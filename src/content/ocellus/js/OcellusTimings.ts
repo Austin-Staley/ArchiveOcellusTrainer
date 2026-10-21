@@ -27,7 +27,7 @@ function selected<T>(value: T, basis: Basis, scale: Scale, note: string, first: 
 }
 
 type Options = Readonly<Record<string, Selected<unknown>>>;
-type Choice<O extends Options> = Readonly<{ default: keyof O & string; options: O }>;
+type Choice<O extends Options> = Readonly<{ default: keyof O & string; options: Readonly<O> }>;
 function choice<O extends Options>(defaultKey: keyof O & string, options: O): Choice<O> {
   return { default: defaultKey, options };
 }
@@ -178,6 +178,8 @@ const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
   soulSplitAfterTell: selected(span(1), "footage-once", "team-4", "Soul Split at S+53", vod("V1", "frames 3749-3785")),
 };
 
+const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
+
 const OVERHEADS: OverheadByStage = {
   "inner-void": selected("deflect-melee", "footage-once", "team-5", "icon at S+12 and S+23; raised at the rise per the wiki order, the switch tick was not in frame (Q9)", vod("V2", "k60, k71"), STRATEGIES),
   "outer-void": selected("deflect-range", "footage-once", "team-5", "icon with the flood from S+31", vod("V2", "k79, k80, k90"), STRATEGIES),
@@ -241,7 +243,7 @@ const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus> =>
 export const OCELLUS_P4 = {
   boss: BOSS,
   leadIn: LEAD_IN,
-  cycle: [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER] satisfies CycleRecipe,
+  cycle: CYCLE,
   overheads: OVERHEADS,
   lifeforce: LIFEFORCE,
   orb: ORB,

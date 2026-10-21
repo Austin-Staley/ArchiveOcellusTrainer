@@ -160,28 +160,28 @@ fixture_logs() {
     const marked = (t, x, y) => ({ kind: "explosion-marked", at: t, void: t < 39 ? "inner-void" : "outer-void", tile: { x, y } });
     const resolved = (t, x, y, outcome, underBoss = false) => ({ kind: "explosion-resolved", at: t, tile: { x, y }, underBoss, outcome });
     const lateHit = { kind: "hit", receipt: { requested: 16, applied: 16, beforeHp: 99, afterHp: 83, prayer: null } };
-    const dodge = { 15: 10, 17: 12, 19: 10, 21: 12, 23: 10, 25: 12 };
-    const dodgeRows = Array.from({ length: 49 }, (_, t) => {
+    const dodge = { 17: 10, 19: 12, 21: 10, 23: 12, 25: 10, 27: 12 };
+    const dodgeRows = Array.from({ length: 51 }, (_, t) => {
       const markX = dodge[t], impactX = dodge[t - 1];
       return {
         tick: t,
         playerAtBossStep: at(10, 10),
-        playerAtPostTick: t === 47 ? at(12, 10) : at(10, 10),
-        inputs: markX !== undefined ? [walk(22 - markX, 10)] : t === 47 ? [walk(12, 10)] : [],
+        playerAtPostTick: t === 49 ? at(12, 10) : at(10, 10),
+        inputs: markX !== undefined ? [walk(22 - markX, 10)] : t === 49 ? [walk(12, 10)] : [],
         events: [
           ...(markX !== undefined ? [marked(t, markX, 10)] : []),
-          ...(impactX !== undefined ? [resolved(t, impactX, 10, fault === "dodge-hit" && t === 20 ? lateHit : { kind: "avoided" })] : []),
-          ...(t === 46 ? [marked(46, 10, 10)] : []),
-          ...(t === 47 ? [resolved(47, 10, 10, fault === "late-spared" ? { kind: "avoided" } : lateHit)] : []),
+          ...(impactX !== undefined ? [resolved(t, impactX, 10, fault === "dodge-hit" && t === 22 ? lateHit : { kind: "avoided" })] : []),
+          ...(t === 48 ? [marked(48, 10, 10)] : []),
+          ...(t === 49 ? [resolved(49, 10, 10, fault === "late-spared" ? { kind: "avoided" } : lateHit)] : []),
         ],
       };
     });
-    const underRows = Array.from({ length: 28 }, (_, t) => ({
+    const underRows = Array.from({ length: 30 }, (_, t) => ({
       tick: t,
       events: [
         ...(dodge[t] !== undefined ? [marked(t, 10, 5)] : []),
         ...(dodge[t - 1] !== undefined
-          ? [resolved(t, 10, 5, fault === "under-spared" ? { kind: "avoided" } : { kind: "hit", receipt: { requested: 16, applied: 16, beforeHp: 99 - 8 * (t - 16), afterHp: 99 - 8 * (t - 16) - 16, prayer: null } }, true)]
+          ? [resolved(t, 10, 5, fault === "under-spared" ? { kind: "avoided" } : { kind: "hit", receipt: { requested: 16, applied: 16, beforeHp: 99 - 8 * (t - 18), afterHp: 99 - 8 * (t - 18) - 16, prayer: null } }, true)]
           : []),
       ],
     }));

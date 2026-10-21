@@ -441,10 +441,10 @@ export const OCELLUS_P4 = {
       "v1-observed": selected(0.249, "footage-once", "team-4", "V1 entry bar", vod("V1", "3:53:54")),
       "v2-observed": selected(0.259, "footage-once", "team-5", "V2 entry bar", vod("V2", "5:20:18")),
     }),
-    explosions: choice("wiki-six", {
+    explosions: choice("v2-tell-then-six", {
       "wiki-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "spec-single", "unscaled", "six marks every 2 ticks, damage a tick later; first mark from k55; 16 from one teammate splat (inferred)", STRATEGIES, vod("V2", "k55-k65, k62")),
       "v2-seven": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 7, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "footage-once", "team-5", "bursts on every odd tick k55 to k67 (C4)", vod("V2", "k55-k67")),
-      "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-5", "k55 read as a tell, marks k57 to k67 (C4)", vod("V2", "k55-k67")),
+      "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-4-and-5", "k55 read as a tell, marks k57 to k67 (C4); the default because sound 12537 plays at hit + 5 to hit + 15 in every void of both clips and the marks are taken to sit on it", vod("V2", "k55-k67"), vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
     }),
     specialSelection: choice("random-uniform", {
       "random-uniform": selected<SpecialSelection>({ kind: "random-uniform" }, "inferred", "unscaled", "V1 repeats melee, so no fixed rotation explains both clips (C3)", vod("V1", "G62, G90"), vod("V2", "k77-k257")),

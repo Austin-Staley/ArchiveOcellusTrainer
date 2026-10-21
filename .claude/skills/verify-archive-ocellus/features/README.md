@@ -8,13 +8,13 @@ This directory is the maintained source for verifying what a user of the trainer
 - `public/osrs-assets/manifest.json` contains `npc-16673` from cache `openrs2:2746`.
 - `AGENT_BROWSER_SESSION` names a session that belongs to this run.
 - The viewport is 1280x800 (`agent-browser set viewport 1280 800`).
-- The page has loaded fresh, and `window.__archiveOcellus.snapshot().tick` has reached 8, past the 6-tick GET READY countdown.
+- The page has loaded fresh, and `window.__archiveOcellusProbe.snapshot().tick` has reached 8, past the 6-tick GET READY countdown.
 
 ## Driving conventions
 
 - Start every recipe from a fresh page load unless its preconditions say otherwise.
 - Use real input: `agent-browser open`, `mouse move/down/up`, and CSS ids of visible elements.
-- Read world state only through `window.__archiveOcellus.snapshot()`. It is read-only and exists only in development builds.
+- Read world state only through `window.__archiveOcellusProbe.snapshot()`. It is read-only and exists only in development builds.
 - Never change state through `eval`, the snapshot handle or SDK globals.
 - Pixel positions are relative to `agent-browser get box "#world"`.
 

@@ -8,20 +8,20 @@ export const CREDIT_LINE =
 
 declare global {
   interface Window {
-    __archiveOcellus?: { snapshot(): ArchiveOcellusSnapshot };
+    __archiveOcellusProbe?: { snapshot(): VerificationProbeSnapshot };
   }
 }
 
-type ArchiveOcellusSnapshot = {
+type VerificationProbeSnapshot = {
   ticking: boolean;
   tick: number;
   player: { x: number; y: number } | null;
   destination: { x: number; y: number } | null;
 };
 
-function exposeReadOnlyState(trainer: TrainerInstance) {
-  window.__archiveOcellus = Object.freeze({
-    snapshot(): ArchiveOcellusSnapshot {
+function exposeVerificationProbe(trainer: TrainerInstance) {
+  window.__archiveOcellusProbe = Object.freeze({
+    snapshot(): VerificationProbeSnapshot {
       const { player, world } = trainer.getSnapshot();
       return {
         ticking: !world.isPaused,
@@ -39,7 +39,7 @@ function createTrainer() {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
   Settings.readFromStorage();
   const trainer = new TrainerInstance(new OcellusRegion());
-  if (process.env.NODE_ENV !== "production") exposeReadOnlyState(trainer);
+  if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer);
   return trainer;
 }
 

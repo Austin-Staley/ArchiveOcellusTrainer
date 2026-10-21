@@ -2,7 +2,7 @@ import { CardinalDirection, Player, Region } from "osrs-sdk";
 import type { Location } from "osrs-sdk";
 import { ocellusLoadout } from "./OcellusLoadout";
 
-export const ARENA_SIZE = { width: 20, height: 20 } as const;
+export const PLACEHOLDER_ARENA_SIZE = { width: 20, height: 20 } as const;
 export const SPAWN_TILE: Readonly<Location> = { x: 10, y: 10 };
 
 export class OcellusRegion extends Region {
@@ -15,11 +15,11 @@ export class OcellusRegion extends Region {
   }
 
   override get width() {
-    return ARENA_SIZE.width;
+    return PLACEHOLDER_ARENA_SIZE.width;
   }
 
   override get height() {
-    return ARENA_SIZE.height;
+    return PLACEHOLDER_ARENA_SIZE.height;
   }
 
   override get initialFacing() {

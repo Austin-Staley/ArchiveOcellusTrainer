@@ -47,12 +47,12 @@ Use a named agent-browser session so you never touch another agent's browser:
 export AGENT_BROWSER_SESSION=archive-ocellus-$(date -u +%Y%m%dT%H%M%SZ)
 agent-browser set viewport 1280 800
 agent-browser open http://127.0.0.1:8002/
-agent-browser wait --fn "window.__archiveOcellus?.snapshot().tick >= 8" --timeout 90000
+agent-browser wait --fn "window.__archiveOcellusProbe?.snapshot().tick >= 8" --timeout 90000
 ```
 
-Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point 160 px right of and 50 px below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to (13, 11). The `browser` stage fails when the click resolves to any other tile, so a changed viewport, camera or default setting shows up as a failure. It does not pass silently.
+Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point `WALK_CLICK_RIGHT_PX` (160) right of and `WALK_CLICK_DOWN_PX` (50) below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to `WALK_TARGET_TILE` (13, 11). The three constants sit together at the top of `scripts/verify.sh`. The `browser` stage fails when the click resolves to any other tile, so a changed viewport, camera or default setting shows up as a failure. It does not pass silently.
 
-Development builds expose `window.__archiveOcellus.snapshot()`. It returns a fresh copy of `{ ticking, tick, player, destination }` and has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
+Development builds expose a verification probe, `window.__archiveOcellusProbe.snapshot()`. It returns a fresh copy of `{ ticking, tick, player, destination }` and has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
 
 Per-feature recipes are in [features/README.md](features/README.md).
 

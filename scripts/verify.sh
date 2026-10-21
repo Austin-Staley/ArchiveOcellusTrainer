@@ -12,6 +12,8 @@ STATE_FILE="$ROOT/.verify/current-server"
 MANIFEST="$ROOT/public/osrs-assets/manifest.json"
 URL="http://127.0.0.1:${VERIFY_PORT}/"
 SPAWN_TILE='{"x":10,"y":10}'
+WALK_CLICK_RIGHT_PX=160
+WALK_CLICK_DOWN_PX=50
 WALK_TARGET_TILE='{"x":13,"y":11}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
@@ -165,13 +167,13 @@ ab() {
 }
 
 snapshot() {
-  ab --json eval "window.__archiveOcellus.snapshot()" | json data.result
+  ab --json eval "window.__archiveOcellusProbe.snapshot()" | json data.result
 }
 
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   ab open "$URL" >/dev/null || return 1
-  ab wait --fn "window.__archiveOcellus?.snapshot().ticking === true && window.__archiveOcellus.snapshot().tick >= 8" \
+  ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
 
   local before after box cx cy credit
@@ -184,12 +186,12 @@ drive() {
   [[ "$(ab --json is visible "#credit_line" | json data.visible)" == "true" ]] || { log "credit line is not visible"; return 1; }
 
   box="$(ab --json get box "#world")"
-  cx=$(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + 160 ))
-  cy=$(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + 50 ))
+  cx=$(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + WALK_CLICK_RIGHT_PX ))
+  cy=$(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + WALK_CLICK_DOWN_PX ))
   echo "{\"x\":${cx},\"y\":${cy}}" >"$VERIFY_DIR/click.json"
   ab mouse move "$cx" "$cy" >/dev/null && ab mouse down left >/dev/null && ab mouse up left >/dev/null || return 1
 
-  ab wait --fn "(() => { const s = window.__archiveOcellus.snapshot(), spawn = ${SPAWN_TILE}; return (s.player.x !== spawn.x || s.player.y !== spawn.y) && s.player.x === s.destination.x && s.player.y === s.destination.y; })()" \
+  ab wait --fn "(() => { const s = window.__archiveOcellusProbe.snapshot(), spawn = ${SPAWN_TILE}; return (s.player.x !== spawn.x || s.player.y !== spawn.y) && s.player.x === s.destination.x && s.player.y === s.destination.y; })()" \
     --timeout 15000 >/dev/null || log "player did not settle on a new tile after the click"
   after="$(snapshot)"
   echo "$after" >"$VERIFY_DIR/after.json"

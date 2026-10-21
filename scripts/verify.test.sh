@@ -5,7 +5,7 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(SPAWN_TILE|WALK_TARGET_TILE|CREDIT_LINE)=' "$SCRIPT")"
+eval "$(grep -E '^(SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CREDIT_LINE)=' "$SCRIPT")"
 for fn in json process_start serve state doctor stop snapshot drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done

@@ -21,7 +21,7 @@ npm start                       # http://127.0.0.1:8002
 
 ## Deploy
 
-`netlify.toml` tells Netlify to run `scripts/netlify-build.sh` on Node 22 and publish `dist`. The script installs the dependencies and the beta SDK, installs the cache reader at a pinned commit, extracts the models from OpenRS2 cache 2746, and builds the app. The models are published with the app under `dist/osrs-assets/`. The cache and the reader go in Netlify's build cache directory, `/opt/build/cache`, which Netlify restores after a successful build. A deploy that reused them logs `Using cached OpenRS2 cache 2746` and `reusing cache reader`.
+`netlify.toml` tells Netlify to run `scripts/netlify-build.sh` on Node 22 and publish `dist`. The script installs the dependencies and the beta SDK, installs the cache reader at a pinned commit, extracts the models from OpenRS2 cache 2746, and builds the app. The models are published with the app under `dist/osrs-assets/`. The cache and the reader go in Netlify's build cache directory, `/opt/build/cache`. That Netlify restores this directory after a successful build is inferred, not documented. The source is a 2019 answer from Netlify staff on the Netlify support forum. Confirm it in the logs of the first two deploys. The second deploy logs `reusing cache reader` and `Using cached OpenRS2 cache 2746` when the directory was restored.
 
 To connect the repository in the Netlify dashboard:
 

@@ -6,6 +6,7 @@ type Target = Readonly<{ magic: number; defence: number; size: number }>;
 
 class MaxRollDummy extends TestNpc {
   readonly received: [number, string][] = [];
+  readonly thrownAt: number[] = [];
   landed = 0;
   private readonly footprint: number;
 
@@ -27,6 +28,7 @@ class MaxRollDummy extends TestNpc {
   override addProjectile(projectile: Projectile): void {
     super.addProjectile(projectile);
     this.received.push([projectile.damage, projectile.attackStyle]);
+    this.thrownAt.push(this.region.world.globalTickCounter);
   }
 
   override damageTaken(): void {
@@ -112,6 +114,29 @@ describe("U1.5 loadouts", () => {
     chop.pray("Piety");
     expect(firstAttack(chop, SOUTH, { magic: 1, defence: 0, size: 3 }).received).toEqual([[49, "slash"], [24, "slash"], [12, "slash"]]);
     chop.dispose();
+  });
+
+  test("the Twisted Bow attacks every 5 ticks on Rapid and 6 otherwise, and Ralos every 6 on Rapid and 7 otherwise", () => {
+    const gap = (ralos: boolean, style: AttackStyle) => {
+      const drill = startDrill();
+      if (ralos) clickInventory(drill, 28922);
+      const weapon = drill.player().equipment.weapon;
+      if (!weapon) throw new Error("no weapon worn");
+      AttackStylesController.controller.setWeaponAttackStyle(weapon, style);
+      const dummy = new MaxRollDummy(drill.region, SOUTH, RANGED_TARGET, Infinity);
+      drill.region.addMob(dummy);
+      drill.player().setAggro(dummy);
+      for (let tick = 0; tick < 20 && new Set(dummy.thrownAt).size < 2; tick++) drill.region.world.tickWorld();
+      AttackStylesController.controller.setWeaponAttackStyle(weapon, weapon.defaultStyle());
+      drill.dispose();
+      const [first, second] = [...new Set(dummy.thrownAt)];
+      return second - first;
+    };
+    const stances = [AttackStyle.ACCURATE, AttackStyle.RAPID, AttackStyle.LONGRANGE];
+    expect({ twistedBow: stances.map((style) => gap(false, style)), ralos: stances.map((style) => gap(true, style)) }).toEqual({
+      twistedBow: [6, 5, 6],
+      ralos: [7, 6, 7],
+    });
   });
 
   test("Division spends half the bar, throws both glaives and drains 12.5% of Magic from Defence for each hit", () => {

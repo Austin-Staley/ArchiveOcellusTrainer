@@ -1,3 +1,4 @@
+import type { TwistedBow } from "osrs-sdk";
 import type { Cycle, Mechanic, Seed, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, span, tile } from "./P4Types";
 
@@ -172,10 +173,12 @@ export type TrainerItemKey =
   | "tonalzticsOfRalos";
 type InquisitorPiece = "inquisitorsGreatHelm" | "inquisitorsHauberk" | "inquisitorsPlateskirt";
 type RangedStrengthPrayer = "Sharp Eye" | "Hawk Eye" | "Eagle Eye" | "Deadeye" | "Rigour";
+export type StanceSpeeds<T extends number = TickSpan> = Readonly<{ rapidSpeed: T; otherSpeed: T }>;
 
 type GearRecipe = Readonly<{
   items: Readonly<Record<TrainerItemKey, TrainerItem>>;
-  ralos: Selected<Readonly<{ rapidSpeed: TickSpan; otherSpeed: TickSpan; range: number; longrangeRange: number; hits: number; hitMaxFraction: number }>>;
+  twistedBow: Selected<StanceSpeeds<TwistedBow["attackSpeed"]>>;
+  ralos: Selected<StanceSpeeds & Readonly<{ range: number; longrangeRange: number; hits: number; hitMaxFraction: number }>>;
   division: Selected<Readonly<{ energy: number; accuracyFactor: number; defenceDrainOfMagic: number }>>;
   eliteVoid: Selected<Readonly<{ accuracy: number; damage: number }>>;
   inquisitorCrushPerMille: Selected<Readonly<Record<InquisitorPiece, number>>>;
@@ -290,6 +293,7 @@ const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";
 const MAX_RANGED_HIT = wiki(`${OSRS_WIKI}Maximum_ranged_hit`, 15199053);
 const VOID_SET = wiki(`${OSRS_WIKI}Void_Knight_equipment`, 15363192);
 const INQUISITOR_SET = wiki(`${OSRS_WIKI}Inquisitor%27s_armour`, null);
+const TWISTED_BOW_PAGE = wiki(`${OSRS_WIKI}Twisted_bow`, 15363157);
 const RALOS_PAGE = wiki(`${OSRS_WIKI}Tonalztics_of_ralos`, 15368852);
 const SCYTHE_PAGE = wiki(`${OSRS_WIKI}Scythe_of_Vitur`, 15372833);
 
@@ -315,6 +319,7 @@ const GEAR: GearRecipe = {
     inquisitorsPlateskirt: item(24421, "Inquisitor%27s_plateskirt", 15352824, stats([0, 0, 12, -9, -5], [42, 30, 49, 0, 22], [2, 0, 0, 2])),
     tonalzticsOfRalos: item(28922, "Tonalztics_of_ralos", 15368852, stats([0, 0, 0, 0, 115], [0, 0, 0, 0, 0], [0, 55, 0, 2])),
   },
+  twistedBow: selected({ rapidSpeed: 5, otherSpeed: 6 }, "spec-single", "unscaled", "attack speed by stance: 5 ticks on Rapid, 6 on Accurate and Longrange", TWISTED_BOW_PAGE),
   ralos: selected({ rapidSpeed: span(6), otherSpeed: span(7), range: 7, longrangeRange: 9, hits: 2, hitMaxFraction: 0.75 }, "spec-single", "unscaled", "charged, one-handed thrown: two independent hits, each 0 to 75% of the max ranged hit", RALOS_PAGE),
   division: selected({ energy: 50, accuracyFactor: 1.5, defenceDrainOfMagic: 0.125 }, "spec-single", "unscaled", "+50% accuracy; each hit that deals damage lowers Defence by 12.5% of Magic (10% before 2026-07-22) and, on NPCs, before the second roll; the drain applies as each glaive lands, so a hit the target rejects drains nothing (inferred); rounding not stated, floored (inferred)", RALOS_PAGE),
   eliteVoid: selected({ accuracy: 1.1, damage: 1.125 }, "spec-single", "unscaled", "void ranger helm, gloves, elite top and robe; the damage factor is floored on effective ranged strength", VOID_SET, MAX_RANGED_HIT),

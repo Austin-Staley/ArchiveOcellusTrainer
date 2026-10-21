@@ -14,7 +14,7 @@ import {
   Unit,
 } from "osrs-sdk";
 import type { AttackBonuses, ProjectileOptions, UnitBonuses, UnitEquipment, Weapon } from "osrs-sdk";
-import type { TrainerItemKey } from "../OcellusTimings";
+import type { StanceSpeeds, TrainerItemKey } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 
 // The SDK matches set effects by its closed ItemName enum and Player.attack never applies void, so the trainer's
@@ -123,6 +123,10 @@ function wearsEliteVoid(equipment: UnitEquipment): boolean {
   );
 }
 
+function stanceSpeed<T extends number>(weapon: Weapon, { rapidSpeed, otherSpeed }: StanceSpeeds<T>): T {
+  return weapon.attackStyle() === AttackStyle.RAPID ? rapidSpeed : otherSpeed;
+}
+
 function rangedBonuses(weapon: Weapon, from: Unit, bonuses: AttackBonuses): AttackBonuses {
   return {
     ...bonuses,
@@ -145,6 +149,10 @@ function rangedMaxHit(from: Unit, bonuses: AttackBonuses, weaponFactor: number):
 }
 
 export class OcellusTwistedBow extends TwistedBow {
+  override get attackSpeed(): TwistedBow["attackSpeed"] {
+    return stanceSpeed(this, gear.twistedBow.value);
+  }
+
   override attack(from: Unit, to: Unit, bonuses: AttackBonuses = {}, options: ProjectileOptions = {}): boolean {
     return super.attack(from, to, rangedBonuses(this, from, bonuses), options);
   }
@@ -217,8 +225,7 @@ export class TonalzticsOfRalos extends RangedWeapon {
   }
 
   override get attackSpeed(): number {
-    const { rapidSpeed, otherSpeed } = gear.ralos.value;
-    return this.attackStyle() === AttackStyle.RAPID ? rapidSpeed : otherSpeed;
+    return stanceSpeed(this, gear.ralos.value);
   }
 
   override get attackRange(): number {

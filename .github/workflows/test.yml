@@ -23,4 +23,5 @@ jobs:
       - run: scripts/check-types.test.sh
       - run: npm test -- --runInBand
       - run: scripts/verify.test.sh
+      - run: scripts/netlify-build.test.sh
       - run: npm run build

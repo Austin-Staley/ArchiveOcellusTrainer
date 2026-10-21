@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick step_on_marks drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -186,6 +186,14 @@ fixture_logs() {
       ],
     }));
     write("explosion-log.json", "explosions", dodgeRows);
+    const late = fault === "sound-on-impact" ? 1 : 0;
+    const cue = (tick, samples) => ({ tick, samples, rate: 22050, state: fault === "suspended-audio" ? "suspended" : "running" });
+    const audio = [
+      cue(14, 14332), ...[17, 19, 21, 23, 25, 27].map((t) => cue(t + late, 8820)),
+      cue(45, 14332), ...[48, 50, 52, 54, 56, 58].map((t) => cue(t + late, 8820)),
+      { ...cue(49, 30720), rate: 48000 },
+    ].sort((a, b) => a.tick - b.tick);
+    fs.writeFileSync(`${dir}/explosion-audio.json`, JSON.stringify({ data: { result: audio } }));
     write("explosion-under-log.json", "explosions", underRows);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
@@ -291,6 +299,7 @@ fake_browser() {
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":7,"y":9}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
+      "--json eval window.__cueAudio") cat "$T/explosion-audio.json" ;;
       "--json eval window.__archiveOcellusProbe.log()")
         [[ ! -e "$T/explosion-under" ]] || { cat "$T/explosion-under-log.json"; return; }
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 4 ]] || { cat "$T/explosion-log.json"; return; }
@@ -438,6 +447,20 @@ camping_under_boss_spared_fails() {
   grep -q '"campingUnderBossHit": false' "$T/drive.log" || { echo "the under-boss check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+explosion_sound_on_the_impact_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '' sound-on-impact
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although 12537 played a tick after each mark"; return 1; fi
+  grep -q '"explosionSoundsOnSchedule": false' "$T/drive.log" || { echo "the sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+explosion_sound_on_a_suspended_context_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '' suspended-audio
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although every sound started on a suspended audio context"; return 1; fi
+  grep -q '"explosionSoundsOnSchedule": false' "$T/drive.log" || { echo "the sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 explosion_marker_following_the_player_fails() {
   setup
   fake_browser '{"x":13,"y":11}' markerfollows
@@ -510,6 +533,8 @@ for t in \
   late_step_spared_fails \
   camping_under_boss_spared_fails \
   explosion_marker_following_the_player_fails \
+  explosion_sound_on_the_impact_fails \
+  explosion_sound_on_a_suspended_context_fails \
   loadout_not_switched_fails \
   division_not_spent_fails \
   division_extra_drains_fail; do

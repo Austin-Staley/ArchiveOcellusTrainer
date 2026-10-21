@@ -83,7 +83,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `orb-hit.png`, `orb-dormant-1.png` to `orb-dormant-6.png`, `orb-glow-1.png` to `orb-glow-6.png`, `orb-click.json`, `orb.json` | The `lifeforce-orb` drill with the player on spawn: the screen at the lifeforce hit, six frames of the dormant orb from P4 tick 20, six of the glowing orb from tick 24, the click on the orb's tile after them with the pixel and the snapshot it set, and the fight log once the HP came back |
 | `orb-skip.png`, `orb-skip.json` | The same drill reloaded with no input: the screen and fight log at tick 63, after the unclaimed outer orb healed the boss |
 | `orb-console.log`, `orb-page-errors.json`, `orb-skip-console.log`, `orb-skip-page-errors.json` | Console and page errors of both orb pages |
-| `explosion-left.png`, `explosion-standing.png`, `explosions.json` | The `explosions` drill: the shards left on their tile 450 ms after the first dodge, the shards under the player before the late step, and the fight log once the late step was hit |
+| `explosion-left.png`, `explosion-standing.png`, `explosions.json`, `explosion-audio.json` | The `explosions` drill with sound and area sound saved on: the shards left on their tile 450 ms after the first dodge, the shards under the player before the late step, the fight log at P4 tick 59, and every audio buffer start with its P4 tick, length, sample rate and context state |
 | `explosion-under.png`, `explosions-under.json` | The same drill reloaded with the player walked under the hidden boss: the screen at the first mark and the fight log after the inner series |
 | `explosion-console.log`, `explosion-page-errors.json`, `explosion-under-console.log`, `explosion-under-page-errors.json` | Console and page errors of both explosion pages |
 | `loadout-before.json`, `loadout-ranged.png` | Fight snapshot and screen of `?seed=1&setup=ranged` with the inventory tab open |
@@ -91,7 +91,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `loadout-spec.json`, `loadout-spec.png` | Snapshot and screen after Division on the boss |
 | `loadout-console.log`, `loadout-page-errors.json` | Console and page errors of the loadout page |
 | `loadout-selector.json`, `loadout-selector-page-errors.json` | Snapshot and page errors after the setup control reloaded the drill on `melee` |
-| `observed.json` | Lead-in, before and after state, the cycle's stage, overhead and transition attack ticks, the focused beats, the bow shot across the flood, the floor hits, the void pixel shares, the orb events and teal shares, the explosion dodges, late step, under-boss hits and shard positions, the worn setups, special energy and boss Defence, and each check's result |
+| `observed.json` | Lead-in, before and after state, the cycle's stage, overhead and transition attack ticks, the focused beats, the bow shot across the flood, the floor hits, the void pixel shares, the orb events and teal shares, the explosion dodges, late step, under-boss hits, sounds and shard positions, the worn setups, special energy and boss Defence, and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
 
 A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture.

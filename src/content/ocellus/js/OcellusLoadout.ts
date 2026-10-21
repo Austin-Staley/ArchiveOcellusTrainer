@@ -28,6 +28,19 @@ import {
   VoidRangerHelm,
 } from "./gear/OcellusGear";
 
+// The SDK's slot classes share one shape, so a weapon or a chest would type-check as a helmet. Each brand fits one slot only.
+declare module "osrs-sdk/lib/src/sdk/gear/Weapon" { interface Weapon { readonly brand?: "weapon" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Offhand" { interface Offhand { readonly brand?: "offhand" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Helmet" { interface Helmet { readonly brand?: "helmet" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Chest" { interface Chest { readonly brand?: "chest" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Legs" { interface Legs { readonly brand?: "legs" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Gloves" { interface Gloves { readonly brand?: "gloves" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Cape" { interface Cape { readonly brand?: "cape" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Necklace" { interface Necklace { readonly brand?: "necklace" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Feet" { interface Feet { readonly brand?: "feet" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Ring" { interface Ring { readonly brand?: "ring" } }
+declare module "osrs-sdk/lib/src/sdk/gear/Ammo" { interface Ammo { readonly brand?: "ammo" } }
+
 type SlotItem<S extends GearSlot> = NonNullable<UnitEquipment[S]>;
 
 const ITEMS: { readonly [S in GearSlot]: { readonly [K in GearKeys[S]]: () => SlotItem<S> } } = {

@@ -319,6 +319,19 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", vod("V2", "k53"), vod("V2", "k64")),
 };
 
+type ExplosionLookRecipe = Readonly<{ shards: Selected<string> }>;
+
+const EXPLOSION: ExplosionLookRecipe = {
+  shards: selected(
+    "#5e317b",
+    "footage-repeated",
+    "team-5",
+    "dark purple shards stand around the player's tile on each mark tick; median colour of the shards on four mark ticks. The spec's cache candidate, spotanims 4299 to 4302 (model 62509), renders a white disc and a white flash, which the footage does not show",
+    vod("V2", "k57, k59, k61, k65"),
+    STRATEGIES,
+  ),
+};
+
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
 
@@ -403,6 +416,7 @@ export const OCELLUS_P4 = {
   geometry: GEOMETRY,
   floor: FLOOR,
   lifeforceOrb: LIFEFORCE_ORB,
+  explosion: EXPLOSION,
   presentation: PRESENTATION,
   gear: GEAR,
   choices: {

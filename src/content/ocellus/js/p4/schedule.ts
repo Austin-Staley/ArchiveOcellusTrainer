@@ -4,7 +4,6 @@ import type { Beat, Cycle, Mechanic, Phase, Seed, Special, Tick, TransitionKind,
 import { cycle, ordinal, tick } from "../P4Types";
 import { roll } from "./roll";
 
-/** Everything the timeline decides about one tick. Derived from the tick, so it is never stored or synced. */
 export type Moment = Readonly<{ tick: Tick; phase: Phase; beats: readonly Beat[] }>;
 
 type BeatAt = (cycleNumber: Cycle, cycleStart: Tick) => Beat | null;
@@ -63,12 +62,6 @@ function acts(focus: Focus, beat: Beat): boolean {
   return mechanic === null || focus.kind === "full-fight" || focus.mechanics.includes(mechanic);
 }
 
-/**
- * The compiled timeline: a lead-in table and one cycle table, built once per drill. Lifeforce counts from void
- * onset; orb and explosion beats from the lifeforce hit; transition tell and hit from stage start; Soul Split from
- * the tell; its heal from the hit; rifts from the next inner onset. A beat may land in a later stage than its
- * anchor, but every anchor sits inside the stage that owns it and every beat inside its table.
- */
 export class Schedule {
   private constructor(
     private readonly leadIn: readonly Moment[],
@@ -169,7 +162,6 @@ export class Schedule {
     return new Schedule(leadInTable, slots, choices.focus.option.value);
   }
 
-  /** Pure and total for any tick at or after 0. */
   at(t: Tick): Moment {
     if (t < this.leadIn.length) return this.leadIn[t];
     const sinceFirstVoid = t - this.leadIn.length;

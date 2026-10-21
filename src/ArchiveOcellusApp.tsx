@@ -54,7 +54,6 @@ function createTrainer() {
 const FOCUS_KEYS = Object.keys(OCELLUS_P4.choices.focus.options);
 const label = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, " ");
 
-/** Restart reloads the page with the chosen focus and seed in the URL, the only input the drill reads. */
 function DrillControls({ config }: Readonly<{ config: DrillConfig }>) {
   const [focus, setFocus] = useState<string>(config.choices.focus.key);
   const [seed, setSeed] = useState(String(config.seed));

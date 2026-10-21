@@ -10,10 +10,6 @@ import { CombatStream } from "./p4/roll";
 
 type Mounted = Readonly<{ kind: "unmounted" }> | Readonly<{ kind: "mounted"; ocellus: Ocellus; player: OcellusPlayer; rows: TickRow[] }>;
 
-/**
- * The drill's public interface: construct it with a resolved DrillConfig, hand it to TrainerInstance, and read
- * snapshot() and fightLog(). Each reset starts a new run with a new boss, player and log.
- */
 export class OcellusRegion extends Region {
   private mounted: Mounted = { kind: "unmounted" };
 

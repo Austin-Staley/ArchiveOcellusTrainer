@@ -4,10 +4,6 @@ import type { InputObservation, PlayerObservation, Style } from "./P4Types";
 import { tile } from "./P4Types";
 import type { CombatStream } from "./p4/roll";
 
-/**
- * The SDK player with two adaptations: accepted walk orders and published protection prayers are reported to the
- * fight log, and the seeded combat stream replaces the SDK's random source only for the synchronous attackStep.
- */
 export class OcellusPlayer extends Player {
   constructor(region: Region, location: Location, private readonly combat: CombatStream, private readonly report: (input: InputObservation) => void) {
     super(region, location);

@@ -6,13 +6,9 @@ type Unbranded = number & { readonly [brand]?: never };
 
 /** P4 tick t. 0 is the first tick with the boss model gone. */
 export type Tick = Brand<"Tick">;
-/** A duration or an offset from an anchor tick, never an absolute tick. */
 export type TickSpan = Brand<"TickSpan">;
-/** The SDK's World.globalTickCounter, recorded beside the P4 tick and never mixed with it. */
 export type WorldTick = Brand<"WorldTick">;
-/** One-based P4 cycle; cycle n starts with an inner void at t = 8 + 60(n - 1). */
 export type Cycle = Brand<"Cycle">;
-/** Zero-based count of transition attacks across the whole fight: 2(cycle - 1) for after-inner, plus 1 for after-outer. */
 export type Ordinal = Brand<"Ordinal">;
 export type Seed = Brand<"Seed">;
 export type TileX = Brand<"TileX">;
@@ -61,11 +57,6 @@ export function after(start: Tick, offset: TickSpan): Tick {
   return tick(start + offset);
 }
 
-/**
- * Where the fight stands on one tick. The floor stage, the boss's overhead and whether the boss is present or
- * damageable are separate observations, but each stage admits only its own combinations: Deflect Melee holds
- * over the cleared floor until Soul Split, and only the lead-in hides the boss or makes it invulnerable.
- */
 export type Phase =
   | Readonly<{ stage: "lead-in"; boss: "hidden" | "present-invulnerable"; overhead: null }>
   | Readonly<{ stage: "inner-void"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" }>
@@ -82,7 +73,6 @@ export type Style = "melee" | "ranged" | "magic";
 export type Special = "vortex" | "spike-disk" | "black-disk";
 export type Mechanic = "void-floor" | "lifeforce-orb" | "explosions" | "transition-attacks" | "rifts";
 
-/** What the compiled schedule says happens on a tick. Mechanics react to beats and never compare tick numbers. */
 export type Beat =
   | Readonly<{ kind: "boss-shouts"; text: string; lasts: TickSpan }>
   | Readonly<{ kind: "lifeforce-tell"; void: VoidKind }>
@@ -117,7 +107,6 @@ export type InputObservation =
   | Readonly<{ kind: "walk-ordered"; destination: Tile }>
   | Readonly<{ kind: "prayer-published"; prayer: Style | null }>;
 
-/** One boss step. `start` is read when the boss steps, after prayers publish; `end` after every unit has moved and settled. */
 export type TickRow = Readonly<{
   tick: Tick;
   worldTick: WorldTick;
@@ -141,5 +130,4 @@ export type FightSnapshot = Readonly<{
   boss: Readonly<{ npcId: number; hp: number; maxHp: number }>;
 }>;
 
-/** The header keeps every resolved choice with its evidence, so an exported log names what the run used. */
 export type FightLog = Readonly<{ header: Readonly<{ seed: Seed; choices: ResolvedChoices }>; rows: readonly TickRow[] }>;

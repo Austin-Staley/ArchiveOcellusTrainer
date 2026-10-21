@@ -10,10 +10,6 @@ import { Schedule } from "../p4/schedule";
 
 type RowDraft = Omit<TickRow, "end" | "bossHp" | "combatDraws"> & Readonly<{ bossHpStart: number; drawsStart: number }>;
 
-/**
- * The boss's view of one run. A row opens when the boss steps and closes in the region's postTick, so inputs that
- * arrive between ticks wait in `inputs` for the next row.
- */
 type Run =
   | Readonly<{ kind: "waiting"; inputs: readonly InputObservation[] }>
   | Readonly<{ kind: "stepping"; draft: RowDraft }>
@@ -44,11 +40,6 @@ function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   return events;
 }
 
-/**
- * NPC 16677 in phase 4. queueStep settles incoming hits first, so a lethal hit ends the run before that tick's
- * beats act; then the boss reacts to the tick's beats. It never moves or auto-attacks. SDK actors keep HP,
- * movement and prayer; this class keeps the P4 clock and builds the fight log's rows.
- */
 export class Ocellus extends Mob {
   private readonly schedule: Schedule;
   private run: Run = { kind: "waiting", inputs: [] };
@@ -141,7 +132,6 @@ export class Ocellus extends Mob {
     }
   }
 
-  /** Called from the region's postTick, after every unit moved and settled. Returns null on a tick the boss did not step. */
   completeTick(): TickRow | null {
     const run = this.run;
     switch (run.kind) {
@@ -233,7 +223,6 @@ export class Ocellus extends Mob {
     this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...judged, ...phaseEvents(last, moment.phase, moment.tick), ...reactions] } };
   }
 
-  /** Hits that land this tick are judged against this tick's phase before the SDK applies them. */
   private judgeLandingHits(moment: Moment): FightEvent[] {
     const damageable = moment.phase.boss === "present-damageable";
     return this.incomingProjectiles

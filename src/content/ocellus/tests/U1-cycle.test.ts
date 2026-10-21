@@ -2,8 +2,6 @@ import { Random } from "osrs-sdk";
 import { parseDrillRequest } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 
-// P4 tick t lines up with V1 G(t + 25) and V2 k(t + 40).
-
 describe("U1 cycle skeleton", () => {
   test("floor stages, overheads and boss state follow the reconciled schedule as separate tracks", () => {
     const drill = startDrill();

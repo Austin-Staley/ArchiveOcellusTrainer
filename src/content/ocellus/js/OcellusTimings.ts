@@ -1,6 +1,5 @@
-// Every Ocellus phase 4 timing, count, coordinate, NPC id and animation id lives here, and all of it is unverified
-// game data. P4 tick t = 0 is the first tick with the boss model gone; V1 tick G is t = G - 25 and V2 tick k is
-// t = k - 40. V1 and V2 are the two Molgoatkirby clips of https://www.twitch.tv/videos/2906214879.
+// V1 and V2 are the two Molgoatkirby clips of https://www.twitch.tv/videos/2906214879. V1 tick G is t = G - 25 and
+// V2 tick k is t = k - 40.
 import type { Cycle, Mechanic, Seed, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, span, tile } from "./P4Types";
 
@@ -49,7 +48,6 @@ type BossRecipe = Readonly<{
   defenceBonuses: Selected<Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>>;
 }>;
 
-/** The boss is hidden, then present but invulnerable; the first inner void starts when both spans end. */
 type LeadInRecipe = Readonly<{
   hiddenFor: Selected<TickSpan>;
   presentFor: Selected<TickSpan>;
@@ -74,7 +72,6 @@ export type TransitionRecipe<K extends TransitionKind> = Readonly<{
   soulSplitAfterTell: Selected<TickSpan>;
 }>;
 
-/** The four stages in order. The cycle length is their sum and is never stored. */
 type CycleRecipe = readonly [
   VoidRecipe<"inner-void">,
   TransitionRecipe<"after-inner">,
@@ -82,7 +79,6 @@ type CycleRecipe = readonly [
   TransitionRecipe<"after-outer">,
 ];
 
-/** Each void raises its own Deflect from onset; each transition switches to Soul Split after its tell. */
 type OverheadByStage = Readonly<{
   "inner-void": Selected<"deflect-melee">;
   "outer-void": Selected<"deflect-range">;
@@ -136,7 +132,6 @@ type BossPose =
   | "unleashLoop"
   | "unleashOut";
 
-/** Cache sequences the build extracts for the boss; each mechanic's unit decides when to play its pose. */
 type PresentationRecipe = Readonly<{ bossPoses: Readonly<Record<BossPose, Selected<number>>> }>;
 
 const BOSS: BossRecipe = {
@@ -301,7 +296,6 @@ export const OCELLUS_P4 = {
 type Choices = typeof OCELLUS_P4.choices;
 type ChoiceName = keyof Choices;
 type OptionKey<K extends ChoiceName> = keyof Choices[K]["options"] & string;
-/** One option key per choice, derived from the data, so the URL and tests accept only real options. */
 export type DrillSelection = { readonly [K in ChoiceName]?: OptionKey<K> };
 type Resolved<O extends Options> = Readonly<{ key: keyof O & string; option: O[keyof O & string] }>;
 export type ResolvedChoices = { readonly [K in ChoiceName]: Resolved<Choices[K]["options"]> };
@@ -343,7 +337,6 @@ export function resolveDrill(request: DrillRequest): DrillConfig {
   return { seed: request.seed, choices: resolveChoices((name) => selection[name], []) };
 }
 
-/** Boundary for the app: `?seed=7&focus=explosions`. Unknown keys, unknown options and bad seeds are listed, never thrown. */
 export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {
   const rejected: string[] = [];
   for (const [key, value] of url.searchParams) {

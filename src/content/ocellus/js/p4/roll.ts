@@ -1,13 +1,11 @@
 import type { Seed, Tick } from "../P4Types";
 
-/** One stream per mechanic, so adding a mechanic never shifts another mechanic's rolls. Ids never change. */
 type RollStream = "specialVariant";
 
 const STREAM_ID: Readonly<Record<RollStream, number>> = {
   specialVariant: 5,
 };
 
-/** Stateless: the result depends only on (seed, stream, tick, draw), so fight state carries no generator. */
 export function roll(seed: Seed, stream: RollStream, at: Tick, draw: number): number {
   let h = (seed ^ Math.imul(STREAM_ID[stream], 0x9e3779b9) ^ Math.imul(at, 0x85ebca6b) ^ Math.imul(draw, 0xc2b2ae35)) >>> 0;
   h ^= h >>> 16;
@@ -18,10 +16,6 @@ export function roll(seed: Seed, stream: RollStream, at: Tick, draw: number): nu
   return (h >>> 0) / 2 ** 32;
 }
 
-/**
- * Sequential mulberry32 for the SDK's own combat draws. The player installs it only around its synchronous
- * attackStep, so attacking more or less never moves a mechanic roll.
- */
 export class CombatStream {
   private state: number;
   draws = 0;

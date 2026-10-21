@@ -5,6 +5,15 @@ import { tile } from "../P4Types";
 
 const key = (at: Tile) => `${at.x},${at.y}`;
 
+export type Side = "north" | "south" | "east" | "west";
+const STEP: Readonly<Record<Side, Readonly<{ dx: number; dy: number }>>> = {
+  north: { dx: 0, dy: -1 },
+  south: { dx: 0, dy: 1 },
+  west: { dx: -1, dy: 0 },
+  east: { dx: 1, dy: 0 },
+};
+const SIDES: readonly Side[] = ["north", "south", "west", "east"];
+
 export class TileMask {
   private constructor(private readonly byKey: ReadonlyMap<string, Tile>) {}
 
@@ -27,6 +36,13 @@ export class TileMask {
 
   tiles(): readonly Tile[] {
     return [...this.byKey.values()];
+  }
+
+  /** Each side of a mask tile whose neighbour lies outside the mask. */
+  border(): readonly Readonly<{ at: Tile; side: Side }>[] {
+    return this.tiles().flatMap((at) =>
+      SIDES.filter((side) => !this.byKey.has(`${at.x + STEP[side].dx},${at.y + STEP[side].dy}`)).map((side) => ({ at, side })),
+    );
   }
 }
 

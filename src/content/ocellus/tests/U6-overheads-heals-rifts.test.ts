@@ -60,6 +60,41 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.dispose();
   });
 
+  test("two rifts spawn north of the 5x5 one tick before each inner void from cycle 2, or from cycle 3 under cycle-3", () => {
+    const spawned = (selection: DrillSelection) => {
+      const drill = startDrill({ selection: { focus: "rifts", ...selection } });
+      drill.tickTo(127);
+      const observed = drill.events("rift-spawned").map((e) => [e.at, e.rift, e.tile]);
+      drill.dispose();
+      return observed;
+    };
+    expect([spawned({}), spawned({ riftFirstCycle: "cycle-3" })]).toEqual([
+      [[67, "rift-67-0", { x: 2, y: 2 }], [67, "rift-67-1", { x: 11, y: 2 }], [127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 11, y: 2 }]],
+      [[127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 11, y: 2 }]],
+    ]);
+  });
+
+  test.each([
+    { killLandsAt: 77, destroyed: [[78, "rift-67-1"]], bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]] },
+    {
+      killLandsAt: 78,
+      destroyed: [],
+      bursts: [
+        [78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
+        [78, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
+      ],
+    },
+  ])("a rift dead by the end of 77 is destroyed at 78 and a standing one bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts }) => {
+    const drill = startDrill({ selection: { focus: "rifts" } });
+    drill.tickTo(killLandsAt - 1);
+    const northEast = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
+    if (!northEast) throw new Error("no rift on (11, 2)");
+    drill.hit(drill.player(), northEast, 44);
+    drill.tickTo(79);
+    expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt])]).toEqual([destroyed, bursts]);
+    drill.dispose();
+  });
+
   test("a kill on the Soul Split tick ends the run before the boss heals", () => {
     const drill = startDrill({ selection: TRANSITIONS });
     drill.tickTo(38);

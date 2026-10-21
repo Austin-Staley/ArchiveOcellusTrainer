@@ -78,6 +78,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "lifeforce-drained":
     case "boss-healed":
     case "special-hit":
+    case "rift-spawned":
+    case "rift-destroyed":
+    case "rift-burst":
     case "run-ended":
       return;
     default: {

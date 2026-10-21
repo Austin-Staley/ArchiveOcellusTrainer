@@ -41,6 +41,8 @@ const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at }
 const wiki = (page: string, oldid: number | null): Source => ({ kind: "wiki", page, oldid });
 const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
 const owner = (topic: string): Source => ({ kind: "owner", date: "2026-10-21", topic });
+const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
+  selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15378404);
 const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
@@ -112,7 +114,23 @@ type SpecialRecipe = Readonly<{
 }>;
 export type SpecialStyle<V extends Special> = SpecialRecipe["styles"][V]["value"];
 type BossHealRecipe = Readonly<{ soulSplitAfterHit: Selected<TickSpan> }>;
-type RiftRecipe = Readonly<{ spawnBeforeOnset: Selected<TickSpan>; chargeAfterSpawn: Selected<TickSpan> }>;
+type RiftOffset = Readonly<{ dx: number; dy: number }>;
+type RiftPose = "idle" | "spawn" | "despawn" | "detonate";
+type RiftRecipe = Readonly<{
+  spawnBeforeOnset: Selected<TickSpan>;
+  chargeAfterSpawn: Selected<TickSpan>;
+  npcId: Selected<number>;
+  name: Selected<string>;
+  combatLevel: Selected<number>;
+  size: Selected<number>;
+  stats: Selected<Readonly<{ attack: number; strength: number; defence: number; range: number; magic: number; hitpoint: number }>>;
+  defenceBonuses: Selected<Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>>;
+  offsetsFromBoss: Selected<readonly [RiftOffset, ...RiftOffset[]]>;
+  burstDamage: Selected<DamageRange>;
+  killChat: Selected<string>;
+  poses: Readonly<Record<RiftPose, Selected<number>>>;
+  burstFlare: Selected<number>;
+}>;
 
 type GeometryRecipe = Readonly<{
   platform: Selected<readonly string[]>;
@@ -307,6 +325,29 @@ const BOSS_HEALS: BossHealRecipe = {
 const RIFTS: RiftRecipe = {
   spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", vod("V1", "G152"), vod("V2", "k107, k167, k227")),
   chargeAfterSpawn: selected(span(11), "inferred", "team-5", "unexplained 14 on the streamer 11 ticks after rifts appear", vod("V2", "k107 to k118, k167 to k178")),
+  npcId: selected(16678, "spec-confirmed", "unscaled", "tfa_ocellus_p3_bombportal_basic, Void Rift", cache("npc 16678"), vod("V2", "k193")),
+  name: selected("Void Rift", "spec-confirmed", "unscaled", "hover text Attack Void Rift (level-138)", cache("npc 16678 name"), vod("V2", "k193")),
+  combatLevel: selected(138, "spec-confirmed", "unscaled", "cache level matches the hover text", cache("npc 16678 combat level"), vod("V2", "k193")),
+  size: selected(1, "spec-confirmed", "unscaled", "one-tile shard", cache("npc 16678 size")),
+  stats: selected({ attack: 1, strength: 1, defence: 175, range: 1, magic: 300, hitpoint: 44 }, "spec-confirmed", "unscaled", "the rift never attacks", cache("npc 16678 stats [1, 175, 1, 44, 1, 300]")),
+  defenceBonuses: selected({ stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, "spec-confirmed", "unscaled", "params 5 to 8 are 0; the decode has no ranged defence param, taken as 0 (inferred)", cache("npc 16678 params 5, 6, 7, 8")),
+  offsetsFromBoss: selected(
+    [{ dx: -2, dy: -4 }, { dx: 7, dy: -4 }],
+    "footage-once",
+    "team-4-and-5",
+    "(2, 2) and (11, 2), north of the 5x5: V1's two rifts, placed from their HP bars and carried onto the V2 platform by the east-west mirror; (2, 2) is the same tile under the 270-degree turn, and (11, 2) is also a V2 second-spawn rift; every observed rift is north of the 5x5, and V2's other rift tiles lie on the undrawn strip north of this grid",
+    vod("V1", "G152-G164"),
+    vod("V2", "k167-k173"),
+  ),
+  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared; a rift's charge is the leading candidate", vod("V2", "k118, k178")),
+  killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", vod("V1", "3:55:21.98"), vod("V2", "k116")),
+  poses: {
+    idle: pose(14895, "vfx_ocellus_voidflare_default_idle", "spec-confirmed", "rift stand and walk animation"),
+    spawn: pose(14896, "vfx_ocellus_voidflare_default_spawn", "inferred", "rift appearing, 1 tick, frame sound 12643"),
+    despawn: pose(14897, "vfx_ocellus_voidflare_default_despawn", "inferred", "rift dying, 1 tick, frame sound 12640"),
+    detonate: pose(14898, "vfx_ocellus_voidflare_default_detonate", "inferred", "rift releasing its charge, 2 ticks, frame sounds 12641 and 12642"),
+  },
+  burstFlare: selected(4306, "inferred", "unscaled", "vfx_human_ocellus_voidflare_default shares the rift's model 62369; played on the player as the charge lands", cache("spotanim 4306 vfx_human_ocellus_voidflare_default")),
 };
 
 const FLOOD_FRAMES = vod("V2", "k86, k95, k142, k156, k205, k212, k262, k269");
@@ -415,9 +456,6 @@ const EXPLOSION: ExplosionCueRecipe = {
 
 const sound = (id: number, note: string, first: Source, ...rest: Source[]): Selected<SoundId> =>
   selected(soundId(id), "footage-repeated", "team-4-and-5", note, first, ...rest, cache(`synth ${id}`));
-
-const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
-  selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
 
 const PRESENTATION: PresentationRecipe = {
   bossPoses: {

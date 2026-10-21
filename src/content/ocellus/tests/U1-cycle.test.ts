@@ -24,7 +24,7 @@ describe("U1 cycle skeleton", () => {
 
   test("the transition attack ordinal runs across cycles and each selection names its variants", () => {
     const hits = (options: Parameters<typeof startDrill>[0]) => {
-      const drill = startDrill(options);
+      const drill = startDrill({ ...options, selection: { focus: "transition-attacks", ...options?.selection } });
       drill.playCorrectlyTo(217);
       const out = drill.rows().flatMap((row) => row.beats.flatMap((b) => (b.kind === "special-hit" ? [[row.tick, b.ordinal, b.variant]] : [])));
       drill.dispose();

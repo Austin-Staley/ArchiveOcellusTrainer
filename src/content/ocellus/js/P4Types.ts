@@ -102,6 +102,11 @@ export type Beat =
 export type IncomingStyle = Style | "typeless";
 export type RunEnd = "kill" | "death";
 
+export type RiftId = `rift-${number}-${number}`;
+export function riftId(spawnedAt: Tick, slot: number): RiftId {
+  return `rift-${spawnedAt}-${slot}`;
+}
+
 export type HitReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number; prayer: Style | null }>;
 export type HealReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number }>;
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }> | Readonly<{ kind: "soul-split"; ordinal: Ordinal }>;
@@ -130,6 +135,9 @@ export type FightEvent =
   | (Readonly<{ kind: "special-told" }> & SpecialAttack)
   | (Readonly<{ kind: "special-hit"; receipt: HitReceipt }> & SpecialAttack)
   | Readonly<{ kind: "special-sounded"; at: Tick; ordinal: Ordinal; cue: TransitionCue }>
+  | Readonly<{ kind: "rift-spawned"; at: Tick; rift: RiftId; tile: Tile }>
+  | Readonly<{ kind: "rift-destroyed"; at: Tick; rift: RiftId; tile: Tile }>
+  | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "run-ended"; at: Tick; reason: RunEnd }>;
 
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;

@@ -5,7 +5,7 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
 for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
@@ -220,6 +220,17 @@ fixture_logs() {
     }));
     write("special-log.json", "transition-attacks", inTime);
     write("special-late-log.json", "transition-attacks", lateRows);
+    const heard = (at, samples, rate = 22050) => ({ tick: Math.floor(at), phase: Math.round((at - Math.floor(at)) * 100) / 100, samples, rate, state: fault === "special-unclicked" && at < 38 ? "suspended" : "running" });
+    const landingAt = (start) => [[0.11, 19845], [0.86, 33075], [2.08, 22050], [2.5, 22050]].map(([offset, samples]) => heard(start + offset, samples));
+    const landingStart = fault === "landing-late" ? 1 : 0;
+    const transitionAudio = [
+      ...[26, 28].map((t) => heard(t + 0.11, 44100)),
+      ...landingAt(29 + landingStart), heard(32.44, 22050), heard(34.2, 35280), heard(36.53, 19845), heard(37.01, 9042, 48000), heard(37.11, 26460), heard(37.25, 55125),
+      heard(60.44, 22050), heard(fault === "ranged-on-the-hit" ? 65.01 : 64.4, 33075), heard(64.53, 19845), heard(65.1, 44100), heard(65.11, 26460),
+      heard(68.08, 39690), ...[70, 72, 74, 76, 78, 80, 82, 84, 86, 88].map((t) => heard(t + 0.11, 44100)),
+      ...landingAt(89 + landingStart), heard(92.1, 66150), heard(92.44, 22050), heard(96.53, 19845), heard(97.1, 33075), heard(97.11, 26460),
+    ].sort((a, b) => a.tick + a.phase - (b.tick + b.phase));
+    fs.writeFileSync(`${dir}/special-audio.json`, JSON.stringify({ data: { result: transitionAudio } }));
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
@@ -238,24 +249,26 @@ fixture_shards() {
 
 fixture_tell() {
   command node -e '
-    const [file, percent, tellBox] = process.argv.slice(1);
+    const [file, percent, centre, tellBox, centreBox] = process.argv.slice(1);
     const zlib = require("zlib");
     const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; } return ~c >>> 0; };
     const chunk = (type, data) => { const head = Buffer.alloc(8), tail = Buffer.alloc(4); head.writeUInt32BE(data.length); head.write(type, 4); tail.writeUInt32BE(crc(Buffer.concat([Buffer.from(type), data]))); return Buffer.concat([head, data, tail]); };
     const [width, height] = [1280, 800];
     const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
-    const offset = JSON.parse(tellBox);
-    const box = { minX: width / 2 + offset.minX, maxX: width / 2 + offset.maxX, minY: height / 2 + offset.minY, maxY: height / 2 + offset.maxY };
+    const around = (o) => ({ minX: width / 2 + o.minX, maxX: width / 2 + o.maxX, minY: height / 2 + o.minY, maxY: height / 2 + o.maxY });
+    const [box, middle] = [around(JSON.parse(tellBox)), around(JSON.parse(centreBox))];
+    const within = (b, x, y) => x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY;
+    const centreColour = { black: [0x02, 0x02, 0x03], white: [0xf8, 0xf8, 0xf8] }[centre];
     let left = ((box.maxX - box.minX + 1) * (box.maxY - box.minY + 1) * Number(percent)) / 100;
     const raw = Buffer.alloc(height * (1 + width * 3));
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const inBox = x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
-        raw.set(inBox && left-- > 0 ? [0x9b, 0x30, 0xff] : [0x68, 0x60, 0x58], y * (1 + width * 3) + 1 + x * 3);
+        const colour = centreColour && within(middle, x, y) ? centreColour : within(box, x, y) && left-- > 0 ? [0x9b, 0x30, 0xff] : [0x68, 0x60, 0x58];
+        raw.set(colour, y * (1 + width * 3) + 1 + x * 3);
       }
     }
     require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
-  ' "$1" "$2" "$TELL_BOX"
+  ' "$1" "$2" "${3:-none}" "$TELL_BOX" "$TELL_CENTRE_BOX"
 }
 
 fixture_png() {
@@ -300,8 +313,10 @@ fake_screenshot() {
     markerfollows:explosion-left.png | *:explosion-standing.png) fixture_shards "$1" 0.5 ;;
     *:explosion-left.png) fixture_shards "$1" 0.44 ;;
     notell:special-* | *:special-before.png) fixture_tell "$1" 0 ;;
-    *:special-*) fixture_tell "$1" 4 ;;
-    notell:*) SCREENSHOT=ok fake_screenshot "$1" ;;
+    *:special-semicircle.png) fixture_tell "$1" 4 ;;
+    whitecentre:special-*) fixture_tell "$1" 4 white ;;
+    *:special-*) fixture_tell "$1" 4 black ;;
+    notell:* | whitecentre:*) SCREENSHOT=ok fake_screenshot "$1" ;;
     ok:void-flood.png | ok:flood-ring.png | noorb:void-flood.png | noorb:flood-ring.png | markerfollows:void-flood.png | markerfollows:flood-ring.png) fixture_png "$1" 60 ;;
     ok:void-inner.png | noorb:void-inner.png | markerfollows:void-inner.png) fixture_png "$1" 2 ;;
     swapped:void-flood.png | swapped:flood-ring.png) fixture_png "$1" 2 ;;
@@ -355,7 +370,7 @@ fake_browser() {
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":3,"y":2}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
-      "--json eval window.__cueAudio") cat "$T/explosion-audio.json" ;;
+      "--json eval window.__cueAudio") if [[ -e "$T/special-late" ]]; then cat "$T/special-audio.json"; else cat "$T/explosion-audio.json"; fi ;;
       "--json eval window.__archiveOcellusProbe.log()")
         [[ ! -e "$T/special-late" ]] || { cat "$T/special-late-log.json"; return; }
         [[ ! -e "$T/special" ]] || { cat "$T/special-log.json"; return; }
@@ -372,7 +387,7 @@ fake_browser() {
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;
-      "open "*"${SPECIAL_QUERY}") if [[ -e "$T/special" ]]; then : >"$T/special-late"; else : >"$T/special"; fi ;;
+      "open "*"${SPECIAL_QUERY}") : >"$T/special" ;;
       "batch --bail")
         local shot
         for shot in $(command node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>JSON.parse(s).filter((c)=>c[0]==="screenshot").forEach((c)=>console.log(c[1])))'); do
@@ -383,7 +398,10 @@ fake_browser() {
         echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts"
         [[ "$FAULT" != focus-not-reloaded || "$*" != "select #focus ${FOCUS_DRILL}" ]] || : >"$T/focus-not-reloaded"
         ;;
-      "click #restart") echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts" ;;
+      "click #restart")
+        echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts"
+        [[ ! -e "$T/special" ]] || : >"$T/special-late"
+        ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;
       "--json get box "*) echo '{"data":{"x":0,"y":0,"width":1280,"height":800}}' ;;
@@ -588,6 +606,35 @@ tells_not_drawn_fails() {
   grep -q '"tellsDrawn": false' "$T/drive.log" || { echo "the tell drawing check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+tell_centre_white_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' whitecentre
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although each tell drew a white centre"; return 1; fi
+  grep -q '"tellCentresDark": false' "$T/drive.log" || { echo "the centre check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+transition_sounds_before_the_first_click_fail() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' special-unclicked
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the landing and wind-up sounds started on a suspended audio context"; return 1; fi
+  grep -q '"landingSoundsOnSchedule": false' "$T/drive.log" || { echo "the landing sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+  grep -q '"styleSoundsOnSchedule": false' "$T/drive.log" || { echo "the style sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+landing_a_tick_late_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' landing-late
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although each landing started as the inner void cleared"; return 1; fi
+  grep -q '"landingSoundsOnSchedule": false' "$T/drive.log" || { echo "the landing sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+ranged_sound_on_the_hit_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' ranged-on-the-hit
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although 12555 played on the ranged hit, not before it"; return 1; fi
+  grep -q '"styleSoundsOnSchedule": false' "$T/drive.log" || { echo "the style sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 loadout_not_switched_fails() {
   setup
   fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' unswitched
@@ -671,6 +718,10 @@ for t in \
   late_click_protected_fails \
   tell_off_schedule_fails \
   tells_not_drawn_fails \
+  tell_centre_white_fails \
+  landing_a_tick_late_fails \
+  ranged_sound_on_the_hit_fails \
+  transition_sounds_before_the_first_click_fail \
   loadout_not_switched_fails \
   division_not_spent_fails \
   division_extra_drains_fail; do

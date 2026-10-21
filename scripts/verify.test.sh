@@ -6,7 +6,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -364,7 +364,7 @@ fake_browser() {
         [[ ! -e "$T/orb-skip" ]] || { cat "$T/orb-skip-log.json"; return; }
         case "$(cat "$T/restarts" 2>/dev/null || echo 0)" in
           0) cat "$T/cycle-log.json" ;;
-          1) cat "$T/focus-log.json" ;;
+          1) if [[ -e "$T/focus-not-reloaded" ]]; then cat "$T/cycle-log.json"; else cat "$T/focus-log.json"; fi ;;
           2) if [[ -e "$T/void-shot" ]]; then cat "$T/void-shot-log.json"; else cat "$T/void-log.json"; fi ;;
           *) cat "$T/orb-log.json" ;;
         esac
@@ -378,6 +378,10 @@ fake_browser() {
         for shot in $(command node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>JSON.parse(s).filter((c)=>c[0]==="screenshot").forEach((c)=>console.log(c[1])))'); do
           fake_screenshot "$shot" || return 1
         done
+        ;;
+      "select #focus "*)
+        echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts"
+        [[ "$FAULT" != focus-not-reloaded || "$*" != "select #focus ${FOCUS_DRILL}" ]] || : >"$T/focus-not-reloaded"
         ;;
       "click #restart") echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts" ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
@@ -425,6 +429,13 @@ focus_not_applied_fails() {
   setup
   fake_browser '{"x":8,"y":3}' ok 8 full-fight
   if drive >"$T/drive.log" 2>&1; then echo "drive passed although the reloaded drill ignored the focus"; return 1; fi
+  grep -q '"focusApplied": false' "$T/drive.log" || { echo "the focus check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+focus_choice_not_reloaded_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' focus-not-reloaded
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although choosing the focus left the full fight running until Restart"; return 1; fi
   grep -q '"focusApplied": false' "$T/drive.log" || { echo "the focus check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
@@ -638,6 +649,7 @@ for t in \
   missing_screenshot_fails \
   cycle_off_schedule_fails \
   focus_not_applied_fails \
+  focus_choice_not_reloaded_fails \
   boss_drawn_in_lead_in_fails \
   lead_in_captured_after_the_hidden_ticks_fails \
   flood_hit_in_the_ring_fails \

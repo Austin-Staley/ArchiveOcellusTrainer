@@ -397,9 +397,13 @@ drive_cycle() {
   ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+choose_focus() {
+  ab select "#focus" "$1" >/dev/null || { log "focus control did not accept $1"; return 1; }
+  ab wait --fn "new URLSearchParams(location.search).get('focus') === '$1'" --timeout 30000 >/dev/null || { log "choosing $1 did not load focus=$1 without Restart"; return 1; }
+}
+
 drive_focus() {
-  ab select "#focus" "$FOCUS_DRILL" >/dev/null && ab click "#restart" >/dev/null || { log "focus control did not accept ${FOCUS_DRILL}"; return 1; }
-  ab wait --fn "new URLSearchParams(location.search).get('focus') === '${FOCUS_DRILL}'" --timeout 30000 >/dev/null || { log "restart did not load focus=${FOCUS_DRILL}"; return 1; }
+  choose_focus "$FOCUS_DRILL" || return 1
   fight_tick_at_least "$FOCUS_LAST_TICK" 120000 || { log "the reloaded boss never stepped to P4 tick ${FOCUS_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/focus.json"
   ab screenshot "$VERIFY_DIR/focus.png" >/dev/null || { log "focus screenshot failed"; return 1; }
@@ -474,8 +478,7 @@ drive_loadouts() {
 }
 
 drive_void_floor() {
-  ab select "#focus" "$VOID_DRILL" >/dev/null && ab click "#restart" >/dev/null || { log "focus control did not accept ${VOID_DRILL}"; return 1; }
-  ab wait --fn "new URLSearchParams(location.search).get('focus') === '${VOID_DRILL}'" --timeout 30000 >/dev/null || { log "restart did not load focus=${VOID_DRILL}"; return 1; }
+  choose_focus "$VOID_DRILL" || return 1
   fight_tick_at_least "$VOID_INNER_SHOT_TICK" 120000 || { log "the reloaded boss never stepped to P4 tick ${VOID_INNER_SHOT_TICK}"; return 1; }
   ab screenshot "$VERIFY_DIR/void-inner.png" >/dev/null || { log "inner void screenshot failed"; return 1; }
   fight_tick_at_least "$VOID_FLOOD_SHOT_TICK" 60000 || { log "the reloaded boss never stepped to P4 tick ${VOID_FLOOD_SHOT_TICK}"; return 1; }
@@ -488,8 +491,7 @@ drive_void_floor() {
 
 drive_lifeforce_orb() {
   local box ox oy frame
-  ab select "#focus" "$ORB_DRILL" >/dev/null && ab click "#restart" >/dev/null || { log "focus control did not accept ${ORB_DRILL}"; return 1; }
-  ab wait --fn "new URLSearchParams(location.search).get('focus') === '${ORB_DRILL}'" --timeout 30000 >/dev/null || { log "restart did not load focus=${ORB_DRILL}"; return 1; }
+  choose_focus "$ORB_DRILL" || return 1
   fight_tick_at_least 12 120000 || { log "the orb drill never reached the lifeforce hit"; return 1; }
   ab screenshot "$VERIFY_DIR/orb-hit.png" >/dev/null || { log "lifeforce hit screenshot failed"; return 1; }
   box="$(ab --json get box "#world")"
@@ -524,8 +526,7 @@ drive_lifeforce_orb() {
 drive_explosions() {
   local inner=($EXPLOSION_INNER_MARKS) outer=($EXPLOSION_OUTER_MARKS)
   save_sound_settings true || { log "the sound settings were not saved"; return 1; }
-  ab select "#focus" "$EXPLOSION_DRILL" >/dev/null && ab click "#restart" >/dev/null || { log "focus control did not accept ${EXPLOSION_DRILL}"; return 1; }
-  ab wait --fn "new URLSearchParams(location.search).get('focus') === '${EXPLOSION_DRILL}'" --timeout 30000 >/dev/null || { log "restart did not load focus=${EXPLOSION_DRILL}"; return 1; }
+  choose_focus "$EXPLOSION_DRILL" || return 1
   fight_tick_at_least 0 120000 || { log "the explosions drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }

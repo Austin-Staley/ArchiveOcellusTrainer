@@ -297,6 +297,7 @@ type LifeforceOrbRecipe = Readonly<{
   innerOrbFloor: Selected<"safe-floor">;
   returnAfterStep: Selected<TickSpan>;
   look: Readonly<Record<OrbVisual, Selected<number>>>;
+  marker: Selected<Readonly<{ dormant: string; ready: string }>>;
 }>;
 
 const spotAnim = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
@@ -315,6 +316,7 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
     tell: spotAnim(4313, "soul_fragment_player_idle", "assumption", "played on the player at the lifeforce tell, where the footage shows a teal swirl; the spec pairs it with the pickup"),
     regain: spotAnim(4314, "soul_fragment_player_regain", "inferred", "the fragment returning to the player"),
   },
+  marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", vod("V2", "k53"), vod("V2", "k64")),
 };
 
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>

@@ -6,10 +6,42 @@ import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
 
+declare global {
+  interface Window {
+    __archiveOcellus?: { snapshot(): ArchiveOcellusSnapshot };
+  }
+}
+
+type ArchiveOcellusSnapshot = {
+  ticking: boolean;
+  tick: number;
+  player: { x: number; y: number } | null;
+  destination: { x: number; y: number } | null;
+};
+
+// Development builds expose a read-only view of world state so the verify skill can record evidence the UI does not show.
+function exposeReadOnlyState(trainer: TrainerInstance) {
+  window.__archiveOcellus = Object.freeze({
+    snapshot(): ArchiveOcellusSnapshot {
+      const { player, world } = trainer.getSnapshot();
+      return {
+        ticking: !world.isPaused,
+        tick: world.globalTickCounter,
+        player: player ? { x: player.location.x, y: player.location.y } : null,
+        destination: player?.destinationLocation
+          ? { x: player.destinationLocation.x, y: player.destinationLocation.y }
+          : null,
+      };
+    },
+  });
+}
+
 function createTrainer() {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
   Settings.readFromStorage();
-  return new TrainerInstance(new OcellusRegion());
+  const trainer = new TrainerInstance(new OcellusRegion());
+  if (process.env.NODE_ENV !== "production") exposeReadOnlyState(trainer);
+  return trainer;
 }
 
 export function ArchiveOcellusApp() {

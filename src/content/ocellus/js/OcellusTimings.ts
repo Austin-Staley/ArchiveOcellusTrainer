@@ -146,6 +146,8 @@ export type ItemStats = Readonly<{
 }>;
 type TrainerItem = Readonly<{ itemId: Selected<number>; stats: Selected<ItemStats> }>;
 
+export const GEAR_SLOTS = ["weapon", "helmet", "chest", "legs", "gloves", "cape", "necklace", "feet", "ring", "ammo"] as const;
+export type GearSlot = (typeof GEAR_SLOTS)[number];
 export type GearKeys = Readonly<{
   weapon: "twistedBow" | "scytheOfVitur" | "tonalzticsOfRalos";
   helmet: "voidRangerHelm" | "inquisitorsGreatHelm";
@@ -158,7 +160,6 @@ export type GearKeys = Readonly<{
   ring: "venatorRing" | "ultorRing";
   ammo: "dragonArrows";
 }>;
-export type GearSlot = keyof GearKeys;
 export type Setup = Readonly<{ [S in GearSlot]: GearKeys[S] }>;
 export type TrainerItemKey =
   | "voidRangerHelm"

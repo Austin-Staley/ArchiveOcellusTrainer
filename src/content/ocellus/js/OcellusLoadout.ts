@@ -14,7 +14,7 @@ import {
 } from "osrs-sdk";
 import type { Item, Player, UnitEquipment } from "osrs-sdk";
 import type { GearKeys, GearSlot, ResolvedChoices, Setup } from "./OcellusTimings";
-import { OCELLUS_P4 } from "./OcellusTimings";
+import { GEAR_SLOTS, OCELLUS_P4 } from "./OcellusTimings";
 import {
   EliteVoidRobe,
   EliteVoidTop,
@@ -43,9 +43,6 @@ const ITEMS: { readonly [S in GearSlot]: { readonly [K in GearKeys[S]]: () => Sl
   ammo: { dragonArrows: () => new DragonArrows() },
 };
 
-const isSlot = (key: string): key is GearSlot => Object.prototype.hasOwnProperty.call(ITEMS, key);
-const SLOTS: readonly GearSlot[] = Object.keys(ITEMS).filter(isSlot);
-
 function create<S extends GearSlot>(slot: S, key: GearKeys[S]): SlotItem<S> {
   return ITEMS[slot][key]();
 }
@@ -58,12 +55,12 @@ const STANCES: Readonly<Record<typeof OCELLUS_P4.gear.scytheStance.value, Attack
 
 export function dress(player: Player, setup: ResolvedChoices["setup"]): void {
   const worn = setup.option.value;
-  for (const slot of SLOTS) wear(player.equipment, slot, worn);
+  for (const slot of GEAR_SLOTS) wear(player.equipment, slot, worn);
 
   const others = Object.values(OCELLUS_P4.choices.setup.options).filter((option) => option !== setup.option);
   const switches: Item[] = [create("weapon", OCELLUS_P4.gear.specialWeapon.value)];
   for (const other of others) {
-    for (const slot of SLOTS) {
+    for (const slot of GEAR_SLOTS) {
       if (other.value[slot] !== worn[slot]) switches.push(create(slot, other.value[slot]));
     }
   }

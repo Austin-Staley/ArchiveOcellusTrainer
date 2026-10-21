@@ -171,11 +171,13 @@ stage_test() {
 }
 
 stage_assets() {
+  local flags=(--cache-dir "$OSRS_CACHE_DIR" --reader-path "$OSRS_CACHE_READER")
   if manifest_ready; then
-    log "assets: manifest already has npc-${BOSS_NPC} and every configured item, spotanim and sound from openrs2:2746, skipping rebuild" | tee "$VERIFY_DIR/assets.log"
-    return 0
+    log "assets: manifest already has npc-${BOSS_NPC} and every configured item, spotanim and sound from openrs2:2746, skipping the model rebuild" | tee "$VERIFY_DIR/assets.log"
+    npm run item-icons -- "${flags[@]}" >>"$VERIFY_DIR/assets.log" 2>&1
+    return
   fi
-  npm run assets -- --cache-dir "$OSRS_CACHE_DIR" --reader-path "$OSRS_CACHE_READER" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
+  npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
 }
 
 port_listener() {

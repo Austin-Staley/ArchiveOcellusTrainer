@@ -47,6 +47,8 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "floor-hit":
     case "lifeforce-drained":
     case "boss-healed":
+    case "explosion-marked":
+    case "explosion-resolved":
     case "run-ended":
       return;
     default: {

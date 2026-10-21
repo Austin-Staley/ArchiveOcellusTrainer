@@ -3,7 +3,31 @@ import { startDrill } from "./drill";
 
 const TRANSITIONS = { focus: "transition-attacks", specialSelection: "replay-v2" } as const;
 
+type Drill = ReturnType<typeof startDrill>;
+
+function northEastRift(drill: Drill) {
+  const rift = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
+  if (!rift) throw new Error("no rift on (11, 2)");
+  return rift;
+}
+
 describe("U6 boss overheads, heals and rifts", () => {
+  test.each([
+    { target: "the size-1 north-east rift once", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 71, hits: [35], hpAfter: 9 },
+    { target: "the size-1 north-east rift once more on its next swing", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 76, hits: [9], hpAfter: 0 },
+    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", setup: "melee", deflect: "none" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
+  ] as const)("one scythe swing hits $target", ({ seed, selection, aggroAt, pick, swingAt, hits, hpAfter }) => {
+    const drill = startDrill({ seed, selection });
+    drill.tickTo(aggroAt);
+    const target = pick(drill);
+    drill.player().setAggro(target);
+    drill.tickTo(swingAt);
+    const queued = target.incomingProjectiles.filter((hit) => hit.from === drill.player()).map((hit) => hit.damage);
+    drill.tickTo(swingAt + 2);
+    expect([queued, target.currentStats.hitpoint]).toEqual([hits, hpAfter]);
+    drill.dispose();
+  });
+
   test.each([
     ["slash", 10, "melee", "blocked", 0],
     ["range", 10, "ranged", "passed", 20],
@@ -93,9 +117,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   ])("a rift dead by the end of 77 is destroyed at 78 and a standing one bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat }) => {
     const drill = startDrill({ selection: { focus: "rifts" } });
     drill.tickTo(killLandsAt - 1);
-    const northEast = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
-    if (!northEast) throw new Error("no rift on (11, 2)");
-    drill.hit(drill.player(), northEast, 44);
+    drill.hit(drill.player(), northEastRift(drill), 44);
     drill.tickTo(79);
     expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat()]).toEqual([destroyed, bursts, chat]);
     drill.dispose();

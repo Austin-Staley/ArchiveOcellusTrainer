@@ -228,6 +228,7 @@ type GearRecipe = Readonly<{
   inquisitorCrushPerMille: Selected<Readonly<Record<InquisitorPiece, number>>>;
   rangedStrengthPrayers: Selected<Readonly<Record<RangedStrengthPrayer, number>>>;
   scytheStance: Selected<"jab">;
+  scytheMaxHitsOnOneTarget: Selected<number>;
   specialWeapon: Selected<GearKeys["weapon"]>;
 }>;
 
@@ -573,6 +574,7 @@ const GEAR: GearRecipe = {
   inquisitorCrushPerMille: selected({ inquisitorsGreatHelm: 5, inquisitorsHauberk: 10, inquisitorsPlateskirt: 10 }, "spec-single", "unscaled", "crush accuracy and damage per piece; the 2026-07-22 update moved the 1% set bonus onto the hauberk and plateskirt", wiki(`${OSRS_WIKI}Inquisitor%27s_hauberk`, 15352823), wiki(`${OSRS_WIKI}Inquisitor%27s_plateskirt`, 15352824), INQUISITOR_SET),
   rangedStrengthPrayers: selected({ "Sharp Eye": 1.05, "Hawk Eye": 1.1, "Eagle Eye": 1.15, Deadeye: 1.18, Rigour: 1.23 }, "spec-single", "unscaled", "prayer bonus to effective ranged strength", MAX_RANGED_HIT),
   scytheStance: selected("jab", "spec-single", "unscaled", "Jab is the scythe's crush style; the owner wants the Scythe setup on crush", SCYTHE_PAGE, owner("melee setup")),
+  scytheMaxHitsOnOneTarget: selected(3, "spec-single", "unscaled", "one hit per tile of the target's width, up to three: a 1x1 target once, 2x2 twice, 3x3 or larger three times; other 1x1 targets in the 1x3 arc take their own hit", SCYTHE_PAGE),
   specialWeapon: selected("tonalzticsOfRalos", "assumption", "unscaled", "owner: players tend to use Ralos to spec the boss", owner("special attack weapon")),
 };
 

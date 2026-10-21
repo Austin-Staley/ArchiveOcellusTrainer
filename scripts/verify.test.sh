@@ -288,6 +288,16 @@ fixture_logs() {
       };
     });
     write("rift-log.json", "rifts", riftRows);
+    const riftCue = (at, samples, rate = 22050) => ({ tick: Math.floor(at), phase: Math.round((at - Math.floor(at)) * 100) / 100, samples, rate, state: fault === "rift-unclicked" ? "suspended" : "running" });
+    const spawnAt = fault === "rift-spawn-late" ? 68.25 : 67.25;
+    const riftAudio = [
+      riftCue(spawnAt, 7717), riftCue(spawnAt, 7717), riftCue(68.08, 39690), riftCue(69, 22050), riftCue(69.01, 9042, 48000),
+      ...[70, 72, 74, 76, 78].map((t) => riftCue(t + 0.11, 44100)),
+      ...(fault === "rift-kill-silent" ? [] : [riftCue(73.28, 11025)]),
+      riftCue(78.13, 14332), riftCue(78.94, 26460),
+      ...(fault === "killed-rift-detonates" ? [riftCue(78.14, 14332), riftCue(78.95, 26460)] : []),
+    ].sort((a, b) => a.tick + a.phase - (b.tick + b.phase));
+    fs.writeFileSync(`${dir}/rift-audio.json`, JSON.stringify({ data: { result: riftAudio } }));
     write("deflect-log.json", "rifts", deflectRows);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
@@ -529,7 +539,7 @@ fake_browser() {
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":3,"y":2}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
-      "--json eval window.__cueAudio") if [[ -e "$T/special-late" ]]; then cat "$T/special-audio.json"; else cat "$T/explosion-audio.json"; fi ;;
+      "--json eval window.__cueAudio") if [[ -e "$T/rifts" ]]; then cat "$T/rift-audio.json"; elif [[ -e "$T/special-late" ]]; then cat "$T/special-audio.json"; else cat "$T/explosion-audio.json"; fi ;;
       "--json eval window.__archiveOcellusProbe.snapshot().fight.player.inventory") supply_probe inventory ;;
       "--json eval window.__archiveOcellusProbe.snapshot().menu") supply_probe menu ;;
       "--json eval window.__archiveOcellusProbe.snapshot().icons") icons_probe ;;
@@ -969,6 +979,37 @@ missing_burst_fails() {
   grep -q '"standingRiftBursts": false' "$T/drive.log" || { echo "the rift burst check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+rift_spawn_sound_off_frame_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' rift-spawn-late
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although 12643 played a tick after the rifts spawned"; return 1; fi
+  grep -q '"riftSpawnSoundsOnFrame": false' "$T/drive.log" || { echo "the rift spawn sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+rift_kill_without_despawn_sound_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' rift-kill-silent
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the killed rift played no 12640"; return 1; fi
+  grep -q '"riftKillSoundOnFrame": false' "$T/drive.log" || { echo "the rift kill sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+killed_rift_detonation_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' killed-rift-detonates
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the killed rift also played the detonation"; return 1; fi
+  grep -q '"riftBurstSoundsOnFrames": false' "$T/drive.log" || { echo "the rift burst sound check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+rift_sounds_before_the_first_click_fail() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' rift-unclicked
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although every rift sound started on a suspended context"; return 1; fi
+  local check
+  for check in riftSpawnSoundsOnFrame riftKillSoundOnFrame riftBurstSoundsOnFrames; do
+    grep -q "\"${check}\": false" "$T/drive.log" || { echo "${check} did not fail on a suspended context"; cat "$T/drive.log"; return 1; }
+  done
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -1029,7 +1070,11 @@ for t in \
   misplaced_rift_fails \
   surviving_rift_fails \
   missing_kill_chat_fails \
-  missing_burst_fails; do
+  missing_burst_fails \
+  rift_spawn_sound_off_frame_fails \
+  rift_kill_without_despawn_sound_fails \
+  killed_rift_detonation_fails \
+  rift_sounds_before_the_first_click_fail; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

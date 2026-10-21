@@ -137,6 +137,11 @@ SOUL_SPLIT_HEAL_TICK=39
 RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[78,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
 SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1355,"afterHp":1404}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1404,"afterHp":1451}]]'
 KILL_CHAT="Destroying the void rift empowers you!"
+RIFT_SOUND_SAMPLES='{"12640":11025,"12641":14332,"12642":26460,"12643":7717}'
+RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
+RIFT_KILL_SOUND='[0.27,12640]'
+RIFT_BURST_SOUNDS='[[78.13,12641],[78.93,12642]]'
+RIFT_SOUND_WINDOW='[66,80]'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
 log() { echo "verify: $*"; }
@@ -704,6 +709,12 @@ drive_transition_attack() {
 drive_overheads_rifts() {
   local shot
   ab open "${URL}${RIFT_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the rifts drill never loaded"; return 1; }
+  save_sound_settings true || { log "the sound settings were not saved"; return 1; }
+  ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
+  ab wait --fn "new URLSearchParams(location.search).has('setup')" --timeout 30000 >/dev/null || { log "Restart did not reload the rifts drill"; return 1; }
+  fight_tick_at_least 0 120000 || { log "the rifts drill never started"; return 1; }
+  record_audio_starts || { log "the audio probe was not installed"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }
   for shot in $OVERHEAD_SHOT_TICKS; do
     shot_after_tick "$shot" 0 "overhead-${shot}.png" || { log "overhead screenshot at P4 tick ${shot} failed"; return 1; }
@@ -717,8 +728,10 @@ drive_overheads_rifts() {
   shot_after_tick "$RIFT_BURST_TICK" 0 rift-burst.png || { log "rift burst screenshot failed"; return 1; }
   fight_tick_at_least $((RIFT_BURST_TICK + 1)) 30000 || { log "the rifts drill never stepped past the burst at P4 tick ${RIFT_BURST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/rifts.json"
+  ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/rift-audio.json" || { log "audio capture failed"; return 1; }
   ab console >"$VERIFY_DIR/rift-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/rift-page-errors.json" || { log "page error capture failed"; return 1; }
+  save_sound_settings false || { log "the sound settings were not restored"; return 1; }
 
   ab open "${URL}${DEFLECT_QUERY}" >/dev/null || return 1
   canvas_centre || { log "canvas box unreadable"; return 1; }
@@ -751,7 +764,7 @@ drive() {
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
-    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-console.log rift-page-errors.json \
+    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
     deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
@@ -760,7 +773,8 @@ drive() {
     const [dir, spawn, target, edgeOrder, edgeStop, holdTicks, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected, orbBox, orbFrames,
       innerMarks, lateMark, explosionPixel, explosionExpected, soundSamples, explosionSounds, centreX, centreY, tellBox, specialExpected,
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
-      supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat] = process.argv.slice(1);
+      supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat,
+      riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -773,7 +787,7 @@ drive() {
     const [carried, itemMenu, itemMenuClosed, brewClick, brewHp, suppliesErrors] = ["supplies-inventory.json", "item-menu.json", "item-menu-closed.json", "brew-click.json", "brew-hp.json", "supplies-page-errors.json"].map(read);
     const icons = read("icons.json");
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
-    const [riftLog, riftChat, riftErrors, deflectLog, deflectErrors] = ["rifts.json", "rift-chat.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json"].map(read);
+    const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json"].map(read);
     const [spawnTile, targetTile, edgeOrderTile, edgeStopTile, nearSquare] = [spawn, target, edgeOrder, edgeStop, square].map((tile) => JSON.parse(tile));
     const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const inSquare = (t) => t.x >= nearSquare.minX && t.x <= nearSquare.maxX && t.y >= nearSquare.minY && t.y <= nearSquare.maxY;
@@ -888,6 +902,22 @@ drive() {
     }
     const overheadAt = (rows, t) => rowAt(rows, t)?.phase.overhead;
     const expectedRifts = JSON.parse(riftExpected);
+    const riftSamplesOf = JSON.parse(riftSoundSamples);
+    const [riftFrom, riftTo] = JSON.parse(riftSoundWindow);
+    const riftTimed = (list) => list.map(([at, id]) => [at, riftSamplesOf[id]]);
+    const riftHeard = (ids) => {
+      const lengths = new Set(ids.map((id) => riftSamplesOf[id]));
+      return riftAudio
+        .filter((s) => s.rate === 22050 && s.tick !== null && lengths.has(s.samples) && s.tick + s.phase >= riftFrom && s.tick + s.phase < riftTo)
+        .map((s) => [Math.round((s.tick + s.phase) * 100) / 100, s.samples]);
+    };
+    const [killOffset, killId] = JSON.parse(riftKillSound);
+    const destroyedAt = kindOf(riftLog.rows, "rift-destroyed")[0]?.at ?? null;
+    const riftExpectedSounds = {
+      spawn: riftTimed(JSON.parse(riftSpawnSounds)),
+      kill: destroyedAt === null ? [] : riftTimed([[destroyedAt + killOffset, killId]]),
+      burst: riftTimed(JSON.parse(riftBurstSounds)),
+    };
     const observed = {
       firstWalkOrders: cycle.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination)).slice(0, 2),
       edge: { arrived: [edgeArrived.tick, edgeArrived.player], held: [edge.tick, edge.player] },
@@ -983,6 +1013,12 @@ drive() {
         destroyed: kindOf(riftLog.rows, "rift-destroyed").map((e) => [e.at, e.rift]),
         bursts: kindOf(riftLog.rows, "rift-burst").map((e) => [e.at, e.rift, e.receipt]),
         chat: riftChat.data?.text ?? null,
+        sounds: {
+          spawn: riftHeard(JSON.parse(riftSpawnSounds).map(([, id]) => id)),
+          kill: riftHeard([killId]),
+          burst: riftHeard(JSON.parse(riftBurstSounds).map(([, id]) => id)),
+          contexts: [...new Set(riftAudio.map((s) => s.state))],
+        },
       },
     };
     const sameJson = (a, b) => require("util").isDeepStrictEqual(a, JSON.parse(b));
@@ -1065,6 +1101,9 @@ drive() {
       riftKilledByClick: rifts.destroyed.length === 1 && rifts.destroyed[0][1] === expectedRifts.destroyed && rifts.destroyed[0][0] <= Number(burstTick),
       killChatShown: rifts.chat === killChat,
       standingRiftBursts: sameJson(rifts.bursts, JSON.stringify(expectedRifts.bursts)),
+      riftSpawnSoundsOnFrame: onSchedule(rifts.sounds.spawn, riftExpectedSounds.spawn) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
+      riftKillSoundOnFrame: riftExpectedSounds.kill.length === 1 && onSchedule(rifts.sounds.kill, riftExpectedSounds.kill) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
+      riftBurstSoundsOnFrames: onSchedule(rifts.sounds.burst, riftExpectedSounds.burst) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
       noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
@@ -1079,7 +1118,8 @@ drive() {
     "$TELL_CENTRE_BOX" "$TRANSITION_SOUND_SAMPLES" "$LANDING_SOUNDS" "$LANDING_WINDOWS" "$STYLE_SOUNDS" "$STYLE_WINDOWS" "$SOUND_TOLERANCE_TICKS" \
     "$SUPPLY_INVENTORY" "$SUPPLY_NAMED_MENU" "$SUPPLY_HP_AFTER_BREW" "$KEYBIND_DEFAULT_KEY" "$KEYBIND_NEW_KEY" \
     "$LOADOUT_TRAINER_ICONS" "$((LOADOUT_SLOT_Y + SUPPLY_BREW_SLOT / 4 * LOADOUT_SLOT_DY))" "$SUPPLY_HOVER_NAME_PIXEL" \
-    "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" >"$VERIFY_DIR/observed.json"
+    "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" \
+    "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

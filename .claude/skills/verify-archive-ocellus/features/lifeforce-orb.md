@@ -1,6 +1,6 @@
 # Lifeforce orb
 
-Four ticks after each void forms, Ocellus takes half the player's current HP, rounded down, whatever prayer is on. A teal swirl plays on the player a tick before the hit. The next tick a dark orb appears 2 to 5 tiles away, off the void and never under the boss. It glows teal once it is ready, 12 ticks after an inner hit or 6 after an outer one. A player who ends a tick on the ready orb gets back exactly the HP that hit took, the tick after, even above 99. An inner orb nobody takes vanishes 18 ticks after the hit. An outer one does the same, and the next tick it heals the boss by the HP it held.
+Four ticks after each void forms, Ocellus takes half the player's current HP, rounded down, whatever prayer is on. A teal swirl plays on the player a tick before the hit. The next tick a dark orb appears 2 to 5 tiles away, off the void and never under the boss. A player farther than 5 tiles from all safe floor gets it on the nearest safe tile. It glows teal once it is ready, 12 ticks after an inner hit or 6 after an outer one. A player who ends a tick on the ready orb gets back exactly the HP that hit took, the tick after, even above 99. An inner orb nobody takes vanishes 18 ticks after the hit. An outer one does the same, and the next tick it heals the boss by the HP it held.
 
 ## Sub-features
 

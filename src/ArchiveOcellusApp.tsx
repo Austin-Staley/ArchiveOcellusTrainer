@@ -5,6 +5,9 @@ import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { DrillConfig } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P4, parseDrillRequest } from "./content/ocellus/js/OcellusTimings";
 import type { FightLog, FightSnapshot } from "./content/ocellus/js/P4Types";
+import { keepHoverTextOnCanvas } from "./hoverText";
+
+keepHoverTextOnCanvas();
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";

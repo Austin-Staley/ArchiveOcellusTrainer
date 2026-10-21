@@ -153,6 +153,11 @@ export class OcellusTwistedBow extends TwistedBow {
     return stanceSpeed(this, gear.twistedBow.value);
   }
 
+  /** The wiki floors the effective ranged level after the void factor; the SDK leaves that product unfloored. */
+  override _rangedAttack(from: Unit, to: Unit, bonuses: AttackBonuses): number {
+    return Math.floor(super._rangedAttack(from, to, bonuses));
+  }
+
   override attack(from: Unit, to: Unit, bonuses: AttackBonuses = {}, options: ProjectileOptions = {}): boolean {
     return super.attack(from, to, rangedBonuses(this, from, bonuses), options);
   }
@@ -235,6 +240,10 @@ export class TonalzticsOfRalos extends RangedWeapon {
 
   override attack(from: Unit, to: Unit, bonuses: AttackBonuses = {}, options: ProjectileOptions = {}): boolean {
     return this.throwBoth(from, to, bonuses, options);
+  }
+
+  override _rangedAttack(from: Unit, to: Unit, bonuses: AttackBonuses): number {
+    return Math.floor(super._rangedAttack(from, to, bonuses));
   }
 
   override _maxHit(from: Unit, to: Unit, bonuses: AttackBonuses): number {

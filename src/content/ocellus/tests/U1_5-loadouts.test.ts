@@ -96,6 +96,20 @@ describe("U1.5 loadouts", () => {
     drill.dispose();
   });
 
+  test("elite void's accuracy factor is floored on the effective ranged level for the Twisted Bow and Ralos", () => {
+    const attackRoll = (ralos: boolean) => {
+      const drill = startDrill();
+      if (ralos) clickInventory(drill, 28922);
+      const player = drill.player();
+      const weapon = player.equipment.weapon;
+      if (!weapon) throw new Error("no weapon worn");
+      const roll = weapon._attackRoll(player, drill.boss(), { effectivePrayers: {}, voidMultiplier: 1.1, gearRangeMultiplier: 1 });
+      drill.dispose();
+      return roll;
+    };
+    expect([attackRoll(false), attackRoll(true)]).toEqual([30958, 27378]);
+  });
+
   test("the scythe rolls crush with Inquisitor's bonus on Jab, and slash without it on Chop", () => {
     const jab = startDrill();
     for (const item of [...jab.player().inventory]) {

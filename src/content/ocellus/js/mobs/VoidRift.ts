@@ -6,6 +6,8 @@ import type { Tile } from "../P4Types";
 const RIFT = OCELLUS_P4.rifts;
 
 export class VoidRift extends Mob {
+  private detonated = false;
+
   constructor(region: Region, at: Tile) {
     super(region, { x: at.x, y: at.y });
     this.playAnimation(RIFT.poses.spawn.value);
@@ -45,8 +47,8 @@ export class VoidRift extends Mob {
     return RIFT.poses.idle.value;
   }
 
-  override get deathAnimationId(): number {
-    return RIFT.poses.despawn.value;
+  override get deathAnimationId(): number | null {
+    return this.detonated ? null : RIFT.poses.despawn.value;
   }
 
   override movementStep(): void {}
@@ -57,8 +59,10 @@ export class VoidRift extends Mob {
     return CacheRenderModel.forRenderable(this, CacheRenderReferences.npc(RIFT.npcId.value));
   }
 
+  /** Unit.dead() starts a death sequence a tick after the death, so the detonation plays here on the burst tick and dead() plays none. */
   detonate(): void {
+    this.detonated = true;
+    this.dead();
     this.playAnimation(RIFT.poses.detonate.value);
-    this.dying = this.deathAnimationLength;
   }
 }

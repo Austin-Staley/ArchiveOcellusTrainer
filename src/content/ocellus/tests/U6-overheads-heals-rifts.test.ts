@@ -104,6 +104,7 @@ describe("U6 boss overheads, heals and rifts", () => {
       destroyed: [[78, "rift-67-1"]],
       bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
       chat: ["Destroying the void rift empowers you!"],
+      northEastRiftSequences: [14896, 14897],
     },
     {
       killLandsAt: 78,
@@ -113,13 +114,24 @@ describe("U6 boss overheads, heals and rifts", () => {
         [78, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
       ],
       chat: [],
+      northEastRiftSequences: [14896, 14898],
     },
-  ])("a rift dead by the end of 77 is destroyed at 78 and a standing one bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat }) => {
+  ])("a rift dead by the end of 77 despawns and is destroyed at 78, and a standing one detonates and bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat, northEastRiftSequences }) => {
     const drill = startDrill({ selection: { focus: "rifts" } });
+    drill.tickTo(68);
+    const northEast = northEastRift(drill);
+    const sequences: number[] = [];
+    // Stands in for the 3D renderer, which jsdom cannot run.
+    northEast.setAnimationListener({ animationChanged: (id) => Promise.resolve(void sequences.push(id)), modelChanged: () => undefined });
     drill.tickTo(killLandsAt - 1);
-    drill.hit(drill.player(), northEastRift(drill), 44);
+    drill.hit(drill.player(), northEast, 44);
     drill.tickTo(79);
-    expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat()]).toEqual([destroyed, bursts, chat]);
+    expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat(), sequences]).toEqual([
+      destroyed,
+      bursts,
+      chat,
+      northEastRiftSequences,
+    ]);
     drill.dispose();
   });
 

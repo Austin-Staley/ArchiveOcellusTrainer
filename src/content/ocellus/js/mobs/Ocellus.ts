@@ -322,20 +322,21 @@ export class Ocellus extends Mob {
       .map((projectile): FightEvent => {
         const requested = projectile.damage;
         const style = incomingStyle(projectile.attackStyle);
-        const outcome = this.judge(moment, style, projectile.totalDelay);
+        const launchedAt = tick(Math.max(0, moment.tick - projectile.totalDelay));
+        const outcome = this.judge(moment, style, launchedAt);
         if (outcome !== "passed") projectile.damage = 0;
         return { kind: "player-hit-judged", at: moment.tick, style, outcome, requested };
       });
   }
 
-  private judge(moment: Moment, style: IncomingStyle, travel: number): HitJudgement {
+  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): HitJudgement {
     if (moment.phase.boss !== "present-damageable") return "invulnerable";
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":
         return "passed";
       case "block": {
-        const { overhead } = rule.sample === "impact" ? moment.phase : this.schedule.at(tick(Math.max(0, moment.tick - travel))).phase;
+        const { overhead } = rule.sample === "impact" ? moment.phase : this.schedule.at(launchedAt).phase;
         return overhead !== null && OCELLUS_P4.deflects[overhead].value === style ? "blocked" : "passed";
       }
       default: {

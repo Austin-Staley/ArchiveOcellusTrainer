@@ -8,7 +8,7 @@ class MaxRollDummy extends TestNpc {
   readonly received: [number, string][] = [];
   private readonly footprint: number;
 
-  constructor(region: Region, location: Location, target: Target) {
+  constructor(region: Region, location: Location, target: Target, private readonly maxedHits: number) {
     super(region, location, {});
     this.footprint = target.size;
     this.stats = { ...this.stats, magic: target.magic, defence: target.defence, hitpoint: 10000 };
@@ -20,7 +20,7 @@ class MaxRollDummy extends TestNpc {
   }
 
   override incomingAttackRollModifiers(_attack: IncomingAttackRoll): IncomingAttackRollModifiers {
-    return { guaranteedHit: true, maxDamage: true };
+    return this.received.length < this.maxedHits ? { guaranteedHit: true, maxDamage: true } : {};
   }
 
   override addProjectile(projectile: Projectile): void {
@@ -35,8 +35,8 @@ class MaxRollDummy extends TestNpc {
 
 type Drill = ReturnType<typeof startDrill>;
 
-function firstAttack(drill: Drill, at: Location, target: Target): MaxRollDummy {
-  const dummy = new MaxRollDummy(drill.region, at, target);
+function firstAttack(drill: Drill, at: Location, target: Target, maxedHits = Infinity): MaxRollDummy {
+  const dummy = new MaxRollDummy(drill.region, at, target, maxedHits);
   drill.region.addMob(dummy);
   drill.player().setAggro(dummy);
   for (let tick = 0; tick < 12 && dummy.received.length === 0; tick++) drill.region.world.tickWorld();
@@ -114,6 +114,15 @@ describe("U1.5 loadouts", () => {
     drill.player().useSpecialAttack = true;
     const dummy = firstAttack(drill, SOUTH, { magic: 240, defence: 200, size: 1 });
     expect([dummy.received, dummy.currentStats.defence, drill.region.snapshot()?.player.specialEnergy]).toEqual([[[18, "range"], [18, "range"]], 140, 50]);
+    drill.dispose();
+  });
+
+  test("on an NPC the first glaive's drain lowers the Defence the second glaive rolls against", () => {
+    const drill = startDrill({ seed: 1 });
+    clickInventory(drill, 28922);
+    drill.player().useSpecialAttack = true;
+    const dummy = firstAttack(drill, SOUTH, { magic: 2400, defence: 600, size: 1 }, 1);
+    expect([dummy.received.map(([damage]) => damage > 0), dummy.currentStats.defence]).toEqual([[true, true], 0]);
     drill.dispose();
   });
 });

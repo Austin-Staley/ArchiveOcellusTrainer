@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|SUPPLY_[A-Z_]+|KEYBIND_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|SUPPLY_[A-Z_]+|KEYBIND_[A-Z_]+|RIFT_[A-Z_]+|OVERHEAD_[A-Z_]+|ICON_BOX|NORTH_EAST_RIFT_[A-Z_]+|CHAT_POLL_[A-Z_]+|RISEN_BOSS_[A-Z_]+|DEFLECT_[A-Z_]+|SOUL_SPLIT_[A-Z_]+|KILL_CHAT|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive_overheads_rifts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -226,10 +226,15 @@ fixture_logs() {
     const prayed = { kind: "prayer-published", prayer: "magic" };
     const protectedHit = struck(37, "magic", { requested: 8, applied: 8, beforeHp: 99, afterHp: 91, prayer: "magic" });
     const unprotectedHit = struck(37, "magic", { requested: 49, applied: 49, beforeHp: 99, afterHp: 50, prayer: null });
-    const inTime = Array.from({ length: 39 }, (_, t) => ({
+    const healed = (t, ordinal, requested, beforeHp) => ({ kind: "boss-healed", at: t, cause: { kind: "soul-split", ordinal }, receipt: { requested, applied: requested, beforeHp, afterHp: beforeHp + requested } });
+    const inTime = Array.from({ length: 40 }, (_, t) => ({
       tick: t,
       inputs: t === 34 ? [prayed] : [],
-      events: [...(t === 32 ? [told(32, "vortex", "magic")] : []), ...(t === 37 ? [fault === "unprotected" ? unprotectedHit : protectedHit] : [])],
+      events: [
+        ...(t === 32 ? [told(32, "vortex", "magic")] : []),
+        ...(t === 37 ? [fault === "unprotected" ? unprotectedHit : protectedHit] : []),
+        ...(t === 39 && fault === "protected-heals" ? [healed(39, 0, 8, 1355)] : []),
+      ],
     }));
     const firstTell = fault === "tell-late" ? 33 : 32;
     const lateTells = { [firstTell]: told(firstTell, "vortex", "magic"), 60: told(60, "spike-disk", "ranged"), 92: told(92, "black-disk", "melee") };
@@ -241,7 +246,13 @@ fixture_logs() {
     const lateRows = Array.from({ length: 98 }, (_, t) => ({
       tick: t,
       inputs: t === 38 ? [prayed] : [],
-      events: [...(lateTells[t] ? [lateTells[t]] : []), ...(lateHits[t] ? [lateHits[t]] : []), ...(t === 97 ? [{ kind: "run-ended", at: 97, reason: "death" }] : [])],
+      events: [
+        ...(lateTells[t] ? [lateTells[t]] : []),
+        ...(lateHits[t] ? [lateHits[t]] : []),
+        ...(t === 39 ? [healed(39, 0, 49, 1355)] : []),
+        ...(t === 67 ? [healed(67, 1, 47, 1404)] : []),
+        ...(t === 97 ? [{ kind: "run-ended", at: 97, reason: "death" }] : []),
+      ],
     }));
     write("special-log.json", "transition-attacks", inTime);
     write("special-late-log.json", "transition-attacks", lateRows);
@@ -256,6 +267,28 @@ fixture_logs() {
       ...landingAt(89 + landingStart), heard(92.1, 66150), heard(92.44, 22050), heard(96.53, 19845), heard(97.1, 33075), heard(97.11, 26460),
     ].sort((a, b) => a.tick + a.phase - (b.tick + b.phase));
     fs.writeFileSync(`${dir}/special-audio.json`, JSON.stringify({ data: { result: transitionAudio } }));
+    const overheadOf = (t) => (t < 8 ? null : t < 33 ? "deflect-melee" : t < 39 ? "soul-split" : t < 61 ? "deflect-range" : t < 68 ? "soul-split" : "deflect-melee");
+    const burst = (rift, tile, beforeHp) => ({ kind: "rift-burst", at: 78, rift, tile, receipt: { requested: 14, applied: 14, beforeHp, afterHp: beforeHp - 14, prayer: null } });
+    const [northWest, northEast] = [{ x: 2, y: 2 }, { x: 11, y: fault === "rift-misplaced" ? 3 : 2 }];
+    const riftEvents = {
+      67: [{ kind: "rift-spawned", at: 67, rift: "rift-67-0", tile: northWest }, { kind: "rift-spawned", at: 67, rift: "rift-67-1", tile: northEast }],
+      73: fault === "rift-survives" ? [] : [{ kind: "rift-destroyed", at: 73, rift: "rift-67-1", tile: northEast }],
+      78: fault === "burst-missing" ? [] : fault === "rift-survives" ? [burst("rift-67-0", northWest, 99), burst("rift-67-1", northEast, 85)] : [burst("rift-67-0", northWest, 99)],
+    };
+    const riftRows = Array.from({ length: 80 }, (_, t) => ({ tick: t, phase: { overhead: overheadOf(t) }, events: riftEvents[t] ?? [] }));
+    const swings = [14, 19, 24, 29, 34, 39, 44];
+    const deflectRows = Array.from({ length: 47 }, (_, t) => {
+      const outcome = swings.includes(t) ? (overheadOf(t) === "deflect-melee" && fault !== "deflect-off" ? "blocked" : "passed") : null;
+      const hp = 1355 - 20 * swings.filter((s) => s < t && (overheadOf(s) !== "deflect-melee" || fault === "deflect-off")).length;
+      return {
+        tick: t,
+        phase: { overhead: overheadOf(t) },
+        bossHp: { atBossStep: hp, atPostTick: outcome === "passed" ? hp - 20 : hp },
+        events: outcome ? [{ kind: "player-hit-judged", at: t, style: "melee", outcome, requested: 20 }] : [],
+      };
+    });
+    write("rift-log.json", "rifts", riftRows);
+    write("deflect-log.json", "rifts", deflectRows);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
@@ -294,6 +327,30 @@ fixture_tell() {
     }
     require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
   ' "$1" "$2" "${3:-none}" "$TELL_BOX" "$TELL_CENTRE_BOX"
+}
+
+fixture_icon() {
+  command node -e '
+    const [file, icon, iconBox] = process.argv.slice(1);
+    const zlib = require("zlib");
+    const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; } return ~c >>> 0; };
+    const chunk = (type, data) => { const head = Buffer.alloc(8), tail = Buffer.alloc(4); head.writeUInt32BE(data.length); head.write(type, 4); tail.writeUInt32BE(crc(Buffer.concat([Buffer.from(type), data]))); return Buffer.concat([head, data, tail]); };
+    const [width, height] = [1280, 800];
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const [BLUE, RED, ORANGE, FLOOR] = [[0x20, 0x80, 0xff], [0xc0, 0x10, 0x10], [0xc0, 0x80, 0x40], [0x68, 0x60, 0x58]];
+    const parts = { "deflect-melee": [[BLUE, 40], [RED, 40]], "deflect-range": [[BLUE, 40], [ORANGE, 10]], "soul-split": [[RED, 40]], none: [] }[icon];
+    const offset = JSON.parse(iconBox);
+    const box = { minX: width / 2 + offset.minX, maxX: width / 2 + offset.maxX, minY: height / 2 + offset.minY, maxY: height / 2 + offset.maxY };
+    const queue = parts.flatMap(([colour, count]) => Array(count).fill(colour));
+    const raw = Buffer.alloc(height * (1 + width * 3));
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const inBox = x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
+        raw.set(inBox && queue.length > 0 ? queue.shift() : FLOOR, y * (1 + width * 3) + 1 + x * 3);
+      }
+    }
+    require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+  ' "$1" "$2" "$ICON_BOX"
 }
 
 fixture_png() {
@@ -361,6 +418,12 @@ fake_screenshot() {
     whitecentre:special-*) fixture_tell "$1" 4 white ;;
     *:special-*) fixture_tell "$1" 4 black ;;
     notell:* | whitecentre:*) SCREENSHOT=ok fake_screenshot "$1" ;;
+    noicon:overhead-*) fixture_icon "$1" none ;;
+    noicon:*) SCREENSHOT=ok fake_screenshot "$1" ;;
+    *:overhead-5.png) fixture_icon "$1" none ;;
+    *:overhead-31.png) fixture_icon "$1" deflect-melee ;;
+    *:overhead-35.png) fixture_icon "$1" soul-split ;;
+    *:overhead-45.png) fixture_icon "$1" deflect-range ;;
     ok:void-flood.png | ok:flood-ring.png | noorb:void-flood.png | noorb:flood-ring.png | markerfollows:void-flood.png | markerfollows:flood-ring.png) fixture_png "$1" 60 ;;
     ok:void-inner.png | noorb:void-inner.png | markerfollows:void-inner.png) fixture_png "$1" 2 ;;
     swapped:void-flood.png | swapped:flood-ring.png) fixture_png "$1" 2 ;;
@@ -475,6 +538,8 @@ fake_browser() {
       "--json eval window.__archiveOcellusProbe.snapshot().panel") supply_probe panel ;;
       "--json eval localStorage.getItem('osrs-sdk:settings')") supply_probe saved ;;
       "--json eval window.__archiveOcellusProbe.log()")
+        [[ ! -e "$T/deflect" ]] || { cat "$T/deflect-log.json"; return; }
+        [[ ! -e "$T/rifts" ]] || { cat "$T/rift-log.json"; return; }
         [[ ! -e "$T/special-late" ]] || { cat "$T/special-late-log.json"; return; }
         [[ ! -e "$T/special" ]] || { cat "$T/special-log.json"; return; }
         [[ ! -e "$T/explosion-under" ]] || { cat "$T/explosion-under-log.json"; return; }
@@ -491,6 +556,8 @@ fake_browser() {
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;
       "open "*"${SPECIAL_QUERY}") : >"$T/special" ;;
+      "open "*"${DEFLECT_QUERY}") : >"$T/deflect" ;;
+      "open "*"${RIFT_QUERY}") : >"$T/rifts" ;;
       "batch --bail")
         local shot
         for shot in $(command node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>JSON.parse(s).filter((c)=>c[0]==="screenshot").forEach((c)=>console.log(c[1])))'); do
@@ -505,6 +572,7 @@ fake_browser() {
         echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts"
         [[ ! -e "$T/special" ]] || : >"$T/special-late"
         ;;
+      "--json get text #game_chat") if [[ "$FAULT" == no-chat ]]; then echo '{"data":{"text":""}}'; else printf '{"data":{"text":"%s"}}\n' "$KILL_CHAT"; fi ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;
       "--json get box "*) echo '{"data":{"x":0,"y":0,"width":1280,"height":800}}' ;;
@@ -852,6 +920,55 @@ clipped_hover_text_fails() {
   [[ "$(failed_checks)" == hoverTextOnCanvas ]] || { echo "expected only hoverTextOnCanvas to fail, got: $(failed_checks)"; return 1; }
 }
 
+overhead_icon_not_drawn_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' noicon
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although no overhead icon was drawn over the boss"; return 1; fi
+  grep -q '"overheadIconsDrawn": false' "$T/drive.log" || { echo "the overhead icon check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+deflect_off_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' deflect-off
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although melee hits landed through Deflect Melee"; return 1; fi
+  grep -q '"deflectBlocksMeleeUntilSoulSplit": false' "$T/drive.log" || { echo "the deflect check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+protected_hit_heals_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' protected-heals
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although Soul Split healed the boss from a protected hit"; return 1; fi
+  grep -q '"soulSplitHealsUnprotected": false' "$T/drive.log" || { echo "the Soul Split check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+misplaced_rift_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' rift-misplaced
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the north-east rift spawned a tile off its offset"; return 1; fi
+  grep -q '"riftsSpawnBesideBoss": false' "$T/drive.log" || { echo "the rift spawn check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+surviving_rift_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' rift-survives
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the clicked rift was never destroyed"; return 1; fi
+  grep -q '"riftKilledByClick": false' "$T/drive.log" || { echo "the rift kill check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+missing_kill_chat_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' no-chat
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the chat stayed empty after the kill"; return 1; fi
+  grep -q '"killChatShown": false' "$T/drive.log" || { echo "the kill chat check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+missing_burst_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' burst-missing
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the standing rift never burst"; return 1; fi
+  grep -q '"standingRiftBursts": false' "$T/drive.log" || { echo "the rift burst check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -905,7 +1022,14 @@ for t in \
   default_key_not_restored_fails \
   placeholder_icon_fails \
   unloaded_icon_fails \
-  clipped_hover_text_fails; do
+  clipped_hover_text_fails \
+  overhead_icon_not_drawn_fails \
+  deflect_off_fails \
+  protected_hit_heals_fails \
+  misplaced_rift_fails \
+  surviving_rift_fails \
+  missing_kill_chat_fails \
+  missing_burst_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

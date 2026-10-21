@@ -43,8 +43,8 @@ LOADOUT_SPECIAL_SLOT=0
 LOADOUT_SWITCHES=8
 LOADOUT_SPECIAL_ORB_X=1140
 LOADOUT_SPECIAL_ORB_Y=157
-LOADOUT_BOSS_CLICK_RIGHT_PX=-10
-LOADOUT_BOSS_CLICK_DOWN_PX=-160
+RISEN_BOSS_CLICK_RIGHT_PX=-10
+RISEN_BOSS_CLICK_DOWN_PX=-160
 LOADOUT_DIVISION_DRAIN=37
 LOADOUT_EQUIPMENT_TAB_X=1197
 LOADOUT_EQUIPMENT_TAB_Y=745
@@ -121,6 +121,22 @@ STYLE_WINDOWS='[[32,37.5],[60,65.5],[92,97.5]]'
 SOUND_TOLERANCE_TICKS=0.2
 SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
 ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[13,{"x":3,"y":2},49]],"matured":[[24,{"x":3,"y":2}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
+RIFT_QUERY="?seed=1&focus=rifts"
+OVERHEAD_SHOT_TICKS="5 31 35 45"
+ICON_BOX='{"minX":-40,"maxX":40,"minY":-290,"maxY":-190}'
+RIFT_CLICK_TICK=68
+NORTH_EAST_RIFT_CLICK_LEFT_PX=325
+NORTH_EAST_RIFT_CLICK_UP_PX=52
+RIFT_BURST_TICK=78
+CHAT_POLL_WAIT_MS=600
+DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
+DEFLECT_CLICK_TICK=12
+DEFLECT_BLOCKED_SHOT_TICK=19
+DEFLECT_LAST_TICK=46
+SOUL_SPLIT_HEAL_TICK=39
+RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[78,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
+SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1355,"afterHp":1404}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1404,"afterHp":1451}]]'
+KILL_CHAT="Destroying the void rift empowers you!"
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
 log() { echo "verify: $*"; }
@@ -461,7 +477,7 @@ drive_focus() {
 
 drive_void_shot() {
   local box
-  ab open "${URL}?seed=1&focus=${VOID_DRILL}" >/dev/null || return 1
+  ab open "${URL}?seed=1&deflect=none&focus=${VOID_DRILL}" >/dev/null || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "the reloaded ${VOID_DRILL} drill never started ticking"; return 1; }
   box="$(ab --json get box "#world")"
@@ -508,8 +524,8 @@ drive_loadouts() {
   ab wait 700 >/dev/null
   click_at "$LOADOUT_SPECIAL_ORB_X" "$LOADOUT_SPECIAL_ORB_Y" || return 1
   box="$(ab --json get box "#world")"
-  click_at $(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + LOADOUT_BOSS_CLICK_RIGHT_PX )) \
-    $(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + LOADOUT_BOSS_CLICK_DOWN_PX )) || return 1
+  click_at $(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + RISEN_BOSS_CLICK_RIGHT_PX )) \
+    $(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + RISEN_BOSS_CLICK_DOWN_PX )) || return 1
   ab wait --fn "window.__archiveOcellusProbe.snapshot().fight.player.specialEnergy < 100" --timeout 15000 >/dev/null || log "the special attack was not spent"
   ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.events).filter((event) => event.kind === 'player-hit-judged').length >= 2" \
     --timeout 15000 >/dev/null || log "the glaives never landed"
@@ -661,7 +677,7 @@ drive_transition_attack() {
   shot_after_tick "$SPECIAL_BEFORE_SHOT_TICK" 0 special-before.png || { log "pre-tell screenshot failed"; return 1; }
   click_after_tick "$SPECIAL_PRAY_TICK" "$PROTECT_MAGIC_RIGHT_PX" "$PROTECT_DOWN_PX" || { log "Protect from Magic was not clicked before the landing"; return 1; }
   shot_after_tick "$SPECIAL_VORTEX_SHOT_TICK" 0 special-vortex.png || { log "vortex screenshot failed"; return 1; }
-  fight_tick_at_least $((SPECIAL_HIT_TICK + 1)) 30000 || { log "the transition drill never stepped past the landing at P4 tick ${SPECIAL_HIT_TICK}"; return 1; }
+  fight_tick_at_least "$SOUL_SPLIT_HEAL_TICK" 30000 || { log "the transition drill never stepped to the Soul Split heal at P4 tick ${SOUL_SPLIT_HEAL_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/special.json"
   ab console >"$VERIFY_DIR/special-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/special-page-errors.json" || { log "page error capture failed"; return 1; }
@@ -672,6 +688,7 @@ drive_transition_attack() {
   fight_tick_at_least 0 120000 || { log "the late-prayer drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
   click_after_tick "$SPECIAL_HIT_TICK" "$PROTECT_MAGIC_RIGHT_PX" "$PROTECT_DOWN_PX" || { log "the late Protect from Magic was not clicked"; return 1; }
+  shot_after_tick "$SOUL_SPLIT_HEAL_TICK" 0 special-heal.png || { log "Soul Split heal screenshot failed"; return 1; }
   shot_after_tick "$SPECIAL_SPIKE_SHOT_TICK" 0 special-spike-disk.png || { log "spike disk screenshot failed"; return 1; }
   shot_after_tick "$SPECIAL_SEMICIRCLE_SHOT_TICK" 0 special-semicircle.png || { log "semicircle screenshot failed"; return 1; }
   shot_after_tick "$SPECIAL_BLACK_SHOT_TICK" 0 special-black-disk.png || { log "black disk screenshot failed"; return 1; }
@@ -684,6 +701,35 @@ drive_transition_attack() {
   save_sound_settings false || { log "the sound settings were not restored"; return 1; }
 }
 
+drive_overheads_rifts() {
+  local shot
+  ab open "${URL}${RIFT_QUERY}" >/dev/null || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  for shot in $OVERHEAD_SHOT_TICKS; do
+    shot_after_tick "$shot" 0 "overhead-${shot}.png" || { log "overhead screenshot at P4 tick ${shot} failed"; return 1; }
+  done
+  shot_after_tick "$RIFT_CLICK_TICK" 0 rift-spawned.png || { log "rift spawn screenshot failed"; return 1; }
+  click_after_tick "$RIFT_CLICK_TICK" "-$NORTH_EAST_RIFT_CLICK_LEFT_PX" "-$NORTH_EAST_RIFT_CLICK_UP_PX" || { log "the north-east rift was not clicked"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe.log().rows.some((row) => row.events.some((e) => e.kind === 'rift-destroyed'))" --timeout 30000 >/dev/null || { log "no rift was destroyed after the click"; return 1; }
+  ab wait "$CHAT_POLL_WAIT_MS" >/dev/null
+  ab screenshot "$VERIFY_DIR/rift-destroyed.png" >/dev/null || { log "rift kill screenshot failed"; return 1; }
+  ab --json get text "#game_chat" >"$VERIFY_DIR/rift-chat.json" || { log "chat text capture failed"; return 1; }
+  shot_after_tick "$RIFT_BURST_TICK" 0 rift-burst.png || { log "rift burst screenshot failed"; return 1; }
+  fight_tick_at_least $((RIFT_BURST_TICK + 1)) 30000 || { log "the rifts drill never stepped past the burst at P4 tick ${RIFT_BURST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/rifts.json"
+  ab console >"$VERIFY_DIR/rift-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/rift-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  ab open "${URL}${DEFLECT_QUERY}" >/dev/null || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$DEFLECT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the risen boss was not clicked"; return 1; }
+  shot_after_tick "$DEFLECT_BLOCKED_SHOT_TICK" 0 deflect-blocked.png || { log "deflected attack screenshot failed"; return 1; }
+  fight_tick_at_least "$DEFLECT_LAST_TICK" 60000 || { log "the deflect drill never stepped to P4 tick ${DEFLECT_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/deflect.json"
+  ab console >"$VERIFY_DIR/deflect-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/deflect-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
@@ -692,7 +738,7 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_void_shot && drive_lifeforce_orb && drive_explosions && drive_transition_attack && drive_loadouts && drive_supplies && drive_keybinds || return 1
+  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_void_shot && drive_lifeforce_orb && drive_explosions && drive_transition_attack && drive_loadouts && drive_supplies && drive_keybinds && drive_overheads_rifts || return 1
 
   local capture
   for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json \
@@ -704,7 +750,9 @@ drive() {
     loadout-before.json loadout-ranged.png icons.json loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png equipment-melee.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
-    keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json; do
+    keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
+    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-console.log rift-page-errors.json \
+    deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
 
@@ -712,7 +760,7 @@ drive() {
     const [dir, spawn, target, edgeOrder, edgeStop, holdTicks, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected, orbBox, orbFrames,
       innerMarks, lateMark, explosionPixel, explosionExpected, soundSamples, explosionSounds, centreX, centreY, tellBox, specialExpected,
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
-      supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel] = process.argv.slice(1);
+      supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -725,6 +773,7 @@ drive() {
     const [carried, itemMenu, itemMenuClosed, brewClick, brewHp, suppliesErrors] = ["supplies-inventory.json", "item-menu.json", "item-menu-closed.json", "brew-click.json", "brew-hp.json", "supplies-page-errors.json"].map(read);
     const icons = read("icons.json");
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
+    const [riftLog, riftChat, riftErrors, deflectLog, deflectErrors] = ["rifts.json", "rift-chat.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json"].map(read);
     const [spawnTile, targetTile, edgeOrderTile, edgeStopTile, nearSquare] = [spawn, target, edgeOrder, edgeStop, square].map((tile) => JSON.parse(tile));
     const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const inSquare = (t) => t.x >= nearSquare.minX && t.x <= nearSquare.maxX && t.y >= nearSquare.minY && t.y <= nearSquare.maxY;
@@ -826,6 +875,19 @@ drive() {
     const hitsOf = (rows) => kindOf(rows, "special-hit").map((e) => [e.at, e.style, e.receipt]);
     const expectedSpecial = JSON.parse(specialExpected);
     const soundBySamples = Object.fromEntries(Object.entries(JSON.parse(soundSamples)).map(([id, samples]) => [samples, Number(id)]));
+    const iconArea = fromCentre(iconBox);
+    const iconColours = {
+      blue: (r, g, b) => r <= 80 && g <= 190 && b >= 200,
+      red: (r, g, b) => r >= 150 && r <= 240 && g <= 80 && b <= 80,
+      orange: (r, g, b) => r >= 170 && g >= 100 && g <= 165 && b <= 100,
+    };
+    function iconIn(file) {
+      const share = Object.fromEntries(Object.entries(iconColours).map(([name, matches]) => [name, pixelShare(file, matches, iconArea)]));
+      const icon = share.blue >= 0.2 ? (share.red >= 0.2 ? "deflect-melee" : share.orange >= 0.06 ? "deflect-range" : "unknown") : share.red >= 0.2 ? "soul-split" : null;
+      return { ...share, icon };
+    }
+    const overheadAt = (rows, t) => rowAt(rows, t)?.phase.overhead;
+    const expectedRifts = JSON.parse(riftExpected);
     const observed = {
       firstWalkOrders: cycle.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination)).slice(0, 2),
       edge: { arrived: [edgeArrived.tick, edgeArrived.player], held: [edge.tick, edge.player] },
@@ -903,6 +965,25 @@ drive() {
         tabs: [keysOpen.tab, keysBound.tab, keysOldKey.tab, keysReloaded.tab],
         inventoryKey: [keysOpen.keys.inventory, keysBound.keys.inventory, keysSaved.values?.inventory_key ?? null, keysReloaded.keys.inventory, keysRestored.keys.inventory],
       },
+      overheads: {
+        box: iconArea,
+        shots: overheadShots.split(" ").map(Number).map((t) => ({ tick: t, logged: [overheadAt(riftLog.rows, t), overheadAt(riftLog.rows, t + 1)], ...iconIn(`overhead-${t}.png`) })),
+        meleeJudged: kindOf(deflectLog.rows, "player-hit-judged").filter((e) => e.style === "melee").map((e) => {
+          const hp = rowAt(deflectLog.rows, e.at)?.bossHp;
+          return { at: e.at, overhead: overheadAt(deflectLog.rows, e.at), outcome: e.outcome, taken: hp ? hp.atBossStep - hp.atPostTick : null };
+        }),
+      },
+      soulSplit: {
+        protectedRunReached: rowAt(specialLog.rows, expectedSpecial.protected[0] + 2) !== undefined,
+        protectedHeals: kindOf(specialLog.rows, "boss-healed").map((e) => [e.at, e.cause, e.receipt]),
+        lateHeals: kindOf(lateLog.rows, "boss-healed").map((e) => [e.at, e.cause, e.receipt]),
+      },
+      rifts: {
+        spawned: kindOf(riftLog.rows, "rift-spawned").map((e) => [e.at, e.rift, e.tile]),
+        destroyed: kindOf(riftLog.rows, "rift-destroyed").map((e) => [e.at, e.rift]),
+        bursts: kindOf(riftLog.rows, "rift-burst").map((e) => [e.at, e.rift, e.receipt]),
+        chat: riftChat.data?.text ?? null,
+      },
     };
     const sameJson = (a, b) => require("util").isDeepStrictEqual(a, JSON.parse(b));
     const share = observed.voidPixelShare;
@@ -910,6 +991,8 @@ drive() {
     const { dodges, late: lateStep, under, shards: shardSpots, sounds } = observed.explosions;
     const [left, standing] = [shardSpots["explosion-left.png"], shardSpots["explosion-standing.png"]];
     const special = observed.special;
+    const { shots: iconShots, meleeJudged } = observed.overheads;
+    const { soulSplit, rifts } = observed;
     const readyAt = Math.max(orb.arrivedAt ?? Infinity, orb.matured[0]?.[0] ?? Infinity);
     const checks = {
       spawnedOnSpawnTile: same(before.player, spawnTile),
@@ -973,7 +1056,16 @@ drive() {
       trainerItemsShowCacheIcons: Object.entries(JSON.parse(trainerIcons)).every(([id, size]) => icons[id]?.path === `/osrs-assets/item-icons/${id}.png` && icons[id].size === size),
       hoverTextOnCanvas: readsInFull(observed.hoverText["brew-heal.png"]) &&
         (readsInFull(observed.hoverText["keybinds.png"]) || (observed.hoverText["keybinds.png"].action === null && observed.hoverText["keybinds.png"].name === null)),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, suppliesErrors, keybindsErrors].every((list) => list.length === 0),
+      overheadIconsDrawn: iconShots.every((shot) => shot.logged[0] !== undefined && shot.logged[0] === shot.logged[1] && shot.icon === shot.logged[0]),
+      deflectBlocksMeleeUntilSoulSplit: meleeJudged.filter((e) => e.outcome === "blocked").length >= 2 && meleeJudged.filter((e) => e.outcome === "passed").length >= 2 &&
+        meleeJudged.every((e) => e.outcome === (e.overhead === "deflect-melee" ? "blocked" : "passed") && (e.outcome === "passed" || e.taken === 0)) &&
+        meleeJudged.reduce((sum, e) => sum + (e.outcome === "passed" ? e.taken : 0), 0) > 0,
+      soulSplitHealsUnprotected: soulSplit.protectedRunReached && soulSplit.protectedHeals.length === 0 && sameJson(soulSplit.lateHeals, soulSplitExpected),
+      riftsSpawnBesideBoss: sameJson(rifts.spawned, JSON.stringify(expectedRifts.spawned)),
+      riftKilledByClick: rifts.destroyed.length === 1 && rifts.destroyed[0][1] === expectedRifts.destroyed && rifts.destroyed[0][0] <= Number(burstTick),
+      killChatShown: rifts.chat === killChat,
+      standingRiftBursts: sameJson(rifts.bursts, JSON.stringify(expectedRifts.bursts)),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -986,7 +1078,8 @@ drive() {
     "[${EXPLOSION_INNER_MARKS// /,}]" "${EXPLOSION_OUTER_MARKS%% *}" "$EXPLOSION_PIXEL" "$EXPLOSION_EXPECTED" "$SOUND_SAMPLES" "$EXPLOSION_SOUNDS" "$CX" "$CY" "$TELL_BOX" "$SPECIAL_EXPECTED" \
     "$TELL_CENTRE_BOX" "$TRANSITION_SOUND_SAMPLES" "$LANDING_SOUNDS" "$LANDING_WINDOWS" "$STYLE_SOUNDS" "$STYLE_WINDOWS" "$SOUND_TOLERANCE_TICKS" \
     "$SUPPLY_INVENTORY" "$SUPPLY_NAMED_MENU" "$SUPPLY_HP_AFTER_BREW" "$KEYBIND_DEFAULT_KEY" "$KEYBIND_NEW_KEY" \
-    "$LOADOUT_TRAINER_ICONS" "$((LOADOUT_SLOT_Y + SUPPLY_BREW_SLOT / 4 * LOADOUT_SLOT_DY))" "$SUPPLY_HOVER_NAME_PIXEL" >"$VERIFY_DIR/observed.json"
+    "$LOADOUT_TRAINER_ICONS" "$((LOADOUT_SLOT_Y + SUPPLY_BREW_SLOT / 4 * LOADOUT_SLOT_DY))" "$SUPPLY_HOVER_NAME_PIXEL" \
+    "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

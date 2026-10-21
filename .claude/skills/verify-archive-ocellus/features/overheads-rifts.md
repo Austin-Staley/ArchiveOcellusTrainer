@@ -1,0 +1,43 @@
+# Overheads, heals and rifts
+
+Ocellus wears a curse overhead, drawn under his HP bar with the cache's head icons: Deflect Melee from P4 tick 8 to 32, Soul Split from 33 to 38, Deflect Range from 39 to 60 and Soul Split again from 61, then the same each 60-tick cycle. A player hit of the deflected style lands as 0. Two ticks after a transition attack hits an unprotected player, Soul Split heals the boss by the damage it dealt, and a heal splat shows on the boss. From cycle 2, on the tick before each inner void (P4 tick 67, then every 60 ticks), two void rifts rise north of the 5x5, on (2, 2) and (11, 2). The player can kill a rift. A rift dead by the end of tick 77 despawns, and the chat shows "Destroying the void rift empowers you!". Each rift still standing at 78 detonates, and the player takes 14 under the void flare. The damage numbers are stand-ins.
+
+## Sub-features
+
+- `overhead-icon` draws sprite 440 frame 15 (Deflect Melee), 16 (Deflect Range) or 11 (Soul Split) under the boss's HP bar while the phase has that overhead. The lead-in has none.
+- `deflect` logs `player-hit-judged` for each player hit on the boss with outcome `blocked`, `passed` or `invulnerable`. A blocked hit lands as 0. The `deflect` choice selects `block-at-impact` (default), `block-at-launch` or `none`.
+- `soul-split-heal` logs `boss-healed` with cause `soul-split` and the attack's ordinal 2 ticks after an unprotected transition hit, by the damage that hit applied. A protected hit heals nothing. The heal splat stays for 2 ticks.
+- `rift-spawn` logs `rift-spawned` for two NPC 16678 rifts, at (-2, -4) and (7, -4) from the boss anchor (4, 6), which is (2, 2) and (11, 2) on the measured platform. They spawn at 67 by default or at 127 with `riftFirstCycle=cycle-3`, and play spawn sequence 14896 with its sound.
+- `rift-destroyed` logs each rift whose HP was 0 at the end of tick 77, at the next boss step. The rift plays despawn sequence 14897, and the kill line goes to the chat.
+- `rift-burst` logs `rift-burst` at 78 for each standing rift with the hit receipt. The rift plays detonate sequence 14898, and spotanim 4306 plays on the player.
+
+## How to get to it (user POV)
+
+- Open `http://127.0.0.1:8002/` and watch the icon under the boss's HP bar change at P4 tick 33, 39 and 61. Attack the boss to see blocked hits as 0.
+- Pick `Rifts` in the `Focus` selector. The drill reloads, and the rifts appear at 67. Click one to attack it. The chat sits above the focus selector.
+- Pick `Transition attacks` or `Boss heals`. Let a transition attack hit without the matching prayer to see the heal.
+
+## Driving it with agent-browser
+
+Preconditions:
+
+- The baseline preconditions in the index hold, and the loadout recipe has run.
+- The player stays on spawn (5, 1) until a step below clicks, so the camera matches the pixel offsets.
+- A click must reach the page between two game ticks. Each click batches a `wait --fn` on the P4 tick with the `mouse move/down/up`.
+
+- **Overhead icons.** Run `agent-browser open "http://127.0.0.1:8002/?seed=1&focus=rifts"` and give no input. Screenshot `overhead-5.png`, `overhead-31.png`, `overhead-35.png` and `overhead-45.png` at those P4 ticks. The script counts three icon colours in `ICON_BOX`, from 40 left to 40 right of the canvas centre and from 290 to 190 above it. The colours are the blue deflect arrows, the red of the Deflect Melee blade and the Soul Split arrows, and the orange Deflect Range fletching. Blue with red reads as Deflect Melee, blue with orange as Deflect Range, red alone as Soul Split, and neither as no icon. Each reading must equal the overhead that `log()` has at that tick and the next. The thresholds are 0.2% of the box for blue and red and 0.06% for orange. On the platform the measured blue, red and orange shares were 0, 0 and 0 at 5, 0.538, 0.513 and 0 at 31, 0, 0.636 and 0.012 at 35, and 0.538, 0 and 0.147 at 45.
+- **Kill a rift.** On the same page, screenshot `rift-spawned.png` at 68. In one batch, wait for 68 and click `NORTH_EAST_RIFT_CLICK_LEFT_PX` (325) left of and `NORTH_EAST_RIFT_CLICK_UP_PX` (52) above the canvas centre, on the north-east rift at (11, 2). The player keeps the default ranged setup and shoots it from spawn. Wait for a `rift-destroyed` event, then wait 600 ms for the chat to poll. Screenshot `rift-destroyed.png` and run `agent-browser --json get text "#game_chat"`, which returns the kill line. Screenshot `rift-burst.png` at 78. `log()` shows `rift-spawned` at 67 on (2, 2) and (11, 2), `rift-destroyed` for `rift-67-1` at 73, and `rift-burst` at 78 from `rift-67-0` with receipt `{requested 14, applied 14, beforeHp 99, afterHp 85, prayer null}`.
+- **Deflect.** Run `agent-browser open "http://127.0.0.1:8002/?seed=1&focus=rifts&setup=melee"`. In one batch, wait for 12 and click `RISEN_BOSS_CLICK_RIGHT_PX` (-10) right of and `RISEN_BOSS_CLICK_DOWN_PX` (-160) below the canvas centre, on the risen boss, as the loadout recipe does. Screenshot `deflect-blocked.png` at 19, which shows the 0 hitsplats. At 46, `log()` shows each scythe swing as three judged melee hits. They are blocked at 14, 19, 24 and 29 with no boss HP lost, then pass at 34 (35 HP), 39 (3) and 44 (0, all three missed).
+- **Soul Split.** The transition-attack recipe's late page takes `special-heal.png` at 39, which shows the 49 heal splat on the boss. Its `log()` has `boss-healed` at 39 (ordinal 0, receipt `{49, 49, 1355, 1404}`) and at 67 (ordinal 1, `{47, 47, 1404, 1451}`). The in-time page's log through tick 39 has no `boss-healed`.
+- **Scripted.** `scripts/verify.sh browser` runs these steps after the loadout recipe. It records `overheadIconsDrawn`, `deflectBlocksMeleeUntilSoulSplit`, `soulSplitHealsUnprotected`, `riftsSpawnBesideBoss`, `riftKilledByClick`, `killChatShown` and `standingRiftBursts` in `observed.json`, with the measurements under `observed.overheads`, `observed.soulSplit` and `observed.rifts`.
+
+## Gotchas
+
+- In the inner void the risen boss's icon is above the top of the screen at the default camera. The icon shots wait for the landing at 30.
+- osrs-sdk draws player overheads where the boss's HP banner covers them. The boss's icon sits under his HP bar, as the footage shows.
+- A rift joins the world on the tick after the boss spawns it, because osrs-sdk adds new mobs at the next tick. The click waits for 68.
+- The osrs-sdk scythe sends all three hits to a 1x1 target. The trainer's scythe hits a target once for each tile of its width, up to three, so a swing hits a rift once and the boss three times.
+- The deflect page wears the melee setup, so only Jest proves Deflect Range blocking.
+- The footage shows a white wisp travelling to the boss before the Soul Split heal. No cache spotanim matches it, so the trainer does not draw it.
+- osrs-sdk has no chatbox. The kill line goes to `#game_chat`, a page element over the canvas.
+- The full-fight page also logs rifts at 67. Its checks stop at 70 and do not read them.

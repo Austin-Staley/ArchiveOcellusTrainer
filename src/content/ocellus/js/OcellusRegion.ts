@@ -1,4 +1,4 @@
-import { CardinalDirection, InvisibleMovementBlocker, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
+import { InvisibleMovementBlocker, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
 import type { Item, Player } from "osrs-sdk";
 import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
@@ -94,16 +94,10 @@ export class OcellusRegion extends Region {
     return GRID.height;
   }
 
-  override get initialFacing(): CardinalDirection {
-    return CardinalDirection.NORTH;
-  }
-
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
-    for (let x = 0; x < this.width; x++) {
-      for (let y = 0; y < this.height; y++) {
-        context.fillStyle = (x + y) % 2 === 0 ? "#4a4339" : "#3f392f";
-        context.fillRect(x * scale, y * scale, scale, scale);
-      }
+    for (const { x, y } of PLATFORM.tiles()) {
+      context.fillStyle = (x + y) % 2 === 0 ? "#4a4339" : "#3f392f";
+      context.fillRect(x * scale, y * scale, scale, scale);
     }
   }
 

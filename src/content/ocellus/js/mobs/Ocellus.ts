@@ -352,7 +352,7 @@ export class Ocellus extends Mob {
     const { protectedDamage, unprotectedDamage } = OCELLUS_P4.special;
     const special = specialAttack(at, ordinal, variant);
     const amount = () => rollInt(this.config.seed, "specialDamage", at, this.target.protection === special.style ? protectedDamage.value : unprotectedDamage.value, 0);
-    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", ...special, protected: receipt.prayer === special.style, receipt }));
+    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", ...special, receipt }));
     this.target.addProjectile(hit);
   }
 

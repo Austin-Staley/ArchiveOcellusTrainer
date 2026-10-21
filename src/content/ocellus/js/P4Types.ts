@@ -124,7 +124,7 @@ export type FightEvent =
   | Readonly<{ kind: "explosion-marked"; at: Tick; void: VoidKind; pulse: number; tile: Tile }>
   | Readonly<{ kind: "explosion-resolved"; at: Tick; void: VoidKind; pulse: number; tile: Tile; underBoss: boolean; outcome: ExplosionOutcome }>
   | (Readonly<{ kind: "special-told" }> & SpecialAttack)
-  | (Readonly<{ kind: "special-hit"; protected: boolean; receipt: HitReceipt }> & SpecialAttack)
+  | (Readonly<{ kind: "special-hit"; receipt: HitReceipt }> & SpecialAttack)
   | Readonly<{ kind: "run-ended"; at: Tick; reason: RunEnd }>;
 
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;

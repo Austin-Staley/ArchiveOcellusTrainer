@@ -97,7 +97,7 @@ SPECIAL_VORTEX_SHOT_TICK=35
 SPECIAL_SPIKE_SHOT_TICK=63
 SPECIAL_BLACK_SHOT_TICK=95
 TELL_BOX='{"minX":-200,"maxX":200,"minY":-220,"maxY":-40}'
-SPECIAL_EXPECTED='{"protected":[37,"magic",true,{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",false,{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
+SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
 ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[13,{"x":3,"y":2},49]],"matured":[[24,{"x":3,"y":2}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
@@ -680,7 +680,7 @@ drive() {
     const tellArea = { minX: Number(centreX) + tellOffset.minX, maxX: Number(centreX) + tellOffset.maxX, minY: Number(centreY) + tellOffset.minY, maxY: Number(centreY) + tellOffset.maxY };
     const tellShare = (file) => pixelShare(file, (r, g, b) => (b >= 150 && r >= 90 && g <= 90 && b - g >= 100) || (r >= 235 && g >= 235 && b >= 235), tellArea);
     const prayedAt = (rows) => rows.find((row) => row.inputs.some((input) => input.kind === "prayer-published" && input.prayer === "magic"))?.tick ?? null;
-    const hitsOf = (rows) => kindOf(rows, "special-hit").map((e) => [e.at, e.style, e.protected, e.receipt]);
+    const hitsOf = (rows) => kindOf(rows, "special-hit").map((e) => [e.at, e.style, e.receipt]);
     const expectedSpecial = JSON.parse(specialExpected);
     const soundBySamples = Object.fromEntries(Object.entries(JSON.parse(soundSamples)).map(([id, samples]) => [samples, Number(id)]));
     const observed = {

@@ -197,10 +197,10 @@ fixture_logs() {
     fs.writeFileSync(`${dir}/explosion-audio.json`, JSON.stringify({ data: { result: audio } }));
     write("explosion-under-log.json", "explosions", underRows);
     const told = (t, variant, style) => ({ kind: "special-told", at: t, variant, style });
-    const struck = (t, style, isProtected, receipt) => ({ kind: "special-hit", at: t, style, protected: isProtected, receipt });
+    const struck = (t, style, receipt) => ({ kind: "special-hit", at: t, style, receipt });
     const prayed = { kind: "prayer-published", prayer: "magic" };
-    const protectedHit = struck(37, "magic", true, { requested: 8, applied: 8, beforeHp: 99, afterHp: 91, prayer: "magic" });
-    const unprotectedHit = struck(37, "magic", false, { requested: 49, applied: 49, beforeHp: 99, afterHp: 50, prayer: null });
+    const protectedHit = struck(37, "magic", { requested: 8, applied: 8, beforeHp: 99, afterHp: 91, prayer: "magic" });
+    const unprotectedHit = struck(37, "magic", { requested: 49, applied: 49, beforeHp: 99, afterHp: 50, prayer: null });
     const inTime = Array.from({ length: 39 }, (_, t) => ({
       tick: t,
       inputs: t === 34 ? [prayed] : [],
@@ -210,8 +210,8 @@ fixture_logs() {
     const lateTells = { [firstTell]: told(firstTell, "vortex", "magic"), 60: told(60, "spike-disk", "ranged"), 92: told(92, "black-disk", "melee") };
     const lateHits = {
       37: fault === "late-protected" ? protectedHit : unprotectedHit,
-      65: struck(65, "ranged", false, { requested: 47, applied: 47, beforeHp: 50, afterHp: 3, prayer: "magic" }),
-      97: struck(97, "melee", false, { requested: 49, applied: 3, beforeHp: 3, afterHp: 0, prayer: "magic" }),
+      65: struck(65, "ranged", { requested: 47, applied: 47, beforeHp: 50, afterHp: 3, prayer: "magic" }),
+      97: struck(97, "melee", { requested: 49, applied: 3, beforeHp: 3, afterHp: 0, prayer: "magic" }),
     };
     const lateRows = Array.from({ length: 98 }, (_, t) => ({
       tick: t,

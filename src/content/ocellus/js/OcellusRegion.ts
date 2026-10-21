@@ -5,7 +5,7 @@ import { OCELLUS_P4 } from "./OcellusTimings";
 import { dress } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { FightEvent, FightLog, FightSnapshot, SoundId, Tile, TickRow, VoidKind } from "./P4Types";
-import { ExplosionViews, FragmentFlash, OrbView, VoidField } from "./entities/P4Views";
+import { BossLook, ExplosionViews, FragmentFlash, OrbView, VoidField } from "./entities/P4Views";
 import { Ocellus } from "./mobs/Ocellus";
 import { PLATFORM, voidUnder } from "./p4/floor";
 import { CombatStream } from "./p4/roll";
@@ -17,7 +17,7 @@ function itemId(item: Item | null | undefined): number | null {
   return typeof id === "number" ? id : null;
 }
 
-type Views = Readonly<{ field: VoidField; orbs: Readonly<Record<VoidKind, OrbView>>; fragment: FragmentFlash; explosions: ExplosionViews }>;
+type Views = Readonly<{ field: VoidField; orbs: Readonly<Record<VoidKind, OrbView>>; fragment: FragmentFlash; explosions: ExplosionViews; boss: BossLook }>;
 
 const { sounds, soundPlayback } = OCELLUS_P4.presentation;
 
@@ -59,6 +59,11 @@ function present(event: FightEvent, views: Views, player: Tile): void {
       views.explosions.detonate(event.void, event.pulse);
       return;
     case "stage-entered":
+      views.boss.enter(event.stage);
+      return;
+    case "special-told":
+      views.boss.tell(event.variant);
+      return;
     case "overhead-switched":
     case "boss-state-changed":
     case "boss-shouted":
@@ -66,7 +71,6 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "floor-hit":
     case "lifeforce-drained":
     case "boss-healed":
-    case "special-told":
     case "special-hit":
     case "run-ended":
       return;
@@ -119,6 +123,7 @@ export class OcellusRegion extends Region {
       orbs: { "inner-void": new OrbView(this), "outer-void": new OrbView(this) },
       fragment: new FragmentFlash(this),
       explosions: new ExplosionViews(this),
+      boss: new BossLook(ocellus),
     };
     [views.field, views.orbs["inner-void"], views.orbs["outer-void"], views.fragment].forEach((view) => this.addEntity(view));
     for (const edge of PLATFORM.surround().tiles()) this.addEntity(new InvisibleMovementBlocker(this, { ...edge }));

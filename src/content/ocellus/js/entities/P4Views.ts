@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { CacheRenderInstancedModel, CacheRenderReferences, CollisionType, Entity, GROUND_OVERLAY_Y, LineOfSightMask, Settings } from "osrs-sdk";
-import type { Location3, Model, Region, Renderable } from "osrs-sdk";
+import type { Location3, Model, Region, Renderable, Unit } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Tile, VoidKind } from "../P4Types";
+import type { Special, Stage, Tile, VoidKind } from "../P4Types";
 import type { TileMask } from "../p4/floor";
 import { VOID_MASKS } from "../p4/floor";
 
@@ -431,5 +431,35 @@ export class FragmentFlash extends Entity {
 
   protected override create3dModel(): Model {
     return new SpotAnimModel(this, () => this.cue);
+  }
+}
+
+const { bossPoses, transitionTells } = OCELLUS_P4.presentation;
+
+export class BossLook {
+  constructor(private readonly boss: Unit) {}
+
+  enter(stage: Stage): void {
+    switch (stage) {
+      case "inner-void":
+        this.boss.playAnimation(bossPoses.deflectIn.value);
+        return;
+      case "after-inner":
+        this.boss.playAnimation(bossPoses.deflectOut.value);
+        return;
+      case "lead-in":
+      case "outer-void":
+      case "after-outer":
+        return;
+      default: {
+        const unhandled: never = stage;
+        return unhandled;
+      }
+    }
+  }
+
+  tell(variant: Special): void {
+    this.boss.playAnimation(bossPoses.meleeHybrid.value);
+    this.boss.addSpotAnim({ id: transitionTells[variant].value, channel: "transition-tell" });
   }
 }

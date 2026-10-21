@@ -147,6 +147,7 @@ type PresentationRecipe = Readonly<{
   bossPoses: Readonly<Record<BossPose, Selected<number>>>;
   sounds: Readonly<Record<CueSound, Selected<SoundId>>>;
   soundPlayback: Selected<SoundPlayback>;
+  transitionTells: Readonly<Record<Special, Selected<number>>>;
 }>;
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
@@ -389,9 +390,9 @@ const PRESENTATION: PresentationRecipe = {
   bossPoses: {
     idle: pose(14840, "phase3_idle", "spec-confirmed", "boss stand animation"),
     walk: pose(14849, "phase3_walk", "spec-confirmed", "boss walk animation"),
-    deflectIn: pose(14863, "phase3_deflect_in", "inferred", "rise into the inner void, 2 ticks; name and the wiki's rise"),
-    deflectLoop: pose(14864, "phase3_deflect_loop", "inferred", "hover over the inner void, 2-tick loop"),
-    deflectOut: pose(14865, "phase3_deflect_out", "inferred", "landing as the inner void clears, 4 ticks"),
+    deflectIn: pose(14863, "phase3_deflect_in", "inferred", "rise as the inner void forms, 2 ticks; name and the wiki's rise"),
+    deflectLoop: pose(14864, "phase3_deflect_loop", "inferred", "hover high over the inner void, 2-tick loop, as V2 shows from k49 to k69"),
+    deflectOut: pose(14865, "phase3_deflect_out", "inferred", "landing as the inner void clears, 4 ticks; the boss is on the ground again by S+23 (k71)"),
     silentDeflectIn: pose(14866, "silent deflect in", "inferred", "outer-void Deflect candidate, 2 ticks"),
     silentDeflectLoop: pose(14867, "silent deflect loop", "inferred", "outer-void Deflect candidate, 2-tick loop"),
     silentDeflectOut: pose(14868, "silent deflect out", "inferred", "outer-void Deflect candidate, 4 ticks"),
@@ -400,7 +401,7 @@ const PRESENTATION: PresentationRecipe = {
     prayerIn: pose(14869, "phase3_prayer_in", "inferred", "overhead switch, 5.6 ticks"),
     prayerLoop: pose(14870, "phase3_prayer_loop", "inferred", "overhead switch loop, 3 ticks"),
     prayerOut: pose(14871, "phase3_prayer_out", "inferred", "overhead switch end, 1.5 ticks"),
-    meleeHybrid: pose(14844, "phase3_melee_hybrid", "inferred", "transition attack candidate with magic and ranged spotanim variants, 7 ticks"),
+    meleeHybrid: pose(14844, "phase3_melee_hybrid", "inferred", "transition attack cast at each tell, 7 ticks; its melee, magic and ranged spotanims match the three tells"),
     meleePrayer: pose(14845, "phase3_melee_prayer", "inferred", "transition attack candidate, 3 ticks"),
     unleashIn: pose(14857, "phase3_unleash_in", "inferred", "transition attack candidate, 2 ticks"),
     unleashLoop: pose(14858, "phase3_unleash_loop", "inferred", "transition attack candidate, 2-tick loop"),
@@ -411,6 +412,11 @@ const PRESENTATION: PresentationRecipe = {
     explosionMark: sound(12537, "one per explosion mark, six per void every 2 ticks from hit + 5, in 3 V1 and 3 V2 cycles", vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
   },
   soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
+  transitionTells: {
+    vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across; the centre renders white where the footage shows black", cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
+    "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players; the centre renders white where the footage shows black", cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),
+    "black-disk": selected(4328, "inferred", "unscaled", "a purple semicircle, then a disk over the footprint; the centre renders white where the footage shows black", cache("spotanim 4328 phase3_melee_hybrid"), vod("V2", "k132 to k137")),
+  },
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";

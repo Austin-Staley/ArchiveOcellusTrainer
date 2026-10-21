@@ -137,6 +137,11 @@ export class Ocellus extends Mob {
     return this.phase().boss !== "hidden";
   }
 
+  override get idlePoseId(): number {
+    const { deflectLoop, idle } = OCELLUS_P4.presentation.bossPoses;
+    return this.phase().stage === "inner-void" ? deflectLoop.value : idle.value;
+  }
+
   override movementStep(): void {}
 
   override attackIfPossible(): void {}

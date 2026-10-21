@@ -6,6 +6,7 @@ const ORB_DRILL = { focus: "lifeforce-orb" } as const;
 const INNER_ORB: At = { x: 7, y: 9 };
 const BESIDE_INNER_ORB: At = { x: 8, y: 9 };
 const OUTER_ORB_FROM_SPAWN: At = { x: 11, y: 7 };
+const FLOOD_FAR_SOUTH: At = { x: 10, y: 14 };
 const OUTER_ORB_ON_FLOOD: At = { x: 11, y: 11 };
 
 function returnsAfterWalkingAt(orderedAfter: number, selection: DrillSelection = {}) {
@@ -99,6 +100,16 @@ describe("U3 lifeforce hit and orb", () => {
       [25, 49, 50, 99], [50, 49, 50, 99], [85, 49, 50, 99], [110, 49, 50, 99], [145, 49, 50, 99], [170, 49, 50, 99], [205, 49, 51, 100],
     ]);
     expect(drill.row(205).playerAtPostTick.hp).toBe(100);
+    drill.dispose();
+  });
+
+  test("under safe-floor a player 7 tiles from the 5x5 gets the outer orb on its nearest edge, not on the flood", () => {
+    const drill = startDrill({ selection: { focus: "orb-retrieval", outerOrbTile: "safe-floor" } });
+    drill.tickTo(30);
+    drill.walkTo(FLOOD_FAR_SOUTH);
+    drill.tickTo(44);
+    expect(drill.row(44).playerAtBossStep.tile).toEqual({ x: 10, y: 14 });
+    expect(drill.events("orb-spawned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.tile, e.credit])).toEqual([[44, { x: 12, y: 7 }, 25]]);
     drill.dispose();
   });
 

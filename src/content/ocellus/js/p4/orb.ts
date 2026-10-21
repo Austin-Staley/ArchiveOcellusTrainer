@@ -25,10 +25,11 @@ function orbFloor(kind: VoidKind, choices: ResolvedChoices): OrbFloor {
 
 export function orbTile(seed: Seed, at: Tick, player: Tile, kind: VoidKind, choices: ResolvedChoices): Tile {
   const { min, max } = orbDistance.value;
-  const inReach = PLATFORM.tiles()
-    .filter((candidate) => !FOOTPRINT.contains(candidate) && reach(candidate, player) >= min && reach(candidate, player) <= max)
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-  const offVoid = inReach.filter((candidate) => !VOID_MASKS[kind].contains(candidate));
-  const candidates = orbFloor(kind, choices) === "safe-floor" && offVoid.length > 0 ? offVoid : inReach;
+  const safeOnly = orbFloor(kind, choices) === "safe-floor";
+  const allowed = PLATFORM.tiles().filter(
+    (candidate) => !FOOTPRINT.contains(candidate) && !(safeOnly && VOID_MASKS[kind].contains(candidate)) && reach(candidate, player) >= min,
+  );
+  const nearest = Math.min(...allowed.map((candidate) => reach(candidate, player)));
+  const candidates = allowed.filter((candidate) => reach(candidate, player) <= Math.max(max, nearest)).sort((a, b) => a.y - b.y || a.x - b.x);
   return candidates[Math.floor(roll(seed, "orbTile", at, 0) * candidates.length)];
 }

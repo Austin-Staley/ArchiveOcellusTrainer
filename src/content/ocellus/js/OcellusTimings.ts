@@ -305,7 +305,7 @@ const spotAnim = (id: number, name: string, basis: Basis, note: string): Selecte
 
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles"), STRATEGIES),
-  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss", vod("V1", "G39"), vod("V2", "k53")),
+  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES),
   innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "inner orbs appear off the void", vod("V1", "G39"), vod("V2", "k53")),
   returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
   look: {

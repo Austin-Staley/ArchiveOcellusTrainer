@@ -331,6 +331,8 @@ export class Ocellus extends Mob {
       case "special-hit":
         this.strikeSpecial(beat.ordinal, beat.variant, at);
         return null;
+      case "special-sound":
+        return { kind: "special-sounded", at, ordinal: beat.ordinal, cue: beat.cue };
       case "soul-split-heal":
       case "rifts-spawn":
       case "rift-charge-ends":

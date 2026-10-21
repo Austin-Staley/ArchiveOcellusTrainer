@@ -1,3 +1,4 @@
+import type { DrillSelection } from "../js/OcellusTimings";
 import { UNDER_BOSS, startDrill } from "./drill";
 
 const REPLAY_V2 = { focus: "transition-attacks", specialSelection: "replay-v2" } as const;
@@ -40,6 +41,20 @@ describe("U5 transition attacks", () => {
     const clears = drill.events("stage-entered").filter((e) => e.stage === "after-inner");
     expect([drill.events("boss-landing-started").map((e) => e.at), clears.map((e) => e.at)]).toEqual([[29, 89], [30, 90]]);
     drill.dispose();
+  });
+
+  test("each style's sounds follow its own tell on the cue audit's ticks, and a drill without transition attacks plays none", () => {
+    const sounded = (selection: DrillSelection) => {
+      const drill = startDrill({ selection });
+      drill.tickTo(98);
+      const cues = drill.events("special-sounded").map((e) => [e.at, e.ordinal, e.cue.sound, e.cue.delayMs]);
+      drill.dispose();
+      return cues;
+    };
+    expect([sounded(REPLAY_V2), sounded({ focus: "lifeforce-orb", specialSelection: "replay-v2" })]).toEqual([
+      [[34, 0, "magicWindUp", 120], [64, 1, "rangedBeforeHit", 240], [65, 1, "rangedHit", 60], [92, 2, "meleeTell", 60], [97, 2, "meleeHit", 60]],
+      [],
+    ]);
   });
 
   test("standing under the boss gives no cover from the transition attack", () => {

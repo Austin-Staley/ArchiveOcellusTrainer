@@ -29,7 +29,7 @@ CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[39,"deflect-ran
 CYCLE_SPECIAL_HITS='[[37,"vortex"],[65,"spike-disk"]]'
 FOCUS_DRILL="transition-attacks"
 FOCUS_LAST_TICK=40
-FOCUS_BEATS='["boss-landing-starts","boss-shouts","soul-split-heal","special-hit","special-tell"]'
+FOCUS_BEATS='["boss-landing-starts","boss-shouts","soul-split-heal","special-hit","special-sound","special-tell"]'
 LOADOUT_QUERY="?seed=1&setup=ranged"
 LOADOUT_RANGED_WORN='{"weapon":20997,"offhand":null,"helmet":11664,"chest":13072,"legs":13073,"gloves":8842,"cape":28951,"necklace":19547,"feet":13237,"ring":28310,"ammo":11212}'
 LOADOUT_MELEE_WORN='{"weapon":22325,"offhand":null,"helmet":24419,"chest":24420,"legs":24421,"gloves":22981,"cape":21295,"necklace":19553,"feet":13239,"ring":25485,"ammo":11212}'

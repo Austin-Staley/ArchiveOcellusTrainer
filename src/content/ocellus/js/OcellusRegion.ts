@@ -21,9 +21,9 @@ type Views = Readonly<{ field: VoidField; orbs: Readonly<Record<VoidKind, OrbVie
 
 const { sounds, soundPlayback } = OCELLUS_P4.presentation;
 
-function playCue(id: SoundId, at: Tile): void {
+function playCue(id: SoundId, at: Tile, delayMs = 0): void {
   const { volume, range, retain } = soundPlayback.value;
-  SoundCache.play(new Sound(cacheSound(id), volume, 0, { location: at, range, retain }));
+  SoundCache.play(new Sound(cacheSound(id), volume, delayMs, { location: at, range, retain }));
 }
 
 type Mounted =
@@ -63,6 +63,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
       return;
     case "special-told":
       views.boss.tell(event.variant);
+      return;
+    case "special-sounded":
+      playCue(sounds[event.cue.sound].value, player, event.cue.delayMs);
       return;
     case "boss-landing-started":
       views.boss.land();

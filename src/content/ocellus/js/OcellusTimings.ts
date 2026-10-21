@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Mechanic, Seed, SoundId, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
@@ -108,6 +108,7 @@ type SpecialRecipe = Readonly<{
   styles: Readonly<{ "black-disk": Selected<"melee">; "spike-disk": Selected<"ranged">; vortex: Selected<"magic"> }>;
   protectedDamage: Selected<DamageRange>;
   unprotectedDamage: Selected<DamageRange>;
+  cues: Readonly<Record<Style, readonly Selected<TransitionCue>[]>>;
 }>;
 export type SpecialStyle<V extends Special> = SpecialRecipe["styles"][V]["value"];
 type BossHealRecipe = Readonly<{ soulSplitAfterHit: Selected<TickSpan> }>;
@@ -141,7 +142,9 @@ type BossPose =
   | "unleashLoop"
   | "unleashOut";
 
-type CueSound = "explosionSeriesStart" | "explosionMark";
+export type TransitionSound = "meleeTell" | "meleeHit" | "rangedBeforeHit" | "rangedHit" | "magicWindUp";
+export type TransitionCue = Readonly<{ sound: TransitionSound; afterTell: TickSpan; delayMs: number }>;
+type CueSound = "explosionSeriesStart" | "explosionMark" | TransitionSound;
 type SoundPlayback = Readonly<{ volume: number; range: number; retain: number }>;
 
 type PresentationRecipe = Readonly<{
@@ -259,6 +262,9 @@ const ORB: OrbRecipe = {
   lastHealAfterHit: selected(span(18), "footage-once", "team-4", "latest observed heal; a lower bound on expiry", vod("V1", "G175")),
 };
 
+const cue = (sound: TransitionSound, afterTell: number, delayMs: number, note: string, first: Source, ...rest: Source[]): Selected<TransitionCue> =>
+  selected({ sound, afterTell: span(afterTell), delayMs }, "footage-repeated", "team-4-and-5", note, first, ...rest);
+
 const SPECIAL: SpecialRecipe = {
   styles: {
     "black-disk": selected("melee", "footage-repeated", "team-4-and-5", "Kirby on Protect from Melee takes 7 and a teammate 50; the streamer on Magic takes 43 while four others take 6", vod("V1", "G62, G90"), vod("V2", "k137")),
@@ -267,6 +273,19 @@ const SPECIAL: SpecialRecipe = {
   },
   protectedDamage: selected({ min: 5, max: 9 }, "footage-repeated", "team-4-and-5", "7, 6, 7, 6, 9 on Kirby and 7, 5, 7, 9 on the streamer under the matching prayer; the solo carry-over is inferred", vod("V1", "G62, G90, G122, G150, G182"), vod("V2", "k77, k105, k165, k197")),
   unprotectedDamage: selected({ min: 43, max: 50 }, "footage-repeated", "team-4-and-5", "50 on a teammate whose prayer is not seen, 43 on the streamer under the wrong prayer; the solo carry-over is inferred", vod("V1", "G62"), vod("V2", "k137")),
+  cues: {
+    melee: [
+      cue("meleeTell", 0, 60, "tell + 0.1 in all 5 melee attacks; 0.1 tick is 60 ms", vod("V1", "3:54:32.45, t60.1")),
+      cue("meleeHit", 5, 60, "tell + 5.1, on the hit tick, in all 5 melee attacks", vod("V1", "3:54:18.66, t37.1")),
+    ],
+    ranged: [
+      cue("rangedBeforeHit", 4, 240, "tell + 4.4, the median of 4.4, 4.4 and 4.6 in 3 of 4 ranged attacks, about 0.6 tick before the hit; the fourth was at tell + 0.9; 0.4 tick is 240 ms", vod("V1", "3:54:54.23, t96.4"), vod("V2", "5:20:58.27, t64.6")),
+      cue("rangedHit", 5, 60, "tell + 5.1, on the hit tick, in 3 of 4 ranged attacks", vod("V1", "t97.1, t157.1"), vod("V2", "t65.3")),
+    ],
+    magic: [
+      cue("magicWindUp", 2, 120, "tell + 2.2, the median of 0.7, 2.2 and 2.3 in 3 of 3 magic attacks; 0.2 tick is 120 ms. The magic hit's 12553 is spotanim 4329's own frame sound", vod("V2", "5:20:39.13, t32.7"), vod("V2", "t122.3, t214.2")),
+    ],
+  },
 };
 
 const BOSS_HEALS: BossHealRecipe = {
@@ -412,6 +431,11 @@ const PRESENTATION: PresentationRecipe = {
   sounds: {
     explosionSeriesStart: sound(12638, "starts each explosion series, in 5 V1 and 5 V2 voids; no sequence references it, so the server sends it", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
     explosionMark: sound(12537, "one per explosion mark, six per void every 2 ticks from hit + 5, in 3 V1 and 3 V2 cycles", vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
+    meleeTell: sound(12572, "the melee transition tell, in all 5 melee attacks and none of the other 7; no sequence references it, so the server sends it", vod("V1", "3:54:32.45, t60.1")),
+    meleeHit: sound(12567, "the melee transition hit, in all 5 melee attacks and none of the other 7; the server sends it", vod("V1", "3:54:18.66, t37.1")),
+    rangedBeforeHit: sound(12555, "before the ranged transition hit, in all 4 ranged attacks, scoring at most 0.21 in the other styles; the server sends it", vod("V1", "3:54:54.23, t96.4"), vod("V2", "5:20:58.27, t64.6")),
+    rangedHit: sound(12556, "the ranged transition hit, in 3 of 4 ranged attacks; the server sends it", vod("V1", "t97.1, t157.1"), vod("V2", "t65.3")),
+    magicWindUp: sound(12554, "the magic transition wind-up, in 3 of 3 magic attacks, scoring at most 0.09 in the other styles; the server sends it", vod("V2", "5:20:39.13, t32.7")),
   },
   soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
   landingBeforeInnerClears: selected(span(1), "footage-repeated", "team-4-and-5", "the landing's frame sounds 12584, 12587, 12586 and 12585 at S+21.1, S+21.8, S+23.0 and S+23.5 put its start at S+21, a tick before the inner void clears; 12586 is heard in 3 V1 and 3 V2 cycles", vod("V1", "3:54:15.01, t31.0"), vod("V2", "5:20:38.13, t31.0"), cache("seq 14865 frames 3, 25, 61 and 74")),

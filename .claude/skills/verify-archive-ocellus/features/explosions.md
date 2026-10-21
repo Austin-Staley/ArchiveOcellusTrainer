@@ -1,0 +1,39 @@
+# Personal explosions
+
+Three ticks after each lifeforce hit, Ocellus marks the tile the player starts that tick on, and marks again every 2 ticks, 6 times by default. A ring of dark purple shards stands on each marked tile. A tick later the explosion goes off there: the shards flare out and fade, and a player who starts that tick on the marked tile takes 16. The mark captures the tile before the player moves, so a player who moves during the mark tick leaves it behind, and a step first taken on the impact tick is too late. Standing under the boss gives no cover.
+
+## Sub-features
+
+- `explosion-mark` logs `explosion-marked` at P4 tick 15, 17, 19, 21, 23 and 25 (inner void) and 46 to 56 (outer void), with the tile the player started that tick on, and places the shards on that tile.
+- `explosion-impact` logs `explosion-resolved` a tick after each mark. The outcome is `hit` with a 16 receipt when the player starts the impact tick on the marked tile, and `avoided` otherwise. The shards flare and fade either way.
+- `explosion-under-boss` records `underBoss: true` when the marked tile is under the boss. Such a mark still hits.
+- `explosion-choices` select the series with `explosions`: `wiki-six` (default, marks from hit + 3), `v2-seven` (a seventh mark at 27) or `v2-tell-then-six` (marks from hit + 5, 17 to 27).
+
+## How to get to it (user POV)
+
+- Open `http://127.0.0.1:8002/` and stand still after the lifeforce hit at P4 tick 12. Shards appear under the player at 15 and a 16 lands at 16.
+- Click a neighbouring tile on each mark tick, or keep walking, and every mark is left behind.
+- Pick `Explosions` in the `Focus` selector and press `Restart` to practise the explosions alone.
+- Add `explosions=v2-seven` or `explosions=v2-tell-then-six` to the URL for the other readings of the footage.
+
+## Driving it with agent-browser
+
+Preconditions:
+
+- The baseline preconditions in the index hold, the lifeforce-orb recipe has run, and the page shows its skipped-orb run with the seed field at 1 and the default ranged setup.
+- A click must reach the page between two game ticks. `agent-browser batch` runs a `wait --fn` on the P4 tick and the `mouse move/down/up` that follow it in one call, which lands the click on the next tick. Separate CLI calls can miss it.
+
+- **Dodge on mark ticks.** Run `agent-browser select "#focus" explosions` and `agent-browser click "#restart"`, then wait until `focus=explosions` is in the URL. Compute the canvas centre from `agent-browser get box "#world"`. In one batch, wait for P4 tick 14 with `>= 14` and click `DODGE_CLICK_SIDE_PX` (110) right of and `STEP_CLICK_DOWN_PX` (25) below the centre. That pixel is the tile two east of the player on its row. In the next batch wait for tick 15, wait `MARKER_SHOT_DELAY_MS` (450), and screenshot `explosion-left.png`. It shows the shards on (10, 10) and the player on (12, 10). Repeat the batch click after ticks 16, 18, 20, 22 and 24, alternating left and right. `log()` shows a `walk-ordered` input in rows 15, 17, 19, 21, 23 and 25, the first mark on (10, 10), and `avoided` at 16, 18, 20, 22, 24 and 26.
+- **Late step.** In one batch, wait for tick 46, click the tile two east, wait 200 and screenshot `explosion-standing.png`. The click lands on tick 47, the impact tick. The screenshot shows the shards on the player, who has not moved yet. `log()` shows the mark at 46 on the tile the player stood on, no input in row 46, the step in row 47, and `explosion-resolved` at 47 as a hit on that tile with receipt `{requested 16, applied 16, beforeHp 99, afterHp 83, prayer null}`, while row 47 ends with the player elsewhere.
+- **Camp under the boss.** Run `agent-browser open "http://127.0.0.1:8002/?seed=1&focus=explosions"`. In one batch, wait for P4 tick 0 and click `UNDER_BOSS_CLICK_UP_PX` (120) above the centre. The boss is hidden until tick 4, so the click walks the player to (10, 5) instead of attacking. Screenshot `explosion-under.png` 450 ms after tick 15. It shows the player's tile outline inside the boss's footprint. The boss model hides the shards. Wait for tick 27. `log()` shows every inner `explosion-resolved` at 16 to 26 on (10, 5) with `underBoss: true` and a hit, leaving 83, 67, 51, 35, 19 and 3 HP.
+- **Pixels.** The script counts pixels within 12 of the shard colour `#5e317b` in a box around the canvas centre, which holds the player. In `explosion-left.png` they are at least 0.1% of the box and their mean column lies at least 2% of the width left of the centre (measured 0.28% at 3.5% left). In `explosion-standing.png` they are at least 0.1% and within 1.6% of the centre (measured 0.19% at 0.4% right). With the camera settled on the player the shards would sit about 8.6% left; with no camera movement they would sit at the centre.
+- **Scripted.** `scripts/verify.sh browser` runs these steps after the lifeforce-orb recipe and records `explosionsDodgedOnMarkTicks`, `lateStepHitOnMarkedTile`, `campingUnderBossHit` and `markerStaysOnCapturedTile` in `observed.json`, with the measured shards under `observed.explosions.shards`.
+
+## Gotchas
+
+- Reacting to the shards is too late by design. The shards appear when the mark tick has already captured the tile, and a click after that moves the player on the impact tick. Click before the mark tick, as the rhythm of every 2 ticks allows.
+- The camera follows the player with a short lag. Screenshots taken right after a dodge show the shards closer to the centre than they settle. 450 ms after the mark tick they sat 45 px, a little under one tile, left of the centre in the last run.
+- A left-click under the boss attacks him once he is drawn. Walk under him while he is hidden (P4 ticks 0 to 3), or through the context menu.
+- Under `focus=explosions` the floor deals no damage, so camping under the boss in the inner void costs only the explosions. In the full fight the inner void floor would also hit.
+- The `scripts/verify.sh browser` order runs this recipe before the loadout recipe, which opens its own page.
+- The look is a footage-coloured placeholder. The spec's cache candidate, spotanims 4299 to 4302, renders a white disc and a white flash, so the data file records it as rejected.

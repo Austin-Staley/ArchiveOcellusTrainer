@@ -38,7 +38,6 @@ export class TileMask {
     return [...this.byKey.values()];
   }
 
-  /** Each side of a mask tile whose neighbour lies outside the mask. */
   border(): readonly Readonly<{ at: Tile; side: Side }>[] {
     return this.tiles().flatMap((at) =>
       SIDES.filter((side) => !this.byKey.has(`${at.x + STEP[side].dx},${at.y + STEP[side].dy}`)).map((side) => ({ at, side })),

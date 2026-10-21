@@ -45,7 +45,6 @@ export function startDrill(options: DrillOptions = {}) {
     tickTo(t: number) {
       advance(t, () => undefined);
     },
-    /** Steps into the 5x5 as each outer void forms and back to spawn as it clears, so the floor never lands a hit. */
     playCorrectlyTo(t: number) {
       advance(t, (row) => {
         for (const event of row.events) {

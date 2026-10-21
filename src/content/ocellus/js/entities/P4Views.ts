@@ -76,7 +76,6 @@ function floorGeometry(mask: TileMask): THREE.BufferGeometry {
   return geometry;
 }
 
-/** A flat strip inside each edge and a short wall on it, both fading from the rim colour to black under additive blending. */
 function rimGeometry(mask: TileMask): THREE.BufferGeometry {
   const rim = new THREE.Color(LOOK.rim);
   const positions: number[] = [];
@@ -146,7 +145,6 @@ class VoidFloorModel implements Model {
   }
 }
 
-/** Presentation only: the boss owns every floor hit. */
 export class VoidField extends Entity {
   private showing: VoidKind | null = null;
 
@@ -158,7 +156,6 @@ export class VoidField extends Entity {
     this.showing = kind;
   }
 
-  // The field stands on tile (0, 0), and SDK entities block walking and line of sight there by default.
   override get collisionType(): CollisionType {
     return CollisionType.NONE;
   }

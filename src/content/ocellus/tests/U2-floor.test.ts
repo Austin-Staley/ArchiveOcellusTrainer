@@ -1,9 +1,6 @@
 import type { DrillSelection } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 
-// Boss footprint x 9-11, y 4-6, so the 5x5 is x 8-12, y 3-7. Spawn (10, 10) is on the outer flood.
-// Expected amounts are seed-1 floorDamage rolls from the arena's golden script, not from this code.
-
 const VOID_FLOOR = { focus: "void-floor" } as const;
 
 function innerVoidHits(selection: DrillSelection, leaveAfter: number) {

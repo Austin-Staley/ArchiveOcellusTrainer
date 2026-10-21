@@ -8,7 +8,6 @@ READER="${CACHE_ROOT}/osrscachereader-${OSRS_CACHE_READER_COMMIT}"
 
 cd "$(dirname "$0")/.."
 
-# The pinned reader directory exists only once its install finished, so a killed build never leaves one to reuse.
 prepare_reader() {
   find "${CACHE_ROOT}" -mindepth 1 -maxdepth 1 -name 'osrscachereader*' ! -path "${READER}" -exec rm -rf {} +
   if [[ -d "${READER}" ]]; then

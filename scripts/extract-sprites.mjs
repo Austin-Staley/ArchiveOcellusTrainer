@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Writes the sprites listed in src/assets.ts as PNGs beside the asset tool's output.
-// Usage: node scripts/extract-sprites.mjs [--check] [--cache-dir DIR] [--reader-path DIR]
-// --check exits 1 when any listed sprite file is missing, without reading the cache.
 import { randomUUID } from "node:crypto";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";

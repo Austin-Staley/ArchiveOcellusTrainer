@@ -328,7 +328,6 @@ export class Ocellus extends Mob {
       });
   }
 
-  /** A hit with delay d that lands on tick t was launched in the player step of tick t - d. */
   private judge(moment: Moment, style: IncomingStyle, travel: number): HitJudgement {
     if (moment.phase.boss !== "present-damageable") return "invulnerable";
     const rule = this.config.choices.deflect.option.value;
@@ -435,7 +434,6 @@ export class Ocellus extends Mob {
     });
   }
 
-  /** Deaths are read in completeTick, after every unit's step, so a kill counts only if it landed by the end of the previous tick. */
   private reportFallenRifts(at: Tick): FightEvent[] {
     const fallen = this.rifts.filter((rift): rift is Extract<Rift, { kind: "fallen" }> => rift.kind === "fallen");
     this.rifts = this.rifts.filter((rift) => rift.kind !== "fallen");

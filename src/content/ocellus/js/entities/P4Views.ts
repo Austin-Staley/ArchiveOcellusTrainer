@@ -439,7 +439,6 @@ const { bossPoses, transitionTells, tellCentre, overheadIcons } = OCELLUS_P4.pre
 const OVERHEAD_ICONS = new Map<BossOverhead, HTMLImageElement>();
 const BELOW_HP_BAR = 7;
 
-/** The footage shows the boss's HP bar above its icon, so the icon sits under the bar rather than where the SDK draws player overheads. */
 export function drawOverheadIcon(context: OffscreenCanvasRenderingContext2D, scale: number, overhead: BossOverhead): void {
   let icon = OVERHEAD_ICONS.get(overhead);
   if (!icon) {

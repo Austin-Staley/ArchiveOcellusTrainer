@@ -57,7 +57,6 @@ export class VoidRift extends Mob {
     return CacheRenderModel.forRenderable(this, CacheRenderReferences.npc(RIFT.npcId.value));
   }
 
-  /** Leaves the world through the SDK's death countdown without taking damage. */
   detonate(): void {
     this.playAnimation(RIFT.poses.detonate.value);
     this.dying = this.deathAnimationLength;

@@ -10,23 +10,23 @@ export class OcellusRegion extends Region {
     super([ocellusLoadout]);
   }
 
-  getName() {
+  override getName() {
     return "Ocellus";
   }
 
-  get width() {
+  override get width() {
     return ARENA_SIZE.width;
   }
 
-  get height() {
+  override get height() {
     return ARENA_SIZE.height;
   }
 
-  get initialFacing() {
+  override get initialFacing() {
     return CardinalDirection.NORTH;
   }
 
-  drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number) {
+  override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number) {
     for (let x = 0; x < this.width; x++) {
       for (let y = 0; y < this.height; y++) {
         context.fillStyle = (x + y) % 2 === 0 ? "#4a4339" : "#3f392f";
@@ -35,7 +35,7 @@ export class OcellusRegion extends Region {
     }
   }
 
-  initialiseRegion() {
+  initialiseRegion(): { player: Player } {
     const player = new Player(this, { ...SPAWN_TILE });
     this.addPlayer(player);
     return { player };

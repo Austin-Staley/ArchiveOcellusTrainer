@@ -20,6 +20,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: scripts/install-beta-sdk.sh
+      - run: npm run typecheck
+      - run: scripts/check-types.test.sh
       - run: npm test -- --runInBand
       - run: scripts/verify.test.sh
       - run: npm run build

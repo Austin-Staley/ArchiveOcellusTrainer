@@ -9,11 +9,11 @@ The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD ar
 
 ```sh
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
-scripts/verify.sh                    # build test assets browser
+scripts/verify.sh                    # build types test assets browser
 scripts/verify.sh test browser       # any subset, in the order given
 ```
 
-Run it from the repository root or a worktree. A passing run prints four `PASS` lines and ends with `verify: stop: PID <n> is gone; evidence kept in <dir>`.
+Run it from the repository root or a worktree. A passing run prints five `PASS` lines and ends with `verify: stop: PID <n> is gone; evidence kept in <dir>`.
 
 ## Preconditions
 
@@ -63,7 +63,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | File | Content |
 | --- | --- |
 | `summary.txt` | One `PASS`/`FAIL` line per stage |
-| `build.log`, `test.log`, `jest.json`, `assets.log` | Stage output; `jest.json` holds the executed test count |
+| `build.log`, `types.log`, `test.log`, `jest.json`, `assets.log` | Stage output; `jest.json` holds the executed test count |
 | `server.log`, `server.pid` | Dev server output; PID, start time, port and revision |
 | `before.json`, `before.png` | State and screenshot after load, before any input |
 | `click.json` | Canvas pixel that was clicked |
@@ -85,7 +85,8 @@ scripts/verify.sh stop
 
 ## Helpers
 
-- `scripts/verify.sh [build] [test] [assets] [browser]`: the stages; no argument runs all four.
+- `scripts/verify.sh [build] [types] [test] [assets] [browser]`: the stages; no argument runs all five. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, and imports of the fight's internal modules from outside `src/content/ocellus/js`.
+- `scripts/check-types.test.sh`: planted violations and a clean control for `check-types.mjs`. Run it after changing the rule check; CI runs it too.
 - `scripts/verify.sh serve | doctor | stop`: a manual instance, as above.
 - `scripts/verify.test.sh`: browser-free checks of `verify.sh` itself, with the dev server and agent-browser stubbed. Run it after changing `verify.sh`; CI runs it too.
 - `scripts/install-beta-sdk.sh`: installs the beta SDK packages with `--no-save`. CI calls it without `OSRS_SDK_PACKS`, so it builds from the pinned commit.

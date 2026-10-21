@@ -43,6 +43,10 @@ stage_build() {
   npm run build >"$VERIFY_DIR/build.log" 2>&1
 }
 
+stage_types() {
+  npm run typecheck >"$VERIFY_DIR/types.log" 2>&1
+}
+
 stage_test() {
   npm test -- --runInBand --json --outputFile="$VERIFY_DIR/jest.json" >"$VERIFY_DIR/test.log" 2>&1 || return 1
   local total
@@ -248,9 +252,9 @@ case "${1:-}" in
 esac
 
 stages=("$@")
-[[ ${#stages[@]} -gt 0 ]] || stages=(build test assets browser)
+[[ ${#stages[@]} -gt 0 ]] || stages=(build types test assets browser)
 for stage in "${stages[@]}"; do
-  case "$stage" in build | test | assets | browser) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
+  case "$stage" in build | types | test | assets | browser) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
 done
 
 mkdir -p "$VERIFY_DIR"

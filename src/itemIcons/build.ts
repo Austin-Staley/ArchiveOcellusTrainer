@@ -80,7 +80,6 @@ function integers(owner: string, value: unknown, length?: number): number[] {
   return value;
 }
 
-/** A per-face list the reader leaves out, or returns empty, when the model has none. */
 function perFace(owner: string, value: unknown, faces: number): number[] | null {
   return value === undefined || value === null || (Array.isArray(value) && value.length === 0) ? null : integers(owner, value, faces);
 }
@@ -135,7 +134,6 @@ function parseModel(itemId: number, value: unknown): IconModel {
     const shading = SHADING[types?.[i] ?? 0];
     if (shading === undefined) throw new Error(`${owner("faceRenderTypes")}: face ${i} has render type ${types?.[i]}, which this renderer does not draw`);
     if (corners.some((corner) => corner < 0 || corner >= vertexCount)) throw new Error(`${owner("faceVertexIndices")}: face ${i} names a missing vertex`);
-    // A model without per-face priorities has one shared priority, and any single priority draws its faces far to near.
     const priority = priorities?.[i] ?? 0;
     if (priority < 0 || priority > 11) throw new Error(`${owner("faceRenderPriorities")}: face ${i} has priority ${priority}`);
     return { corners, colour, shading, priority };

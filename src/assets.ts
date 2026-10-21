@@ -18,7 +18,6 @@ export const ARCHIVE_OCELLUS_ASSETS = {
   sounds: Object.fromEntries(Object.entries(presentation.sounds).map(([cue, sound]) => [cue, { id: sound.value }])),
 } as const satisfies CacheAssets;
 
-/** The asset build writes each trainer item's inventory icon here, relative to the asset output directory. */
 export const ITEM_ICON_DIR = "item-icons";
 export const itemIconFile = (itemId: number) => `${ITEM_ICON_DIR}/${itemId}.png`;
 

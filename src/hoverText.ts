@@ -1,6 +1,5 @@
 import { ClickController } from "osrs-sdk";
 
-/** The SDK draws the hover text rightwards from the cursor and lets it run off the canvas; this moves it back onto the canvas. */
 export function keepHoverTextOnCanvas(): void {
   const measure = document.createElement("canvas").getContext("2d");
   if (measure === null) return;

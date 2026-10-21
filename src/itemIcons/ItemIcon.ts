@@ -29,11 +29,9 @@
 
 export type Vertex = Readonly<{ x: number; y: number; z: number }>;
 export type Shading = "smooth" | "flat";
-/** `colour` is the cache's packed 16-bit HSL; `priority` is 0 to 11 and draws later, over nearer faces, as it rises. */
 export type Face = Readonly<{ corners: readonly [number, number, number]; colour: number; shading: Shading; priority: number }>;
 export type IconModel = Readonly<{ vertices: readonly Vertex[]; faces: readonly Face[] }>;
 export type Recolour = Readonly<{ from: number; to: number }>;
-/** An item definition's inventory-sprite fields, named as the cache names them. */
 export type IconItem = Readonly<{
   zoom2d: number;
   xan2d: number;
@@ -46,7 +44,6 @@ export type IconItem = Readonly<{
   ambient: number;
   contrast: number;
 }>;
-/** `pixels` holds 0xRRGGBB per pixel, row by row; 0 is transparent, so the outline is 0x000001. */
 export type Sprite = Readonly<{ width: number; height: number; pixels: Uint32Array }>;
 
 const WIDTH = 36;
@@ -61,7 +58,6 @@ const UNIT = Math.PI / 1024;
 const SINE = Array.from({ length: 2048 }, (_, i) => Math.trunc(65536 * Math.sin(i * UNIT)));
 const COSINE = Array.from({ length: 2048 }, (_, i) => Math.trunc(65536 * Math.cos(i * UNIT)));
 
-/** The item's icon as the inventory draws it: lit, outlined, without the drop shadow, cropped to its outline. */
 export function renderItemIcon(item: IconItem, model: IconModel): Sprite {
   const vertices = model.vertices.map(({ x, y, z }) => ({
     x: Math.trunc((x * item.resize.x) / 128),
@@ -165,7 +161,7 @@ function project(vertices: readonly Vertex[], item: IconItem): Screen {
   return { points, depths, radius, diameter };
 }
 
-/** Back faces dropped, the rest far to near; priorities 10 and 11 interleave by depth with the 0, 3 and 5 layers as the client does. */
+/** Priorities 10 and 11 interleave by depth with the 0, 3 and 5 layers as the client does. */
 function drawOrder(faces: readonly LitFace[], { points, depths, radius, diameter }: Screen): LitFace[] {
   const byDistance: LitFace[][] = Array.from({ length: diameter }, () => []);
   for (const face of faces) {
@@ -205,10 +201,7 @@ function drawOrder(faces: readonly LitFace[], { points, depths, radius, diameter
 
 const slope = (from: Point, to: Point) => (from.y === to.y ? 0 : Math.trunc(((to.x - from.x) << 14) / (to.y - from.y)));
 
-/**
- * The client fills spans from the left edge to just before the right one, stepping each edge in 18.14 fixed point. Which edge is
- * on the left when the top is flat or two slopes tie depends on which corner is topmost, so that choice follows the client case by case.
- */
+/** Which edge is on the left when the top is flat or two slopes tie depends on which corner is topmost, so that choice follows the client case by case. */
 function longEdgeOnLeft(top: number, middleIsNext: boolean, topY: number, middleY: number, long: number, short: number, lower: number): boolean {
   if (middleIsNext) return top === 2 ? long < short : (topY !== middleY && long < short) || (topY === middleY && long > lower);
   return !(top === 0 ? (topY !== middleY && short < long) || (topY === middleY && lower > long) : short < long);

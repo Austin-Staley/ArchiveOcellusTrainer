@@ -1,8 +1,6 @@
 import { renderItemIcon } from "./ItemIcon";
 import type { Face, IconItem, IconModel, Shading, Sprite } from "./ItemIcon";
 
-// Every expected pixel below is RuneLite's ItemSpriteFactory output (commit 12f56ce) for the same item and model.
-
 const FRONT_ON: IconItem = {
   zoom2d: 512,
   xan2d: 0,

@@ -153,6 +153,7 @@ type PresentationRecipe = Readonly<{
   soundPlayback: Selected<SoundPlayback>;
   landingBeforeInnerClears: Selected<TickSpan>;
   transitionTells: Readonly<Record<Special, Selected<number>>>;
+  tellCentre: Selected<Readonly<{ faceColour: number; rgb: number }>>;
 }>;
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
@@ -440,10 +441,19 @@ const PRESENTATION: PresentationRecipe = {
   soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
   landingBeforeInnerClears: selected(span(1), "footage-repeated", "team-4-and-5", "the landing's frame sounds 12584, 12587, 12586 and 12585 at S+21.1, S+21.8, S+23.0 and S+23.5 put its start at S+21, a tick before the inner void clears; 12586 is heard in 3 V1 and 3 V2 cycles", vod("V1", "3:54:15.01, t31.0"), vod("V2", "5:20:38.13, t31.0"), cache("seq 14865 frames 3, 25, 61 and 74")),
   transitionTells: {
-    vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across; the centre renders white where the footage shows black", cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
-    "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players; the centre renders white where the footage shows black", cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),
-    "black-disk": selected(4328, "inferred", "unscaled", "a purple semicircle, then a disk over the footprint; the centre renders white where the footage shows black", cache("spotanim 4328 phase3_melee_hybrid"), vod("V2", "k132 to k137")),
+    vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across", cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
+    "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players", cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),
+    "black-disk": selected(4328, "inferred", "unscaled", "a purple semicircle, then a disk over the footprint", cache("spotanim 4328 phase3_melee_hybrid"), vod("V2", "k132 to k137")),
   },
+  tellCentre: selected(
+    { faceColour: 4, rgb: 0x020203 },
+    "inferred",
+    "unscaled",
+    "the three tells share model 62698, whose centre is 144 faces of colour 4 textured with 215, a near-black starfield; the SDK draws spotanims without textures, so those faces show their lighting as near white, and recolouring colour 4 to the texture's mean texel draws them black as the footage does. The 296 untextured colour-4 faces were already near black",
+    cache("model 62698 faces of colour 4 with texture 215"),
+    cache("texture 215 sprite 8803, mean texel #020203"),
+    vod("V2", "k72 to k78, k100 to k106, k132 to k137"),
+  ),
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";

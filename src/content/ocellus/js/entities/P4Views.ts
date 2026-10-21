@@ -434,7 +434,7 @@ export class FragmentFlash extends Entity {
   }
 }
 
-const { bossPoses, transitionTells } = OCELLUS_P4.presentation;
+const { bossPoses, transitionTells, tellCentre } = OCELLUS_P4.presentation;
 
 export class BossLook {
   constructor(private readonly boss: Unit) {}
@@ -461,7 +461,8 @@ export class BossLook {
   }
 
   tell(variant: Special): void {
+    const { faceColour, rgb } = tellCentre.value;
     this.boss.playAnimation(bossPoses.meleeHybrid.value);
-    this.boss.addSpotAnim({ id: transitionTells[variant].value, channel: "transition-tell" });
+    this.boss.addSpotAnim({ id: transitionTells[variant].value, channel: "transition-tell", recolor: { [faceColour]: rgb } });
   }
 }

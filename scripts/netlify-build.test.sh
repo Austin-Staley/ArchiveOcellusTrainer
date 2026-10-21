@@ -6,6 +6,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 PREPARE_READER="$(sed -n '/^prepare_reader() {$/,/^}$/p' "$SCRIPT")"
+FAILURE_POLICY="$(grep -m1 '^set -' "$SCRIPT")"
 
 setup() {
   T="$(mktemp -d "$WORK/case.XXXXXX")"
@@ -31,7 +32,7 @@ prepare_reader() {
   bash -c "$(declare -p T CACHE_ROOT READER OSRS_CACHE_READER_REPO OSRS_CACHE_READER_COMMIT)
 $(declare -f git npm)
 ${PREPARE_READER}
-set -e
+${FAILURE_POLICY}
 prepare_reader"
 }
 

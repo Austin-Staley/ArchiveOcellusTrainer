@@ -112,9 +112,9 @@ export type TickRow = Readonly<{
   worldTick: WorldTick;
   phase: Phase;
   beats: readonly Beat[];
-  start: PlayerObservation;
-  end: PlayerObservation;
-  bossHp: Readonly<{ start: number; end: number }>;
+  playerAtBossStep: PlayerObservation;
+  playerAtPostTick: PlayerObservation;
+  bossHp: Readonly<{ atBossStep: number; atPostTick: number }>;
   combatDraws: number;
   inputs: readonly InputObservation[];
   events: readonly FightEvent[];

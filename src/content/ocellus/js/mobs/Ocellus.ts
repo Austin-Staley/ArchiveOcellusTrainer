@@ -8,7 +8,7 @@ import { tick, worldTick } from "../P4Types";
 import type { Moment } from "../p4/schedule";
 import { Schedule } from "../p4/schedule";
 
-type RowDraft = Omit<TickRow, "end" | "bossHp" | "combatDraws"> & Readonly<{ bossHpStart: number; drawsStart: number }>;
+type RowDraft = Omit<TickRow, "playerAtPostTick" | "bossHp" | "combatDraws"> & Readonly<{ bossHpAtBossStep: number; drawsAtBossStep: number }>;
 
 type Run =
   | Readonly<{ kind: "waiting"; inputs: readonly InputObservation[] }>
@@ -141,16 +141,16 @@ export class Ocellus extends Mob {
         return null;
       case "stepping":
       case "killed": {
-        const { bossHpStart, drawsStart, ...draft } = run.draft;
-        const end = this.target.observe();
-        const died = run.kind === "stepping" && end.hp <= 0;
+        const { bossHpAtBossStep, drawsAtBossStep, ...draft } = run.draft;
+        const playerAtPostTick = this.target.observe();
+        const died = run.kind === "stepping" && playerAtPostTick.hp <= 0;
         const events: readonly FightEvent[] = died ? [...draft.events, { kind: "run-ended", at: draft.tick, reason: "death" }] : draft.events;
         const row: TickRow = {
           ...draft,
-          end,
+          playerAtPostTick,
           events,
-          bossHp: { start: bossHpStart, end: this.currentStats.hitpoint },
-          combatDraws: this.target.combatDraws - drawsStart,
+          bossHp: { atBossStep: bossHpAtBossStep, atPostTick: this.currentStats.hitpoint },
+          combatDraws: this.target.combatDraws - drawsAtBossStep,
         };
         const reason: RunEnd | null = run.kind === "killed" ? "kill" : died ? "death" : null;
         this.run = reason === null
@@ -208,10 +208,10 @@ export class Ocellus extends Mob {
       tick: moment.tick,
       worldTick: worldTick(this.region.world.globalTickCounter),
       phase: moment.phase,
-      start: this.target.observe(),
+      playerAtBossStep: this.target.observe(),
       inputs,
-      bossHpStart: this.currentStats.hitpoint,
-      drawsStart: this.target.combatDraws,
+      bossHpAtBossStep: this.currentStats.hitpoint,
+      drawsAtBossStep: this.target.combatDraws,
     };
     const judged = this.judgeLandingHits(moment);
     super.queueStep();

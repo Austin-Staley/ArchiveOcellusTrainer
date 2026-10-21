@@ -100,7 +100,7 @@ describe("U1 cycle skeleton", () => {
     drill.hit(drill.player(), drill.boss(), 20);
     drill.tickTo(8);
     expect(drill.events("player-hit-judged").map((e) => [e.at, e.outcome, e.requested])).toEqual([[6, "invulnerable", 20], [8, "passed", 20]]);
-    expect([drill.row(6).bossHp, drill.row(8).bossHp]).toEqual([{ start: 1355, end: 1355 }, { start: 1355, end: 1335 }]);
+    expect([drill.row(6).bossHp, drill.row(8).bossHp]).toEqual([{ atBossStep: 1355, atPostTick: 1355 }, { atBossStep: 1355, atPostTick: 1335 }]);
     drill.dispose();
   });
 
@@ -158,7 +158,7 @@ describe("U1 cycle skeleton", () => {
     drill.tickTo(20);
     expect(drill.events("run-ended").map((e) => [e.at, e.reason])).toEqual([[10, "death"]]);
     expect(drill.rows().map((row) => row.tick).slice(-1)).toEqual([10]);
-    expect(drill.row(10).end.hp).toBe(0);
+    expect(drill.row(10).playerAtPostTick.hp).toBe(0);
     drill.dispose();
   });
 
@@ -169,8 +169,8 @@ describe("U1 cycle skeleton", () => {
     drill.tickTo(10);
     drill.pray("Protect from Magic");
     drill.tickTo(11);
-    expect([drill.row(10).inputs, drill.row(10).end.tile]).toEqual([[{ kind: "walk-ordered", destination: { x: 14, y: 10 } }], { x: 12, y: 10 }]);
-    expect([drill.row(11).inputs, drill.row(11).start.prayer]).toEqual([[{ kind: "prayer-published", prayer: "magic" }], "magic"]);
+    expect([drill.row(10).inputs, drill.row(10).playerAtPostTick.tile]).toEqual([[{ kind: "walk-ordered", destination: { x: 14, y: 10 } }], { x: 12, y: 10 }]);
+    expect([drill.row(11).inputs, drill.row(11).playerAtBossStep.prayer]).toEqual([[{ kind: "prayer-published", prayer: "magic" }], "magic"]);
     drill.dispose();
   });
 
@@ -181,7 +181,7 @@ describe("U1 cycle skeleton", () => {
       drill.tickTo(8);
       drill.player().setAggro(drill.boss());
       drill.tickTo(40);
-      const out = { bossHp: drill.rows().map((row) => row.bossHp.end), draws: drill.rows().reduce((sum, row) => sum + row.combatDraws, 0), after: Random.get() };
+      const out = { bossHp: drill.rows().map((row) => row.bossHp.atPostTick), draws: drill.rows().reduce((sum, row) => sum + row.combatDraws, 0), after: Random.get() };
       drill.dispose();
       return out;
     };

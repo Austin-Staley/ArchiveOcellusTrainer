@@ -15,13 +15,13 @@ prepare_reader() {
     return 0
   fi
   echo "netlify-build: installing cache reader ${OSRS_CACHE_READER_REPO} at ${OSRS_CACHE_READER_COMMIT}"
-  local work
-  work="$(mktemp -d "${CACHE_ROOT}/osrscachereader.XXXXXX")"
-  git init --quiet "${work}"
-  git -C "${work}" fetch --quiet --depth 1 "${OSRS_CACHE_READER_REPO}" "${OSRS_CACHE_READER_COMMIT}"
-  git -C "${work}" checkout --quiet FETCH_HEAD
-  (cd "${work}" && npm ci --no-audit --no-fund)
-  mv "${work}" "${READER}"
+  local unpublished_reader
+  unpublished_reader="$(mktemp -d "${CACHE_ROOT}/osrscachereader.XXXXXX")"
+  git init --quiet "${unpublished_reader}"
+  git -C "${unpublished_reader}" fetch --quiet --depth 1 "${OSRS_CACHE_READER_REPO}" "${OSRS_CACHE_READER_COMMIT}"
+  git -C "${unpublished_reader}" checkout --quiet FETCH_HEAD
+  (cd "${unpublished_reader}" && npm ci --no-audit --no-fund)
+  mv "${unpublished_reader}" "${READER}"
 }
 
 mkdir -p "${CACHE_ROOT}"

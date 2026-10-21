@@ -96,7 +96,7 @@ scripts/verify.sh stop
 
 ## Helpers
 
-- `scripts/verify.sh [build] [types] [test] [assets] [browser]`: the stages; no argument runs all five. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, and imports of the fight's internal modules from outside `src/content/ocellus/js`.
+- `scripts/verify.sh [build] [types] [test] [assets] [browser]`: the stages; no argument runs all five. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, imports of the fight's internal modules from outside `src/content/ocellus/js`, and test files inside it. Tests live in `src/content/ocellus/tests` and drive the region.
 - `scripts/check-types.test.sh`: planted violations and a clean control for `check-types.mjs`. Run it after changing the rule check; CI runs it too.
 - `scripts/verify.sh serve | doctor | stop`: a manual instance, as above.
 - `scripts/verify.test.sh`: browser-free checks of `verify.sh` itself, with the dev server and agent-browser stubbed. Run it after changing `verify.sh`; CI runs it too.

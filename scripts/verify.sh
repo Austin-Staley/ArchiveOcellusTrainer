@@ -249,7 +249,6 @@ canvas_centre() {
   CY=$(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 ))
 }
 
-# The wait and the click run in one batch so the click reaches the page before the next game tick.
 click_after_tick() {
   printf '[["wait","--fn","(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= %d","--timeout","90000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' \
     "$1" $((CX + $2)) $((CY + $3)) | ab batch --bail >/dev/null

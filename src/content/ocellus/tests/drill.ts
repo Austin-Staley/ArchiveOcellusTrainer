@@ -76,7 +76,6 @@ export function startDrill(options: DrillOptions = {}) {
         }
         const stage = row.phase.stage;
         if (!dodging || (stage !== "inner-void" && stage !== "outer-void")) return;
-        // A mark takes the tile the player starts its tick on, so stepping between two safe tiles every tick dodges every mark.
         const at = player().location;
         const side = besideOnSameFloor(home, stage === "outer-void");
         if (at.x === home.x && at.y === home.y) player().moveTo(side.x, side.y);

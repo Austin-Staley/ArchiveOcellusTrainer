@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+public/osrs-assets/
+.osrs-cache/
+.verify/
+*.log
+.DS_Store

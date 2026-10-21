@@ -7,6 +7,7 @@ import type {
   Beat,
   ExplosionOutcome,
   FightEvent,
+  HitJudgement,
   HitReceipt,
   IncomingStyle,
   InputObservation,
@@ -286,14 +287,33 @@ export class Ocellus extends Mob {
   }
 
   private judgeLandingHits(moment: Moment): FightEvent[] {
-    const damageable = moment.phase.boss === "present-damageable";
     return this.incomingProjectiles
       .filter((projectile) => projectile.remainingDelay === 1 && !projectile.shouldDestroy())
       .map((projectile): FightEvent => {
         const requested = projectile.damage;
-        if (!damageable) projectile.damage = 0;
-        return { kind: "player-hit-judged", at: moment.tick, style: incomingStyle(projectile.attackStyle), outcome: damageable ? "passed" : "invulnerable", requested };
+        const style = incomingStyle(projectile.attackStyle);
+        const outcome = this.judge(moment, style, projectile.totalDelay);
+        if (outcome !== "passed") projectile.damage = 0;
+        return { kind: "player-hit-judged", at: moment.tick, style, outcome, requested };
       });
+  }
+
+  /** A hit with delay d that lands on tick t was launched in the player step of tick t - d. */
+  private judge(moment: Moment, style: IncomingStyle, travel: number): HitJudgement {
+    if (moment.phase.boss !== "present-damageable") return "invulnerable";
+    const rule = this.config.choices.deflect.option.value;
+    switch (rule.kind) {
+      case "none":
+        return "passed";
+      case "block": {
+        const { overhead } = rule.sample === "impact" ? moment.phase : this.schedule.at(tick(Math.max(0, moment.tick - travel))).phase;
+        return overhead !== null && OCELLUS_P4.deflects[overhead].value === style ? "blocked" : "passed";
+      }
+      default: {
+        const unhandled: never = rule;
+        return unhandled;
+      }
+    }
   }
 
   private react(beat: Beat, at: Tick, player: PlayerObservation): FightEvent | null {

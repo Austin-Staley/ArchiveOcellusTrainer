@@ -107,6 +107,7 @@ export type HealReceipt = Readonly<{ requested: number; applied: number; beforeH
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }>;
 export type ExplosionOutcome = Readonly<{ kind: "hit"; receipt: HitReceipt }> | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
+export type HitJudgement = "passed" | "invulnerable" | "blocked";
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>
@@ -114,7 +115,7 @@ export type FightEvent =
   | Readonly<{ kind: "boss-state-changed"; at: Tick; state: BossState }>
   | Readonly<{ kind: "boss-shouted"; at: Tick; text: string }>
   | Readonly<{ kind: "boss-landing-started"; at: Tick }>
-  | Readonly<{ kind: "player-hit-judged"; at: Tick; style: IncomingStyle; outcome: "passed" | "invulnerable"; requested: number }>
+  | Readonly<{ kind: "player-hit-judged"; at: Tick; style: IncomingStyle; outcome: HitJudgement; requested: number }>
   | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "lifeforce-told"; at: Tick; void: VoidKind }>
   | Readonly<{ kind: "lifeforce-drained"; at: Tick; void: VoidKind; receipt: HitReceipt }>

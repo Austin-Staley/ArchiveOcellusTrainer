@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { BossOverhead, Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
@@ -255,6 +255,14 @@ const OVERHEADS: OverheadByStage = {
   "inner-void": selected("deflect-melee", "footage-once", "team-5", "icon at S+12 and S+23; raised at the rise per the wiki order, the switch tick was not in frame (Q9)", vod("V2", "k60, k71"), STRATEGIES),
   "outer-void": selected("deflect-range", "footage-once", "team-5", "icon with the flood from S+31", vod("V2", "k79, k80, k90"), STRATEGIES),
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
+};
+
+export type DeflectRule = Readonly<{ kind: "block"; sample: "impact" | "launch" }> | Readonly<{ kind: "none" }>;
+
+const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
+  "deflect-melee": selected("melee", "inferred", "unscaled", "named for the style it turns away; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
+  "deflect-range": selected("ranged", "inferred", "unscaled", "named for the style it turns away; no capture shows a ranged hit landing during it (Q8)", STRATEGIES, vod("V2", "k80, k90")),
+  "soul-split": selected(null, "inferred", "unscaled", "a healing prayer that turns no style away", STRATEGIES, vod("V2", "k73")),
 };
 
 const LIFEFORCE: LifeforceRecipe = {
@@ -529,6 +537,7 @@ export const OCELLUS_P4 = {
   leadIn: LEAD_IN,
   cycle: CYCLE,
   overheads: OVERHEADS,
+  deflects: DEFLECTS,
   lifeforce: LIFEFORCE,
   orb: ORB,
   special: SPECIAL,
@@ -586,6 +595,11 @@ export const OCELLUS_P4 = {
       "cycle-3": selected<Cycle>(cycle(3), "footage-once", "team-4", "none in view before cycle 2, two before cycle 3", vod("V1", "G90-G95, G152")),
     }),
     innerVoidFloor: INNER_VOID_FLOOR,
+    deflect: choice("block-at-impact", {
+      "block-at-impact": selected<DeflectRule>({ kind: "block", sample: "impact" }, "assumption", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it lands; nothing gives a reflection amount (Q8)", STRATEGIES),
+      "block-at-launch": selected<DeflectRule>({ kind: "block", sample: "launch" }, "assumption", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched (Q8)", STRATEGIES),
+      none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
+    }),
     orbPickupRadius: choice("on-tile", {
       "on-tile": selected(0, "footage-repeated", "team-5", "the streamer stands on the orb tile a tick before each heal (C9)", vod("V2", "k67, k95")),
       adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", vod("V1", "G51, G135, G175")),
@@ -650,6 +664,7 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     unclaimedOuterOrb: pick("unclaimedOuterOrb"),
     riftFirstCycle: pick("riftFirstCycle"),
     innerVoidFloor: pick("innerVoidFloor"),
+    deflect: pick("deflect"),
     orbPickupRadius: pick("orbPickupRadius"),
     outerOrbTile: pick("outerOrbTile"),
     focus: pick("focus"),

@@ -1,13 +1,14 @@
 import type { DrillSelection } from "../js/OcellusTimings";
-import { startDrill } from "./drill";
+import type { At } from "./drill";
+import { FLOOD_SOUTH_OF_RING, RING_SOUTH, SPAWN_ON_FLOOD, UNDER_BOSS, startDrill } from "./drill";
 
 const VOID_FLOOR = { focus: "void-floor" } as const;
 
 function innerVoidHits(selection: DrillSelection, leaveAfter: number) {
   const drill = startDrill({ selection: { ...VOID_FLOOR, ...selection } });
-  drill.walkTo(10, 7);
+  drill.walkTo(RING_SOUTH);
   drill.tickTo(leaveAfter);
-  drill.walkTo(10, 10);
+  drill.walkTo(SPAWN_ON_FLOOD);
   drill.tickTo(38);
   const observed = [drill.row(8).playerAtBossStep.tile, drill.events("floor-hit").map((e) => [e.at, e.receipt.applied])];
   drill.dispose();
@@ -29,16 +30,16 @@ describe("U2 void floor", () => {
   });
 
   test("the outer void spares the 5x5, under the boss and on its ring, but not the next tile out", () => {
-    const hitsOn = (x: number, y: number) => {
+    const hitsOn = (at: At) => {
       const drill = startDrill({ selection: VOID_FLOOR });
       drill.tickTo(30);
-      drill.walkTo(x, y);
+      drill.walkTo(at);
       drill.tickTo(58);
       const observed = [drill.row(44).playerAtBossStep.tile, drill.events("floor-hit").map((e) => e.at)];
       drill.dispose();
       return observed;
     };
-    expect([hitsOn(10, 5), hitsOn(10, 7), hitsOn(10, 8)]).toEqual([
+    expect([hitsOn(UNDER_BOSS), hitsOn(RING_SOUTH), hitsOn(FLOOD_SOUTH_OF_RING)]).toEqual([
       [{ x: 10, y: 5 }, []],
       [{ x: 10, y: 7 }, []],
       [{ x: 10, y: 8 }, [44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54]],
@@ -48,9 +49,9 @@ describe("U2 void floor", () => {
   test("the floor reads the tile the player starts the tick on, not the one it ends on", () => {
     const drill = startDrill({ selection: VOID_FLOOR });
     drill.tickTo(30);
-    drill.walkTo(10, 8);
+    drill.walkTo(FLOOD_SOUTH_OF_RING);
     drill.tickTo(43);
-    drill.walkTo(10, 7);
+    drill.walkTo(RING_SOUTH);
     drill.tickTo(50);
     expect(drill.events("floor-hit").map((e) => [e.at, e.tile, e.receipt.applied])).toEqual([[44, { x: 10, y: 8 }, 9]]);
     expect(drill.row(44).playerAtPostTick.tile).toEqual({ x: 10, y: 7 });
@@ -77,7 +78,7 @@ describe("U2 void floor", () => {
   test("the inner void stops hitting the tick it clears", () => {
     const drill = startDrill({ selection: VOID_FLOOR });
     drill.tickTo(25);
-    drill.walkTo(10, 7);
+    drill.walkTo(RING_SOUTH);
     drill.tickTo(44);
     expect(drill.events("floor-hit").map((e) => [e.at, e.void, e.tile, e.receipt.applied])).toEqual([
       [28, "inner-void", { x: 10, y: 7 }, 9],

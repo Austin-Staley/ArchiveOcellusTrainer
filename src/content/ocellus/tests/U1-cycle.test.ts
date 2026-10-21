@@ -165,7 +165,7 @@ describe("U1 cycle skeleton", () => {
   test("the log records a walk order and a protection prayer on the row they act in", () => {
     const drill = startDrill();
     drill.tickTo(9);
-    drill.walkTo(14, 10);
+    drill.walkTo({ x: 14, y: 10 });
     drill.tickTo(10);
     drill.pray("Protect from Magic");
     drill.tickTo(11);

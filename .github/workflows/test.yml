@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - run: scripts/install-beta-sdk.sh
+      - run: npm test -- --runInBand
+      # No asset build here: cache 2746 extraction needs an osrscachereader fix that exists only on a local branch.
+      - run: npm run build

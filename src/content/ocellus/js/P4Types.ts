@@ -122,6 +122,8 @@ export type FightEvent =
   | Readonly<{ kind: "explosion-series-started"; at: Tick; void: VoidKind }>
   | Readonly<{ kind: "explosion-marked"; at: Tick; void: VoidKind; pulse: number; tile: Tile }>
   | Readonly<{ kind: "explosion-resolved"; at: Tick; void: VoidKind; pulse: number; tile: Tile; underBoss: boolean; outcome: ExplosionOutcome }>
+  | Readonly<{ kind: "special-told"; at: Tick; ordinal: Ordinal; variant: Special; style: Style }>
+  | Readonly<{ kind: "special-hit"; at: Tick; ordinal: Ordinal; variant: Special; style: Style; protected: boolean; receipt: HitReceipt }>
   | Readonly<{ kind: "run-ended"; at: Tick; reason: RunEnd }>;
 
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;

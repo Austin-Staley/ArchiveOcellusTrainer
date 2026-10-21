@@ -10,10 +10,12 @@ import type {
   HitReceipt,
   IncomingStyle,
   InputObservation,
+  Ordinal,
   Phase,
   PlayerObservation,
   RunEnd,
   RunState,
+  Special,
   Tick,
   TickRow,
   Tile,
@@ -313,7 +315,10 @@ export class Ocellus extends Mob {
       case "explosion-impact":
         return this.detonate(beat.void, beat.pulse, at, player.tile);
       case "special-tell":
+        return { kind: "special-told", at, ordinal: beat.ordinal, variant: beat.variant, style: OCELLUS_P4.special.styles[beat.variant].value };
       case "special-hit":
+        this.strikeSpecial(beat.ordinal, beat.variant, at);
+        return null;
       case "soul-split-heal":
       case "rifts-spawn":
       case "rift-charge-ends":
@@ -330,6 +335,14 @@ export class Ocellus extends Mob {
     if (rule.kind === "harmless" || !VOID_MASKS[kind].contains(player.tile)) return;
     const requested = rollInt(this.config.seed, "floorDamage", at, rule.perTick, 0);
     const hit = new P4Hit(this, this.target, () => requested, (receipt) => this.recordEvent({ kind: "floor-hit", at, void: kind, tile: player.tile, receipt }));
+    this.target.addProjectile(hit);
+  }
+
+  private strikeSpecial(ordinal: Ordinal, variant: Special, at: Tick): void {
+    const { styles, protectedDamage, unprotectedDamage } = OCELLUS_P4.special;
+    const style = styles[variant].value;
+    const amount = () => rollInt(this.config.seed, "specialDamage", at, this.target.protection === style ? protectedDamage.value : unprotectedDamage.value, 0);
+    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", at, ordinal, variant, style, protected: receipt.prayer === style, receipt }));
     this.target.addProjectile(hit);
   }
 

@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Mechanic, Seed, SoundId, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
@@ -104,6 +104,11 @@ export type SpecialSelection =
   | Readonly<{ kind: "replay"; order: readonly [Special, ...Special[]] }>;
 
 export type UnclaimedOrbRule = Readonly<{ kind: "heals-boss"; afterHit: TickSpan }> | Readonly<{ kind: "off" }>;
+type SpecialRecipe = Readonly<{
+  styles: Readonly<Record<Special, Selected<Style>>>;
+  protectedDamage: Selected<DamageRange>;
+  unprotectedDamage: Selected<DamageRange>;
+}>;
 type BossHealRecipe = Readonly<{ soulSplitAfterHit: Selected<TickSpan> }>;
 type RiftRecipe = Readonly<{ spawnBeforeOnset: Selected<TickSpan>; chargeAfterSpawn: Selected<TickSpan> }>;
 
@@ -249,6 +254,16 @@ const LIFEFORCE: LifeforceRecipe = {
 
 const ORB: OrbRecipe = {
   lastHealAfterHit: selected(span(18), "footage-once", "team-4", "latest observed heal; a lower bound on expiry", vod("V1", "G175")),
+};
+
+const SPECIAL: SpecialRecipe = {
+  styles: {
+    "black-disk": selected("melee", "footage-repeated", "team-4-and-5", "Kirby on Protect from Melee takes 7 and a teammate 50; the streamer on Magic takes 43 while four others take 6", vod("V1", "G62, G90"), vod("V2", "k137")),
+    "spike-disk": selected("ranged", "footage-repeated", "team-4-and-5", "players on Protect from Missiles take 7, 5 and 9", vod("V1", "G122"), vod("V2", "k105, k197")),
+    vortex: selected("magic", "footage-repeated", "team-5", "players on Protect from Magic take 7 twice", vod("V2", "k77, k165")),
+  },
+  protectedDamage: selected({ min: 5, max: 9 }, "footage-repeated", "team-4-and-5", "7, 6, 7, 6, 9 on Kirby and 7, 5, 7, 9 on the streamer under the matching prayer; the solo carry-over is inferred", vod("V1", "G62, G90, G122, G150, G182"), vod("V2", "k77, k105, k165, k197")),
+  unprotectedDamage: selected({ min: 43, max: 50 }, "footage-repeated", "team-4-and-5", "50 on a teammate whose prayer is not seen, 43 on the streamer under the wrong prayer; the solo carry-over is inferred", vod("V1", "G62"), vod("V2", "k137")),
 };
 
 const BOSS_HEALS: BossHealRecipe = {
@@ -451,6 +466,7 @@ export const OCELLUS_P4 = {
   overheads: OVERHEADS,
   lifeforce: LIFEFORCE,
   orb: ORB,
+  special: SPECIAL,
   bossHeals: BOSS_HEALS,
   rifts: RIFTS,
   geometry: GEOMETRY,

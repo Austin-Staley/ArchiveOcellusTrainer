@@ -53,9 +53,7 @@ type Orb =
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 
-type Rift =
-  | Readonly<{ kind: "charging"; id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift }>
-  | Readonly<{ kind: "fallen"; id: RiftId; tile: Tile }>;
+type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number }>;
 
 /** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
 const HEAL_SPLAT_TICKS = span(1);
@@ -241,7 +239,7 @@ export class Ocellus extends Mob {
         const reason: RunEnd | null = run.kind === "killed" ? "kill" : died ? "death" : null;
         if (reason === null) {
           this.claimOrbs(row.tick, playerAtPostTick.tile);
-          this.rifts = this.rifts.map((rift) => (rift.kind === "charging" && rift.mob.currentStats.hitpoint <= 0 ? { kind: "fallen", id: rift.id, tile: rift.tile } : rift));
+          this.rifts = this.rifts.map((rift) => ({ ...rift, hpAtPostTick: rift.mob.currentStats.hitpoint }));
         }
         this.run = reason === null
           ? { kind: "between", last: { tick: row.tick, phase: row.phase }, inputs: [] }
@@ -311,9 +309,9 @@ export class Ocellus extends Mob {
       this.run = { kind: "killed", draft: { ...draft, beats: [], events: [...logged, { kind: "run-ended", at: moment.tick, reason: "kill" }] } };
       return;
     }
-    const fallen = this.reportFallenRifts(moment.tick);
+    const destroyed = this.destroyFallenRifts(moment.tick);
     const reactions = moment.beats.flatMap((beat) => this.react(beat, moment.tick, draft.playerAtBossStep) ?? []);
-    this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...fallen, ...reactions] } };
+    this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...destroyed, ...reactions] } };
   }
 
   private judgeLandingHits(moment: Moment): FightEvent[] {
@@ -430,19 +428,19 @@ export class Ocellus extends Mob {
       const mob = new VoidRift(this.region, place);
       this.region.addMob(mob);
       const id = riftId(at, slot);
-      this.rifts = [...this.rifts, { kind: "charging", id, tile: place, forCycle, mob }];
+      this.rifts = [...this.rifts, { id, tile: place, forCycle, mob, hpAtPostTick: mob.currentStats.hitpoint }];
       return { kind: "rift-spawned", at, rift: id, tile: place };
     });
   }
 
-  private reportFallenRifts(at: Tick): FightEvent[] {
-    const fallen = this.rifts.filter((rift): rift is Extract<Rift, { kind: "fallen" }> => rift.kind === "fallen");
-    this.rifts = this.rifts.filter((rift) => rift.kind !== "fallen");
+  private destroyFallenRifts(at: Tick): FightEvent[] {
+    const fallen = this.rifts.filter((rift) => rift.hpAtPostTick <= 0);
+    this.rifts = this.rifts.filter((rift) => rift.hpAtPostTick > 0);
     return fallen.map((rift) => ({ kind: "rift-destroyed", at, rift: rift.id, tile: rift.tile }));
   }
 
   private burstRifts(forCycle: Cycle, at: Tick): void {
-    const isDue = (rift: Rift): rift is Extract<Rift, { kind: "charging" }> => rift.kind === "charging" && rift.forCycle === forCycle;
+    const isDue = (rift: Rift) => rift.forCycle === forCycle;
     const due = this.rifts.filter(isDue);
     this.rifts = this.rifts.filter((rift) => !isDue(rift));
     due.forEach((rift, draw) => {

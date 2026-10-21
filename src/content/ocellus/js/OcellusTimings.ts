@@ -175,6 +175,7 @@ type PresentationRecipe = Readonly<{
   transitionTells: Readonly<Record<Special, Selected<number>>>;
   tellCentre: Selected<Readonly<{ faceColour: number; rgb: number }>>;
   overheadIcons: Readonly<Record<BossOverhead, Selected<SpriteFrame>>>;
+  overheadIconBelowHpBar: Selected<number>;
 }>;
 
 const headIcon = (frame: number, note: string, seen: Source): Selected<SpriteFrame> =>
@@ -515,6 +516,7 @@ const PRESENTATION: PresentationRecipe = {
     "deflect-range": headIcon(16, "an arrow over the same badge; matches the boss's icon by eye", vod("V2", "k80, k90")),
     "soul-split": headIcon(11, "a white star with red arrows over a purple badge; matches the boss's icon by eye", vod("V2", "k73 to k77")),
   },
+  overheadIconBelowHpBar: selected(7, "inferred", "unscaled", "the boss's HP bar sits above its curse icon, not over it as the SDK draws player overheads; 7 px clears the bar at the SDK's overhead scale", vod("V2", "k60, k71, k73, k80, k90")),
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";

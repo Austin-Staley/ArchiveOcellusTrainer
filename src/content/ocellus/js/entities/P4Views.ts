@@ -435,9 +435,8 @@ export class FragmentFlash extends Entity {
   }
 }
 
-const { bossPoses, transitionTells, tellCentre, overheadIcons } = OCELLUS_P4.presentation;
+const { bossPoses, transitionTells, tellCentre, overheadIcons, overheadIconBelowHpBar } = OCELLUS_P4.presentation;
 const OVERHEAD_ICONS = new Map<BossOverhead, HTMLImageElement>();
-const BELOW_HP_BAR = 7;
 
 export function drawOverheadIcon(context: OffscreenCanvasRenderingContext2D, scale: number, overhead: BossOverhead): void {
   let icon = OVERHEAD_ICONS.get(overhead);
@@ -446,7 +445,7 @@ export function drawOverheadIcon(context: OffscreenCanvasRenderingContext2D, sca
     icon.src = `osrs-assets/${spriteFile(overheadIcons[overhead].value)}`;
     OVERHEAD_ICONS.set(overhead, icon);
   }
-  if (icon.complete && icon.naturalWidth > 0) context.drawImage(icon, -scale / 2, BELOW_HP_BAR, scale, scale);
+  if (icon.complete && icon.naturalWidth > 0) context.drawImage(icon, -scale / 2, overheadIconBelowHpBar.value, scale, scale);
 }
 
 const HEAL_SPLAT_SLOTS: readonly Readonly<{ x: number; y: number }>[] = [{ x: 0, y: 30 }, { x: -18, y: 20 }, { x: 18, y: 20 }];

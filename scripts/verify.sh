@@ -228,7 +228,7 @@ state() {
 
 doctor() {
   [[ -f "$STATE_FILE" ]] || { log "doctor: no recorded instance"; return 1; }
-  local pid problems=0
+  local pid page manifest problems=0
   pid="$(state pid)"
   if [[ "$(process_start "$pid")" != "$(state started)" ]]; then
     log "doctor: recorded PID ${pid} is not running (or the PID was reused)"
@@ -238,11 +238,13 @@ doctor() {
     log "doctor: port $(state port) is held by '$(port_listener)', not the recorded PID ${pid}"
     problems=1
   fi
-  if ! curl -sf "http://127.0.0.1:$(state port)/" | grep -q "<title>Archive Ocellus Trainer</title>"; then
+  page="$(curl -sf "http://127.0.0.1:$(state port)/")"
+  if ! grep -q "<title>Archive Ocellus Trainer</title>" <<<"$page"; then
     log "doctor: page title is not Archive Ocellus Trainer"
     problems=1
   fi
-  if ! curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json" | grep -q "\"npc-${BOSS_NPC}\""; then
+  manifest="$(curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json")"
+  if ! grep -q "\"npc-${BOSS_NPC}\"" <<<"$manifest"; then
     log "doctor: served manifest has no npc-${BOSS_NPC}"
     problems=1
   fi

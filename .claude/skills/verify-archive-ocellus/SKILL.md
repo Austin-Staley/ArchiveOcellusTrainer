@@ -37,7 +37,7 @@ It refuses ports 8000 and 8001, which belong to other trainers, and refuses any 
 scripts/verify.sh doctor
 ```
 
-Read-only. It passes when the recorded PID is alive with its recorded start time, that PID owns the port, `/` has the title `Archive Ocellus Trainer`, and `/osrs-assets/manifest.json` contains `npc-16673`. It also warns when HEAD or tracked files changed since launch; webpack has reloaded them, but the recorded revision no longer names what you are driving. Run it first whenever anything looks wrong, and never drive an instance this checkout did not start.
+Read-only. It passes when the recorded PID is alive with its recorded start time, that PID owns the port, `/` has the title `Archive Ocellus Trainer`, and `/osrs-assets/manifest.json` contains `npc-16677`. It also warns when HEAD or tracked files changed since launch; webpack has reloaded them, but the recorded revision no longer names what you are driving. Run it first whenever anything looks wrong, and never drive an instance this checkout did not start.
 
 ## Drive
 
@@ -91,4 +91,4 @@ scripts/verify.sh stop
 - `scripts/verify.test.sh`: browser-free checks of `verify.sh` itself, with the dev server and agent-browser stubbed. Run it after changing `verify.sh`; CI runs it too.
 - `scripts/install-beta-sdk.sh`: installs the beta SDK packages with `--no-save`. CI calls it without `OSRS_SDK_PACKS`, so it builds from the pinned commit.
 
-The `assets` stage skips extraction when `public/osrs-assets/manifest.json` already contains `npc-16673` from `openrs2:2746`. Delete `public/osrs-assets/` to force a rebuild. Extracted assets are never committed.
+The `assets` stage skips extraction when `public/osrs-assets/manifest.json` already contains `npc-16677` from `openrs2:2746`. The boss's P4 poses come from the presentation recipe in `OcellusTimings.ts`; a pose added there is extracted on the next rebuild. Delete `public/osrs-assets/` to force a rebuild. Extracted assets are never committed.

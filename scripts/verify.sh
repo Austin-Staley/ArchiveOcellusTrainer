@@ -11,6 +11,7 @@ VERIFY_DIR="${VERIFY_DIR:-$ROOT/.verify/$(date -u +%Y%m%dT%H%M%SZ)}"
 STATE_FILE="$ROOT/.verify/current-server"
 MANIFEST="$ROOT/public/osrs-assets/manifest.json"
 URL="http://127.0.0.1:${VERIFY_PORT}/"
+BOSS_NPC=16677
 SPAWN_TILE='{"x":10,"y":10}'
 WALK_CLICK_RIGHT_PX=160
 WALK_CLICK_DOWN_PX=50
@@ -37,8 +38,8 @@ ensure_deps() {
 manifest_ready() {
   [[ -f "$MANIFEST" ]] && node -e '
     const m = require(process.argv[1]);
-    process.exit(m.cache?.source === "openrs2:2746" && m.assets?.["npc-16673"] ? 0 : 1);
-  ' "$MANIFEST"
+    process.exit(m.cache?.source === "openrs2:2746" && m.assets?.[`npc-${process.argv[2]}`] ? 0 : 1);
+  ' "$MANIFEST" "$BOSS_NPC"
 }
 
 stage_build() {
@@ -59,7 +60,7 @@ stage_test() {
 
 stage_assets() {
   if manifest_ready; then
-    log "assets: manifest already has npc-16673 from openrs2:2746, skipping rebuild" | tee "$VERIFY_DIR/assets.log"
+    log "assets: manifest already has npc-${BOSS_NPC} from openrs2:2746, skipping rebuild" | tee "$VERIFY_DIR/assets.log"
     return 0
   fi
   npm run assets -- --cache-dir "$OSRS_CACHE_DIR" --reader-path "$OSRS_CACHE_READER" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
@@ -129,8 +130,8 @@ doctor() {
     log "doctor: page title is not Archive Ocellus Trainer"
     problems=1
   fi
-  if ! curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json" | grep -q '"npc-16673"'; then
-    log "doctor: served manifest has no npc-16673"
+  if ! curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json" | grep -q "\"npc-${BOSS_NPC}\""; then
+    log "doctor: served manifest has no npc-${BOSS_NPC}"
     problems=1
   fi
   if [[ "$(state revision)" != "$(git rev-parse HEAD)" ]] || [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then

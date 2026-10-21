@@ -5,7 +5,7 @@ This directory is the maintained source for verifying what a user of the trainer
 ## Baseline preconditions
 
 - `scripts/verify.sh serve` has started the trainer at `http://127.0.0.1:8002/`, and `scripts/verify.sh doctor` passes.
-- `public/osrs-assets/manifest.json` contains `npc-16673` from cache `openrs2:2746`.
+- `public/osrs-assets/manifest.json` contains `npc-16677` from cache `openrs2:2746`.
 - `AGENT_BROWSER_SESSION` names a session that belongs to this run.
 - The viewport is 1280x800 (`agent-browser set viewport 1280 800`).
 - The page has loaded fresh, and `window.__archiveOcellusProbe.snapshot().tick` has reached 8, past the 6-tick GET READY countdown.

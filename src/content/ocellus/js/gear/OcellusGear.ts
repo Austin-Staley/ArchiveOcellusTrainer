@@ -24,7 +24,6 @@ const ICONS: Readonly<Record<TrainerItemKey, Readonly<{ set: string; piece: stri
   tonalzticsOfRalos: { set: "Ralos", piece: "spec", colour: "#8a5a2b" },
 };
 
-/** Cache 2746 extraction has no inventory icons, and committing sprites is not allowed, so trainer items draw a label. */
 function icon(key: TrainerItemKey): HTMLImageElement {
   const { set, piece, colour } = ICONS[key];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect x="1" y="1" width="30" height="30" rx="5" fill="${colour}" stroke="#000"/><g fill="#fff" font-family="sans-serif" font-size="9" text-anchor="middle"><text x="16" y="14">${set}</text><text x="16" y="25">${piece}</text></g></svg>`;
@@ -216,7 +215,6 @@ export class TonalzticsOfRalos extends RangedWeapon {
     return this.throwBoth(from, to, { ...bonuses, isSpecialAttack: true }, options);
   }
 
-  /** Division drains as each hit rolls, so on an NPC the first drain lowers the second roll's defence. */
   private throwBoth(from: Unit, to: Unit, bonuses: AttackBonuses, options: ProjectileOptions): boolean {
     let thrown = false;
     for (let hit = 0; hit < gear.ralos.value.hits; hit++) {

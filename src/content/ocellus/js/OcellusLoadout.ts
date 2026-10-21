@@ -30,7 +30,6 @@ import {
 
 type SlotItem<S extends GearSlot> = NonNullable<UnitEquipment[S]>;
 
-/** Declaration order is the inventory order of the switches. */
 const ITEMS: { readonly [S in GearSlot]: { readonly [K in GearKeys[S]]: () => SlotItem<S> } } = {
   weapon: { twistedBow: () => new OcellusTwistedBow(), scytheOfVitur: () => new OcellusScythe(), tonalzticsOfRalos: () => new TonalzticsOfRalos() },
   helmet: { voidRangerHelm: () => new VoidRangerHelm(), inquisitorsGreatHelm: () => new InquisitorsGreatHelm() },
@@ -57,7 +56,6 @@ function wear<S extends GearSlot>(equipment: UnitEquipment, slot: S, setup: Setu
 
 const STANCES: Readonly<Record<typeof OCELLUS_P4.gear.scytheStance.value, AttackStyle>> = { jab: AttackStyle.AGGRESSIVECRUSH };
 
-/** Region.reset resolves SDK loadouts only through the SDK's static registry, which cannot hold trainer items. */
 export function dress(player: Player, setup: ResolvedChoices["setup"]): void {
   const worn = setup.option.value;
   for (const slot of SLOTS) wear(player.equipment, slot, worn);

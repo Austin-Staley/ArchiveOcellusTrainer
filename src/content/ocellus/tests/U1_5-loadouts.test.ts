@@ -4,7 +4,6 @@ import { startDrill } from "./drill";
 
 type Target = Readonly<{ magic: number; defence: number; size: number }>;
 
-/** Takes every roll at max through the SDK's own roll-modifier hook, so a max hit is what lands. */
 class MaxRollDummy extends TestNpc {
   readonly received: [number, string][] = [];
   private readonly footprint: number;

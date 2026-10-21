@@ -297,10 +297,21 @@ export const OCELLUS_P4 = {
 
 type Choices = typeof OCELLUS_P4.choices;
 type ChoiceName = keyof Choices;
-type OptionKey<K extends ChoiceName> = keyof Choices[K]["options"] & string;
+type OptionsOf<K extends ChoiceName> = Choices[K]["options"];
+type OptionKey<K extends ChoiceName> = keyof OptionsOf<K> & string;
 export type DrillSelection = { readonly [K in ChoiceName]?: OptionKey<K> };
-type Resolved<O extends Options> = Readonly<{ key: keyof O & string; option: O[keyof O & string] }>;
-export type ResolvedChoices = { readonly [K in ChoiceName]: Resolved<Choices[K]["options"]> };
+const CHOICES: { readonly [K in ChoiceName]: Readonly<{ default: OptionKey<K>; options: OptionsOf<K> }> } = OCELLUS_P4.choices;
+
+class ResolvedChoice<K extends ChoiceName> {
+  readonly #name: K;
+  readonly option: OptionsOf<K>[OptionKey<K>];
+
+  constructor(name: K, readonly key: OptionKey<K>) {
+    this.#name = name;
+    this.option = CHOICES[name].options[key];
+  }
+}
+export type ResolvedChoices = { readonly [K in ChoiceName]: ResolvedChoice<K> };
 
 type DrillRequest = Readonly<{ seed: Seed; selection?: DrillSelection }>;
 export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices }>;
@@ -311,22 +322,22 @@ function hasKey<O extends object>(record: O, key: string): key is keyof O & stri
 }
 
 function resolveChoices(lookup: (name: ChoiceName) => string | undefined, rejected: string[]): ResolvedChoices {
-  const pick = <O extends Options>(name: ChoiceName, { default: fallback, options }: Choice<O>): Resolved<O> => {
+  const pick = <K extends ChoiceName>(name: K): ResolvedChoice<K> => {
     const raw = lookup(name);
-    if (raw !== undefined && hasKey(options, raw)) return { key: raw, option: options[raw] };
+    const { default: fallback, options } = CHOICES[name];
+    if (raw !== undefined && hasKey(options, raw)) return new ResolvedChoice(name, raw);
     if (raw !== undefined) rejected.push(`${name}=${raw}`);
-    return { key: fallback, option: options[fallback] };
+    return new ResolvedChoice(name, fallback);
   };
-  const { choices } = OCELLUS_P4;
   return {
-    bossMaxHp: pick("bossMaxHp", choices.bossMaxHp),
-    entryHpFraction: pick("entryHpFraction", choices.entryHpFraction),
-    explosions: pick("explosions", choices.explosions),
-    specialSelection: pick("specialSelection", choices.specialSelection),
-    orbSpawnAfterHit: pick("orbSpawnAfterHit", choices.orbSpawnAfterHit),
-    unclaimedOuterOrb: pick("unclaimedOuterOrb", choices.unclaimedOuterOrb),
-    riftFirstCycle: pick("riftFirstCycle", choices.riftFirstCycle),
-    focus: pick("focus", choices.focus),
+    bossMaxHp: pick("bossMaxHp"),
+    entryHpFraction: pick("entryHpFraction"),
+    explosions: pick("explosions"),
+    specialSelection: pick("specialSelection"),
+    orbSpawnAfterHit: pick("orbSpawnAfterHit"),
+    unclaimedOuterOrb: pick("unclaimedOuterOrb"),
+    riftFirstCycle: pick("riftFirstCycle"),
+    focus: pick("focus"),
   };
 }
 

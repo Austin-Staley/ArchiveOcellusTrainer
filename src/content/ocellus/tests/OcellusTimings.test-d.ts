@@ -1,3 +1,4 @@
+import type { ResolvedChoices } from "../js/OcellusTimings";
 import { OCELLUS_P4 } from "../js/OcellusTimings";
 
 // Assignability ignores readonly, so this compares the two types for identity instead.
@@ -15,3 +16,7 @@ type WritablePaths<T, Path extends string> = T extends string | number | boolean
 
 type TimingWrites = WritablePaths<typeof OCELLUS_P4, "OCELLUS_P4">;
 const timingTablesAreReadonly: [TimingWrites] extends [never] ? true : TimingWrites = true;
+
+type LooseChoice<K extends keyof ResolvedChoices> = Readonly<{ key: ResolvedChoices[K]["key"]; option: ResolvedChoices[K]["option"] }>;
+type ConstructibleChoices = { [K in keyof ResolvedChoices]: LooseChoice<K> extends ResolvedChoices[K] ? K : never }[keyof ResolvedChoices];
+const resolvedChoicesComeOnlyFromTheResolver: [ConstructibleChoices] extends [never] ? true : ConstructibleChoices = true;

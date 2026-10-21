@@ -6,6 +6,7 @@ type Target = Readonly<{ magic: number; defence: number; size: number }>;
 
 class MaxRollDummy extends TestNpc {
   readonly received: [number, string][] = [];
+  landed = 0;
   private readonly footprint: number;
 
   constructor(region: Region, location: Location, target: Target, private readonly maxedHits: number) {
@@ -28,6 +29,11 @@ class MaxRollDummy extends TestNpc {
     this.received.push([projectile.damage, projectile.attackStyle]);
   }
 
+  override damageTaken(): void {
+    super.damageTaken();
+    this.landed++;
+  }
+
   override movementStep(): void {}
 
   override attackIfPossible(): void {}
@@ -39,7 +45,7 @@ function firstAttack(drill: Drill, at: Location, target: Target, maxedHits = Inf
   const dummy = new MaxRollDummy(drill.region, at, target, maxedHits);
   drill.region.addMob(dummy);
   drill.player().setAggro(dummy);
-  for (let tick = 0; tick < 12 && dummy.received.length === 0; tick++) drill.region.world.tickWorld();
+  for (let tick = 0; tick < 12 && (dummy.received.length === 0 || dummy.landed < dummy.received.length); tick++) drill.region.world.tickWorld();
   return dummy;
 }
 
@@ -124,5 +130,25 @@ describe("U1.5 loadouts", () => {
     const dummy = firstAttack(drill, SOUTH, { magic: 2400, defence: 600, size: 1 }, 1);
     expect([dummy.received.map(([damage]) => damage > 0), dummy.currentStats.defence]).toEqual([[true, true], 0]);
     drill.dispose();
+  });
+
+  test("Division drains Ocellus's Defence only for glaives that land damage, so a spec into the invulnerable lead-in drains nothing", () => {
+    const spec = (throwAt: number, landedBy: number) => {
+      const drill = startDrill({ seed: 1 });
+      drill.walkTo(10, 8);
+      drill.tickTo(throwAt);
+      clickInventory(drill, 28922);
+      drill.player().useSpecialAttack = true;
+      drill.player().setAggro(drill.boss());
+      drill.tickTo(landedBy);
+      const { hitpoint, defence } = drill.boss().currentStats;
+      const outcome = [drill.events("player-hit-judged").map((event) => event.outcome), hitpoint, defence, drill.region.snapshot()?.player.specialEnergy];
+      drill.dispose();
+      return outcome;
+    };
+    expect([spec(4, 7), spec(9, 12)]).toEqual([
+      [["invulnerable", "invulnerable"], 1355, 250, 50],
+      [["passed", "passed"], 1329, 176, 50],
+    ]);
   });
 });

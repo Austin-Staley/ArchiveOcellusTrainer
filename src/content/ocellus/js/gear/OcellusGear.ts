@@ -1,5 +1,19 @@
-import { AttackStyle, AttackStyleTypes, Chest, Gloves, Helmet, ImageLoader, Legs, RangedWeapon, ScytheOfVitur, TwistedBow } from "osrs-sdk";
-import type { AttackBonuses, ProjectileOptions, Unit, UnitBonuses, UnitEquipment, Weapon } from "osrs-sdk";
+import {
+  AttackStyle,
+  AttackStyleTypes,
+  Chest,
+  Gloves,
+  Helmet,
+  ImageLoader,
+  Legs,
+  mergeProjectileOptions,
+  Projectile,
+  RangedWeapon,
+  ScytheOfVitur,
+  TwistedBow,
+  Unit,
+} from "osrs-sdk";
+import type { AttackBonuses, ProjectileOptions, UnitBonuses, UnitEquipment, Weapon } from "osrs-sdk";
 import type { TrainerItemKey } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 
@@ -158,6 +172,27 @@ export class OcellusScythe extends ScytheOfVitur {
   }
 }
 
+function drained(defence: number, target: Unit): number {
+  return Math.max(0, defence - Math.floor(target.currentStats.magic * gear.division.value.defenceDrainOfMagic));
+}
+
+function rollingAgainst<T>(target: Unit, defence: number, roll: () => T): T {
+  const landed = target.currentStats.defence;
+  target.currentStats.defence = defence;
+  try {
+    return roll();
+  } finally {
+    target.currentStats.defence = landed;
+  }
+}
+
+class DivisionGlaive extends Projectile {
+  override beforeHit(): void {
+    super.beforeHit();
+    if (this.damage > 0 && this.to instanceof Unit) this.to.currentStats.defence = drained(this.to.currentStats.defence, this.to);
+  }
+}
+
 export class TonalzticsOfRalos extends RangedWeapon {
   override inventorySprite = placeholderLabel("tonalzticsOfRalos");
 
@@ -215,14 +250,20 @@ export class TonalzticsOfRalos extends RangedWeapon {
     return this.throwBoth(from, to, { ...bonuses, isSpecialAttack: true }, options);
   }
 
+  override registerProjectile(from: Unit, to: Unit, bonuses: AttackBonuses, options: ProjectileOptions = {}): void {
+    if (!bonuses.isSpecialAttack) return super.registerProjectile(from, to, bonuses, options);
+    const own = { sound: this.attackSound ?? undefined, hitSound: this.attackLandingSound ?? undefined, visuals: { model: this.projectileModel ?? undefined } };
+    to.addProjectile(new DivisionGlaive(this, this.damage, from, to, "range", mergeProjectileOptions(own, this.projectileOptions, options)));
+  }
+
+  /** The SDK rolls both glaives as they are thrown, so the second rolls against the Defence the first glaive's drain will leave once it lands. */
   private throwBoth(from: Unit, to: Unit, bonuses: AttackBonuses, options: ProjectileOptions): boolean {
+    let defence = to.currentStats.defence;
     let thrown = false;
     for (let hit = 0; hit < gear.ralos.value.hits; hit++) {
-      if (!super.attack(from, to, rangedBonuses(this, from, bonuses), options)) return thrown;
+      if (!rollingAgainst(to, defence, () => super.attack(from, to, rangedBonuses(this, from, bonuses), options))) return thrown;
       thrown = true;
-      if (bonuses.isSpecialAttack && this.damage > 0) {
-        to.currentStats.defence = Math.max(0, to.currentStats.defence - Math.floor(to.currentStats.magic * gear.division.value.defenceDrainOfMagic));
-      }
+      if (bonuses.isSpecialAttack && this.damage > 0) defence = drained(defence, to);
     }
     return thrown;
   }

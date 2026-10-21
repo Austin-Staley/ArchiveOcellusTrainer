@@ -286,6 +286,8 @@ drive_loadouts() {
   click_at $(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + LOADOUT_BOSS_CLICK_RIGHT_PX )) \
     $(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + LOADOUT_BOSS_CLICK_DOWN_PX )) || return 1
   ab wait --fn "window.__archiveOcellusProbe.snapshot().fight.player.specialEnergy < 100" --timeout 15000 >/dev/null || log "the special attack was not spent"
+  ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.events).filter((event) => event.kind === 'player-hit-judged').length >= 2" \
+    --timeout 15000 >/dev/null || log "the glaives never landed"
   probe "snapshot().fight" >"$VERIFY_DIR/loadout-spec.json"
   ab wait 1200 >/dev/null
   ab screenshot "$VERIFY_DIR/loadout-spec.png" >/dev/null || { log "special attack screenshot failed"; return 1; }

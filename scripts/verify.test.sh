@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop snapshot drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_walk drive_cycle drive_focus drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -82,18 +82,46 @@ interrupt_leaves_the_recorded_instance() {
   [[ ! -e "$T/stop-called" ]] || { echo "stop was called for an instance this run did not start"; return 1; }
 }
 
+fixture_logs() {
+  local inner_void_tick="$1" focus="$2"
+  command node -e '
+    const [dir, innerVoid, focus] = process.argv.slice(1);
+    const stages = { 0: "lead-in", [innerVoid]: "inner-void", 30: "after-inner", 39: "outer-void", 59: "after-outer", 68: "inner-void" };
+    const overheads = { 8: "deflect-melee", 33: "soul-split", 39: "deflect-range", 61: "soul-split", 68: "deflect-melee" };
+    const specials = { 37: "vortex", 65: "spike-disk" };
+    const cycle = Array.from({ length: 71 }, (_, t) => ({
+      tick: t,
+      beats: specials[t] ? [{ kind: "special-hit", variant: specials[t] }] : [],
+      events: [
+        ...(stages[t] ? [{ kind: "stage-entered", at: t, stage: stages[t] }] : []),
+        ...(overheads[t] ? [{ kind: "overhead-switched", at: t, overhead: overheads[t] }] : []),
+      ],
+    }));
+    const focusBeats = { 5: "boss-shouts", 32: "special-tell", 37: "special-hit", 39: "soul-split-heal" };
+    const focused = Array.from({ length: 41 }, (_, t) => ({ tick: t, beats: focusBeats[t] ? [{ kind: focusBeats[t] }] : [], events: [] }));
+    const fs = require("fs");
+    fs.writeFileSync(`${dir}/cycle-log.json`, JSON.stringify({ data: { result: { header: { choices: { focus: { key: "full-fight" } } }, rows: cycle } } }));
+    fs.writeFileSync(`${dir}/focus-log.json`, JSON.stringify({ data: { result: { header: { choices: { focus: { key: focus } } }, rows: focused } } }));
+  ' "$T" "$inner_void_tick" "$focus"
+}
+
 fake_browser() {
   FINAL_TILE="$1"
   SCREENSHOT="${2:-ok}"
+  fixture_logs "${3:-8}" "${4:-$FOCUS_DRILL}"
   ab() {
     case "$*" in
-      "--json eval "*)
+      "--json eval window.__archiveOcellusProbe.snapshot()")
         local n tile='{"x":10,"y":10}' tick=8
         n=$(($(cat "$T/evals" 2>/dev/null || echo 0) + 1))
         echo "$n" >"$T/evals"
         [[ "$n" -eq 1 ]] || { tile="$FINAL_TILE"; tick=12; }
-        printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s}}}\n' "$tick" "$tile" "$tile"
+        printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":{"boss":{"npcId":16677}}}}}\n' "$tick" "$tile" "$tile"
         ;;
+      "--json eval window.__archiveOcellusProbe.log()")
+        if [[ -e "$T/restarted" ]]; then cat "$T/focus-log.json"; else cat "$T/cycle-log.json"; fi
+        ;;
+      "click #restart") : >"$T/restarted" ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;
       "--json get box "*) echo '{"data":{"x":0,"y":0,"width":1280,"height":800}}' ;;
@@ -133,6 +161,20 @@ missing_screenshot_fails() {
   if drive >"$T/drive.log" 2>&1; then echo "drive passed although no screenshot was written"; return 1; fi
 }
 
+cycle_off_schedule_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 9
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed with the first inner void at P4 tick 9"; return 1; fi
+  grep -q '"stagesOnSchedule": false' "$T/drive.log" || { echo "the stage check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+focus_not_applied_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 full-fight
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the reloaded drill ignored the focus"; return 1; fi
+  grep -q '"focusApplied": false' "$T/drive.log" || { echo "the focus check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -142,7 +184,9 @@ for t in \
   walk_to_the_documented_tile_passes \
   walk_to_a_wrong_tile_fails \
   failed_screenshot_fails \
-  missing_screenshot_fails; do
+  missing_screenshot_fails \
+  cycle_off_schedule_fails \
+  focus_not_applied_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

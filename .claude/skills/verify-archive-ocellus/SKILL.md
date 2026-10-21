@@ -5,7 +5,7 @@ description: Verify Archive Ocellus Trainer, a browser trainer built on osrs-sdk
 
 # Verify Archive Ocellus Trainer
 
-The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena and their player, and clicks floor tiles to walk. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
+The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena, their player and Ocellus (NPC 16677), clicks floor tiles to walk, and watches the phase 4 cycle run. A focus selector, a seed field and a Restart button sit at the bottom left. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
 
 ```sh
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
@@ -46,13 +46,13 @@ Use a named agent-browser session so you never touch another agent's browser:
 ```sh
 export AGENT_BROWSER_SESSION=archive-ocellus-$(date -u +%Y%m%dT%H%M%SZ)
 agent-browser set viewport 1280 800
-agent-browser open http://127.0.0.1:8002/
+agent-browser open "http://127.0.0.1:8002/?seed=1&specialSelection=replay-v2"
 agent-browser wait --fn "window.__archiveOcellusProbe?.snapshot().tick >= 8" --timeout 90000
 ```
 
 Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point `WALK_CLICK_RIGHT_PX` (160) right of and `WALK_CLICK_DOWN_PX` (50) below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to `WALK_TARGET_TILE` (13, 11). The three constants sit together at the top of `scripts/verify.sh`. The `browser` stage fails when the click resolves to any other tile, so a changed viewport, camera or default setting shows up as a failure. It does not pass silently.
 
-Development builds expose a verification probe, `window.__archiveOcellusProbe.snapshot()`. It returns a fresh copy of `{ ticking, tick, player, destination }` and has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
+Development builds expose a verification probe, `window.__archiveOcellusProbe`. `snapshot()` returns a fresh copy of `{ ticking, tick, player, destination, fight, rejected }`: `tick` is the SDK world tick, `fight` is `{ run, boss }` with the P4 tick and phase in `run`, and `rejected` lists URL options the drill ignored. `log()` returns the fight log: a header with the seed and every resolved choice, and one row per boss step with its phase, beats, player observations, boss HP, inputs and events. The probe has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
 
 Per-feature recipes are in [features/README.md](features/README.md).
 
@@ -68,8 +68,12 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `before.json`, `before.png` | State and screenshot after load, before any input |
 | `click.json` | Canvas pixel that was clicked |
 | `after.json`, `after.png` | State and screenshot after the walk |
-| `console.log`, `page-errors.json` | Browser console and uncaught page errors |
-| `observed.json` | Before and after state, the expected tile and each check's result |
+| `console.log`, `page-errors.json` | Browser console and uncaught page errors of the first page |
+| `boss.png` | The default 3D view once the boss is present (P4 tick 12 or later) |
+| `cycle-snapshot.json`, `cycle.json` | Probe snapshot and fight log once P4 tick 70 has run |
+| `focus.json`, `focus.png` | Fight log and screen after the focus control reloaded the drill on `transition-attacks` |
+| `focus-console.log`, `focus-page-errors.json` | Console and page errors of the reloaded page |
+| `observed.json` | Before and after state, the cycle's stage, overhead and transition attack ticks, the focused beats, and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
 
 A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture.

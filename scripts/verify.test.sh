@@ -6,7 +6,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_walk drive_cycle drive_focus drive release_browser stage_browser; do
+for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_lead_in drive_walk drive_cycle drive_focus drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -109,14 +109,18 @@ fake_browser() {
   FINAL_TILE="$1"
   SCREENSHOT="${2:-ok}"
   fixture_logs "${3:-8}" "${4:-$FOCUS_DRILL}"
+  LEAD_IN_FIGHT="${5:-}" PRESENT_FIGHT="${6:-}"
+  [[ -n "$LEAD_IN_FIGHT" ]] || LEAD_IN_FIGHT='{"run":{"kind":"running","tick":1},"boss":{"npcId":16677,"visible":false}}'
+  [[ -n "$PRESENT_FIGHT" ]] || PRESENT_FIGHT='{"run":{"kind":"running","tick":70},"boss":{"npcId":16677,"visible":true}}'
   ab() {
     case "$*" in
       "--json eval window.__archiveOcellusProbe.snapshot()")
-        local n tile='{"x":10,"y":10}' tick=8
+        local n tile='{"x":10,"y":10}' tick=8 fight="$LEAD_IN_FIGHT"
         n=$(($(cat "$T/evals" 2>/dev/null || echo 0) + 1))
         echo "$n" >"$T/evals"
-        [[ "$n" -eq 1 ]] || { tile="$FINAL_TILE"; tick=12; }
-        printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":{"boss":{"npcId":16677}}}}}\n' "$tick" "$tile" "$tile"
+        [[ "$n" -ne 1 ]] || tick=6
+        [[ "$n" -lt 3 ]] || { tile="$FINAL_TILE"; tick=12; fight="$PRESENT_FIGHT"; }
+        printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
       "--json eval window.__archiveOcellusProbe.log()")
         if [[ -e "$T/restarted" ]]; then cat "$T/focus-log.json"; else cat "$T/cycle-log.json"; fi
@@ -175,6 +179,27 @@ focus_not_applied_fails() {
   grep -q '"focusApplied": false' "$T/drive.log" || { echo "the focus check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+boss_drawn_in_lead_in_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '{"run":{"kind":"running","tick":1},"boss":{"npcId":16677,"visible":true}}'
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the boss was drawn at P4 tick 1"; return 1; fi
+  grep -q '"bossHiddenInLeadIn": false' "$T/drive.log" || { echo "the lead-in check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+lead_in_captured_after_the_hidden_ticks_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '{"run":{"kind":"running","tick":4},"boss":{"npcId":16677,"visible":false}}'
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the lead-in capture ran at P4 tick 4"; return 1; fi
+  grep -q '"bossHiddenInLeadIn": false' "$T/drive.log" || { echo "the lead-in check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+boss_never_drawn_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '{"run":{"kind":"running","tick":70},"boss":{"npcId":16677,"visible":false}}'
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the boss was never drawn"; return 1; fi
+  grep -q '"bossDrawnOncePresent": false' "$T/drive.log" || { echo "the presence check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -186,7 +211,10 @@ for t in \
   failed_screenshot_fails \
   missing_screenshot_fails \
   cycle_off_schedule_fails \
-  focus_not_applied_fails; do
+  focus_not_applied_fails \
+  boss_drawn_in_lead_in_fails \
+  lead_in_captured_after_the_hidden_ticks_fails \
+  boss_never_drawn_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

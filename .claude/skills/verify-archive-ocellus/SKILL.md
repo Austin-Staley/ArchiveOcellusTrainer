@@ -52,7 +52,7 @@ agent-browser wait --fn "window.__archiveOcellusProbe?.snapshot().tick >= 8" --t
 
 Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point `WALK_CLICK_RIGHT_PX` (160) right of and `WALK_CLICK_DOWN_PX` (50) below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to `WALK_TARGET_TILE` (13, 11). The three constants sit together at the top of `scripts/verify.sh`. The `browser` stage fails when the click resolves to any other tile, so a changed viewport, camera or default setting shows up as a failure. It does not pass silently.
 
-Development builds expose a verification probe, `window.__archiveOcellusProbe`. `snapshot()` returns a fresh copy of `{ ticking, tick, player, destination, fight, rejected }`: `tick` is the SDK world tick, `fight` is `{ run, boss }` with the P4 tick and phase in `run`, and `rejected` lists URL options the drill ignored. `log()` returns the fight log: a header with the seed and every resolved choice, and one row per boss step with its phase, beats, player observations, boss HP, inputs and events. The probe has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
+Development builds expose a verification probe, `window.__archiveOcellusProbe`. `snapshot()` returns a fresh copy of `{ ticking, tick, player, destination, fight, rejected }`: `tick` is the SDK world tick, `fight` is `{ run, boss }` with the P4 tick and phase in `run` and, in `boss.visible`, whether the renderer draws the boss model. `rejected` lists URL options the drill ignored. `log()` returns the fight log: a header with the seed and every resolved choice, and one row per boss step with its phase, beats, player observations, boss HP, inputs and events. The probe has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
 
 Per-feature recipes are in [features/README.md](features/README.md).
 
@@ -65,6 +65,8 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `summary.txt` | One `PASS`/`FAIL` line per stage |
 | `build.log`, `types.log`, `test.log`, `jest.json`, `assets.log` | Stage output; `jest.json` holds the executed test count |
 | `server.log`, `server.pid` | Dev server output; PID, start time, port and revision |
+| `warm-up.png` | A blank page; a new browser's first screenshot takes about 10 s, so it is taken before the trainer opens |
+| `hidden.json`, `hidden.png` | Screenshot, then state, after the boss's first P4 step; the check needs P4 tick 3 or earlier with the model hidden |
 | `before.json`, `before.png` | State and screenshot after load, before any input |
 | `click.json` | Canvas pixel that was clicked |
 | `after.json`, `after.png` | State and screenshot after the walk |
@@ -73,7 +75,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `cycle-snapshot.json`, `cycle.json` | Probe snapshot and fight log once P4 tick 70 has run |
 | `focus.json`, `focus.png` | Fight log and screen after the focus control reloaded the drill on `transition-attacks` |
 | `focus-console.log`, `focus-page-errors.json` | Console and page errors of the reloaded page |
-| `observed.json` | Before and after state, the cycle's stage, overhead and transition attack ticks, the focused beats, and each check's result |
+| `observed.json` | Lead-in, before and after state, the cycle's stage, overhead and transition attack ticks, the focused beats, and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
 
 A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture.

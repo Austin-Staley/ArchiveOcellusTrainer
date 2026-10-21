@@ -70,9 +70,9 @@ describe("U1 cycle skeleton", () => {
       drill.dispose();
       return boss;
     };
-    expect(entry({})).toEqual({ npcId: 16677, hp: 1355, maxHp: 5420 });
-    expect(entry({ selection: { bossMaxHp: "cache" } })).toEqual({ npcId: 16677, hp: 1312, maxHp: 5250 });
-    expect(entry({ selection: { entryHpFraction: "v1-observed" } })).toEqual({ npcId: 16677, hp: 1349, maxHp: 5420 });
+    expect(entry({})).toEqual({ npcId: 16677, hp: 1355, maxHp: 5420, visible: false });
+    expect(entry({ selection: { bossMaxHp: "cache" } })).toEqual({ npcId: 16677, hp: 1312, maxHp: 5250, visible: false });
+    expect(entry({ selection: { entryHpFraction: "v1-observed" } })).toEqual({ npcId: 16677, hp: 1349, maxHp: 5420, visible: false });
   });
 
   test("a restart starts a new run: entry HP again and a log from P4 tick 0", () => {
@@ -87,12 +87,14 @@ describe("U1 cycle skeleton", () => {
     drill.dispose();
   });
 
-  test("the boss is present from 4 but takes damage only from 8", () => {
+  test("the boss is hidden through P4 tick 3, drawn and targetable from 4, and takes damage only from 8", () => {
     const drill = startDrill();
-    drill.tickTo(2);
-    expect(drill.boss().canBeAttacked()).toBe(false);
+    const presence = [0, 1, 2, 3, 4].map((t) => {
+      drill.tickTo(t);
+      return [drill.region.snapshot()?.boss.visible, drill.boss().canBeAttacked()];
+    });
+    expect(presence).toEqual([[false, false], [false, false], [false, false], [false, false], [true, true]]);
     drill.tickTo(5);
-    expect(drill.boss().canBeAttacked()).toBe(true);
     drill.hit(drill.player(), drill.boss(), 20);
     drill.tickTo(7);
     drill.hit(drill.player(), drill.boss(), 20);

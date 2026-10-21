@@ -17,6 +17,7 @@ SPAWN_TILE='{"x":10,"y":10}'
 WALK_CLICK_RIGHT_PX=160
 WALK_CLICK_DOWN_PX=50
 WALK_TARGET_TILE='{"x":13,"y":11}'
+CYCLE_LAST_HIDDEN_TICK=3
 CYCLE_LAST_TICK=70
 CYCLE_STAGE_ENTRIES='[[0,"lead-in"],[8,"inner-void"],[30,"after-inner"],[39,"outer-void"],[59,"after-outer"],[68,"inner-void"]]'
 CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[39,"deflect-range"],[61,"soul-split"],[68,"deflect-melee"]]'
@@ -207,6 +208,12 @@ drive_walk() {
   ab screenshot "$VERIFY_DIR/after.png" >/dev/null || { log "after screenshot failed"; return 1; }
 }
 
+drive_lead_in() {
+  fight_tick_at_least 0 90000 || { log "the boss never took its first P4 step"; return 1; }
+  ab screenshot "$VERIFY_DIR/hidden.png" >/dev/null || { log "lead-in screenshot failed"; return 1; }
+  probe "snapshot()" >"$VERIFY_DIR/hidden.json"
+}
+
 drive_cycle() {
   fight_tick_at_least 12 30000 || { log "the boss never stepped to P4 tick 12"; return 1; }
   ab screenshot "$VERIFY_DIR/boss.png" >/dev/null || { log "boss screenshot failed"; return 1; }
@@ -229,21 +236,24 @@ drive_focus() {
 
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
+  # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
+  ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
+  drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
   drive_walk && drive_cycle && drive_focus || return 1
 
   local capture
-  for capture in before.json before.png after.json after.png boss.png cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json; do
+  for capture in hidden.json hidden.png before.json before.png after.json after.png boss.png cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
 
   node -e '
-    const [dir, spawn, target, bossNpc, lastTick, stages, overheads, specials, focusKey, focusBeats] = process.argv.slice(1);
+    const [dir, spawn, target, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats] = process.argv.slice(1);
     const read = (file) => JSON.parse(require("fs").readFileSync(`${dir}/${file}`, "utf8"));
-    const [before, after, errors, cycle, snapshot, focus, focusErrors] =
-      ["before.json", "after.json", "page-errors.json", "cycle.json", "cycle-snapshot.json", "focus.json", "focus-page-errors.json"].map(read);
+    const [hidden, before, after, errors, cycle, snapshot, focus, focusErrors] =
+      ["hidden.json", "before.json", "after.json", "page-errors.json", "cycle.json", "cycle-snapshot.json", "focus.json", "focus-page-errors.json"].map(read);
     const [spawnTile, targetTile] = [JSON.parse(spawn), JSON.parse(target)];
     const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const upTo = (rows, last) => rows.filter((row) => row.tick <= last);
@@ -261,6 +271,8 @@ drive() {
       arrivedAtExpectedTile: same(after.player, targetTile),
       worldTicked: after.tick > before.tick,
       bossIsExpectedNpc: snapshot.fight?.boss.npcId === Number(bossNpc),
+      bossHiddenInLeadIn: hidden.fight?.run.kind === "running" && hidden.fight.run.tick <= Number(lastHiddenTick) && hidden.fight.boss.visible === false,
+      bossDrawnOncePresent: snapshot.fight?.boss.visible === true,
       logHasEveryTick: cycle.rows.every((row, index) => row.tick === index) && cycle.rows.length > Number(lastTick),
       stagesOnSchedule: sameJson(observed.stageEntries, stages),
       overheadsOnSchedule: sameJson(observed.overheadSwitches, overheads),
@@ -271,9 +283,9 @@ drive() {
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
     }
-    console.log(JSON.stringify({ before, after, target: targetTile, observed, checks }, null, 2));
+    console.log(JSON.stringify({ hidden, before, after, target: targetTile, observed, checks }, null, 2));
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
-  ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$BOSS_NPC" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_BEATS" >"$VERIFY_DIR/observed.json"
+  ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$BOSS_NPC" "$CYCLE_LAST_HIDDEN_TICK" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_BEATS" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

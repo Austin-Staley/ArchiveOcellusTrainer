@@ -127,7 +127,7 @@ export type RunState =
 
 export type FightSnapshot = Readonly<{
   run: RunState;
-  boss: Readonly<{ npcId: number; hp: number; maxHp: number }>;
+  boss: Readonly<{ npcId: number; hp: number; maxHp: number; visible: boolean }>;
 }>;
 
 export type FightLog = Readonly<{ header: Readonly<{ seed: Seed; choices: ResolvedChoices }>; rows: readonly TickRow[] }>;

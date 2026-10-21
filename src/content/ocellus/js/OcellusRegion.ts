@@ -71,7 +71,7 @@ export class OcellusRegion extends Region {
     const { ocellus } = this.mounted;
     return {
       run: ocellus.runState(),
-      boss: { npcId: OCELLUS_P4.boss.npcId.value, hp: ocellus.currentStats.hitpoint, maxHp: ocellus.stats.hitpoint },
+      boss: { npcId: OCELLUS_P4.boss.npcId.value, hp: ocellus.currentStats.hitpoint, maxHp: ocellus.stats.hitpoint, visible: ocellus.visible() },
     };
   }
 

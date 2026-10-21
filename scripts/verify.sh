@@ -238,13 +238,17 @@ doctor() {
     log "doctor: port $(state port) is held by '$(port_listener)', not the recorded PID ${pid}"
     problems=1
   fi
-  page="$(curl -sf "http://127.0.0.1:$(state port)/")"
-  if ! grep -q "<title>Archive Ocellus Trainer</title>" <<<"$page"; then
+  if ! page="$(curl -sf "http://127.0.0.1:$(state port)/")"; then
+    log "doctor: page request failed"
+    problems=1
+  elif ! grep -q "<title>Archive Ocellus Trainer</title>" <<<"$page"; then
     log "doctor: page title is not Archive Ocellus Trainer"
     problems=1
   fi
-  manifest="$(curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json")"
-  if ! grep -q "\"npc-${BOSS_NPC}\"" <<<"$manifest"; then
+  if ! manifest="$(curl -sf "http://127.0.0.1:$(state port)/osrs-assets/manifest.json")"; then
+    log "doctor: manifest request failed"
+    problems=1
+  elif ! grep -q "\"npc-${BOSS_NPC}\"" <<<"$manifest"; then
     log "doctor: served manifest has no npc-${BOSS_NPC}"
     problems=1
   fi

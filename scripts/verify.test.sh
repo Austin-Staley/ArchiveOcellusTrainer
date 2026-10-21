@@ -82,6 +82,31 @@ interrupt_leaves_the_recorded_instance() {
   [[ ! -e "$T/stop-called" ]] || { echo "stop was called for an instance this run did not start"; return 1; }
 }
 
+failed_transfer_fails_doctor() {
+  setup
+  printf 'pid=4242\nstarted=unchanged\nport=8002\nrevision=%s\n' "$(git rev-parse HEAD)" >"$STATE_FILE"
+  process_start() { echo unchanged; }
+  port_listener() { echo 4242; }
+  curl() {
+    case "$*" in
+      *manifest.json*)
+        [[ "$BROKEN" != manifest ]] || { printf '{"assets":{"npc-16677":'; return 18; }
+        printf '{"assets":{"npc-16677":{}}}'
+        ;;
+      *)
+        [[ "$BROKEN" != page ]] || { printf '<html><title>Archive Ocellus Trainer</title>'; return 18; }
+        printf '<html><title>Archive Ocellus Trainer</title></html>'
+        ;;
+    esac
+  }
+  BROKEN=none
+  doctor >"$T/doctor.log" || { echo "doctor rejected a healthy instance"; cat "$T/doctor.log"; return 1; }
+  for BROKEN in page manifest; do
+    if doctor >"$T/doctor.log"; then echo "doctor passed although the ${BROKEN} transfer failed (curl exit 18)"; return 1; fi
+    grep -q "doctor: ${BROKEN} request failed" "$T/doctor.log" || { echo "doctor did not name the failed ${BROKEN} transfer"; cat "$T/doctor.log"; return 1; }
+  done
+}
+
 fixture_logs() {
   local inner_void_tick="$1" focus="$2" fault="$3"
   command node -e '
@@ -762,6 +787,7 @@ for t in \
   own_instance_is_stopped \
   interrupt_stops_own_instance \
   interrupt_leaves_the_recorded_instance \
+  failed_transfer_fails_doctor \
   walk_to_the_documented_tile_passes \
   walk_to_a_wrong_tile_fails \
   walk_off_the_edge_fails \

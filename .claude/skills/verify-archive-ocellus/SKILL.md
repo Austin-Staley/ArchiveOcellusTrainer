@@ -37,7 +37,7 @@ It refuses ports 8000 and 8001, which belong to other trainers, and refuses any 
 scripts/verify.sh doctor
 ```
 
-Read-only. It passes when the recorded PID is alive with its recorded start time, that PID owns the port, `/` has the title `Archive Ocellus Trainer`, and `/osrs-assets/manifest.json` contains `npc-16677`. It also warns when HEAD or tracked files changed since launch; webpack has reloaded them, but the recorded revision no longer names what you are driving. Run it first whenever anything looks wrong, and never drive an instance this checkout did not start.
+Read-only. It passes when the recorded PID is alive with its recorded start time, that PID owns the port, `/` loads completely with the title `Archive Ocellus Trainer`, and `/osrs-assets/manifest.json` loads completely and contains `npc-16677`. It also warns when HEAD or tracked files changed since launch; webpack has reloaded them, but the recorded revision no longer names what you are driving. Run it first whenever anything looks wrong, and never drive an instance this checkout did not start.
 
 ## Drive
 

@@ -91,7 +91,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `special-spike-disk.png`, `special-semicircle.png`, `special-black-disk.png`, `special-late.json`, `special-audio.json` | The same drill reloaded with sound and area sound saved on and Protect from Magic clicked after 37: the spike disk tell at 63, the melee semicircle at 93 and black disk at 95, the fight log once the player died at 97, and every audio start with its P4 tick, phase into the tick, length, rate and context state |
 | `special-console.log`, `special-page-errors.json`, `special-late-console.log`, `special-late-page-errors.json` | Console and page errors of both transition pages |
 | `loadout-before.json`, `loadout-ranged.png` | Fight snapshot and screen of `?seed=1&setup=ranged` with the inventory tab open |
-| `loadout-after.json`, `loadout-melee.png` | Snapshot and screen after clicking the nine switches |
+| `loadout-after.json`, `loadout-melee.png` | Snapshot and screen after clicking the eight switches |
 | `loadout-spec.json`, `loadout-spec.png` | Snapshot and screen after Division on the boss |
 | `loadout-console.log`, `loadout-page-errors.json` | Console and page errors of the loadout page |
 | `loadout-selector.json`, `loadout-selector-page-errors.json` | Snapshot and page errors after the setup control reloaded the drill on `melee` |

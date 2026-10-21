@@ -8,6 +8,7 @@ import {
   ItemName,
   Legs,
   mergeProjectileOptions,
+  NecklaceOfRupture,
   Projectile,
   RangedWeapon,
   ScytheOfVitur,
@@ -158,6 +159,12 @@ export class InquisitorsPlateskirt extends Legs {
   }
   override setStats(): void {
     this.bonuses = bonuses("inquisitorsPlateskirt");
+  }
+}
+
+export class OcellusNecklaceOfRupture extends NecklaceOfRupture {
+  override get cacheItemId(): number {
+    return gear.sdkCacheIds.necklaceOfRupture.value;
   }
 }
 

@@ -25,8 +25,7 @@ describe("U7 item names and supplies", () => {
       "Equip Inquisitor's plateskirt",
       "Equip Ferocious gloves",
       "Equip Infernal cape",
-      "Equip Amulet of torture",
-      "Equip Primordial boots",
+      "Equip Amulet of rancour",
       "Equip Ultor ring",
     ]);
     expect(switchedOut).toEqual([
@@ -37,8 +36,7 @@ describe("U7 item names and supplies", () => {
       "Equip Elite void robe",
       "Equip Void knight gloves",
       "Equip Dizana's Quiver",
-      "Equip Necklace of Anguish",
-      "Equip Pegasian Boots",
+      "Equip Necklace of rupture",
       "Equip Venator ring",
     ]);
   });

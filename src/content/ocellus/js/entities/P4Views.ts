@@ -76,23 +76,39 @@ function floorGeometry(mask: TileMask): THREE.BufferGeometry {
   return geometry;
 }
 
+type Vertex = readonly [number, number, number];
+type Segment = Readonly<{ from: Vertex; to: Vertex }>;
+
 function rimGeometry(mask: TileMask): THREE.BufferGeometry {
   const rim = new THREE.Color(LOOK.rim);
   const positions: number[] = [];
   const colors: number[] = [];
-  const quad = (corners: readonly (readonly [number, number, number])[], lit: readonly boolean[]) => {
-    for (const index of [0, 1, 2, 0, 2, 3]) {
-      positions.push(...corners[index]);
-      colors.push(...(lit[index] ? [rim.r, rim.g, rim.b] : [0, 0, 0]));
-    }
+  const lit = (at: Vertex) => {
+    positions.push(...at);
+    colors.push(rim.r, rim.g, rim.b);
   };
+  const dark = (at: Vertex) => {
+    positions.push(...at);
+    colors.push(0, 0, 0);
+  };
+  const fadeFromEdge = (edge: Segment, far: Segment) => {
+    lit(edge.from);
+    lit(edge.to);
+    dark(far.to);
+    lit(edge.from);
+    dark(far.to);
+    dark(far.from);
+  };
+  const floor = GROUND_OVERLAY_Y;
   for (const { from, to, inward } of rimEdges(mask)) {
-    const floor = GROUND_OVERLAY_Y;
-    quad(
-      [[from.x, floor, from.z], [to.x, floor, to.z], [to.x + inward.x * RIM_DEPTH, floor, to.z + inward.z * RIM_DEPTH], [from.x + inward.x * RIM_DEPTH, floor, from.z + inward.z * RIM_DEPTH]],
-      [true, true, false, false],
-    );
-    quad([[from.x, floor, from.z], [to.x, floor, to.z], [to.x, floor + RIM_HEIGHT, to.z], [from.x, floor + RIM_HEIGHT, from.z]], [true, true, false, false]);
+    const edge: Segment = { from: [from.x, floor, from.z], to: [to.x, floor, to.z] };
+    const stripInside: Segment = {
+      from: [from.x + inward.x * RIM_DEPTH, floor, from.z + inward.z * RIM_DEPTH],
+      to: [to.x + inward.x * RIM_DEPTH, floor, to.z + inward.z * RIM_DEPTH],
+    };
+    const wallTop: Segment = { from: [from.x, floor + RIM_HEIGHT, from.z], to: [to.x, floor + RIM_HEIGHT, to.z] };
+    fadeFromEdge(edge, stripInside);
+    fadeFromEdge(edge, wallTop);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));

@@ -36,6 +36,11 @@ export function startDrill(options: DrillOptions = {}) {
     return region.primaryBoss;
   };
   const walkTo = (to: At) => player().moveTo(to.x, to.y);
+  const stepOffMarkedTile = (home: At, side: At) => {
+    const at = player().location;
+    if (at.x === home.x && at.y === home.y) walkTo(side);
+    else if (at.x === side.x && at.y === side.y) walkTo(home);
+  };
   const ended = () => region.snapshot()?.run.kind === "ended";
   const lastTick = () => {
     const all = rows();
@@ -75,11 +80,7 @@ export function startDrill(options: DrillOptions = {}) {
           if (event.stage === "after-outer") goHome(SPAWN_ON_FLOOD);
         }
         const stage = row.phase.stage;
-        if (!dodging || (stage !== "inner-void" && stage !== "outer-void")) return;
-        const at = player().location;
-        const side = besideOnSameFloor(home, stage === "outer-void");
-        if (at.x === home.x && at.y === home.y) player().moveTo(side.x, side.y);
-        else if (at.x === side.x && at.y === side.y) player().moveTo(home.x, home.y);
+        if (dodging && (stage === "inner-void" || stage === "outer-void")) stepOffMarkedTile(home, besideOnSameFloor(home, stage === "outer-void"));
       });
     },
     row(t: number): TickRow {

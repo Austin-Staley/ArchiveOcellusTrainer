@@ -22,7 +22,7 @@ Preconditions:
 - **Before.** Record the state and the screen. Run `agent-browser --json eval "window.__archiveOcellus.snapshot()"` and `agent-browser screenshot "$PWD/.verify/<run>/before.png"`. `player` and `destination` are both `{"x":10,"y":10}`.
 - **Click.** Click 160 px right of and 50 px below the canvas centre. Get the centre from `agent-browser --json get box "#world"`, then run `agent-browser mouse move <cx+160> <cy+50>`, `agent-browser mouse down left` and `agent-browser mouse up left`. The clicked tile gets a white outline.
 - **Arrive.** Wait for the walk to finish. Run `agent-browser wait --fn "(() => { const s = window.__archiveOcellus.snapshot(); return s.player.x === s.destination.x && s.player.y === s.destination.y && s.player.x !== 10; })()" --timeout 15000`. The command exits 0.
-- **After.** Record the state and the screen. Run the same `eval` and `agent-browser screenshot "$PWD/.verify/<run>/after.png"`. `player` equals `destination`, which is `{"x":13,"y":11}` at a 1280x800 viewport, and `tick` is higher than before.
+- **After.** Record the state and the screen. Run the same `eval` and `agent-browser screenshot "$PWD/.verify/<run>/after.png"`. `player` and `destination` are both `{"x":13,"y":11}` at a 1280x800 viewport, and `tick` is higher than before. Compare against that literal tile, not against `destination`: both come from the trainer, so a click on the wrong tile still has `player` equal to `destination`.
 - **Scripted.** `scripts/verify.sh browser` runs this recipe and writes `observed.json` with each check.
 
 ## Gotchas

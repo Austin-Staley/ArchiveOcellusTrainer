@@ -20,6 +20,8 @@ STATE_FILE="$ROOT/.verify/current-server"
 MANIFEST="$ROOT/public/osrs-assets/manifest.json"
 URL="http://127.0.0.1:${VERIFY_PORT}/"
 SPAWN_TILE='{"x":10,"y":10}'
+# Where the documented click (160 px right of and 50 px below the canvas centre at 1280x800) lands.
+WALK_TARGET_TILE='{"x":13,"y":11}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
 log() { echo "verify: $*"; }
@@ -93,6 +95,7 @@ serve() {
   node node_modules/.bin/webpack serve --mode development --host 127.0.0.1 --port "$VERIFY_PORT" \
     >"$VERIFY_DIR/server.log" 2>&1 &
   local pid=$!
+  LAUNCHED_PID=$pid
   printf 'pid=%s\nstarted=%s\nport=%s\nevidence=%s\nrevision=%s\n' \
     "$pid" "$(process_start "$pid")" "$VERIFY_PORT" "$VERIFY_DIR" "$(git rev-parse HEAD)" >"$STATE_FILE"
   cp "$STATE_FILE" "$VERIFY_DIR/server.pid"
@@ -179,7 +182,7 @@ drive() {
   local before after box cx cy credit
   before="$(snapshot)"
   echo "$before" >"$VERIFY_DIR/before.json"
-  ab screenshot "$VERIFY_DIR/before.png" >/dev/null
+  ab screenshot "$VERIFY_DIR/before.png" >/dev/null || { log "before screenshot failed"; return 1; }
 
   credit="$(ab --json get text "#credit_line" | json data.text)"
   [[ "$credit" == "$CREDIT_LINE" ]] || { log "credit line text differs: ${credit}"; return 1; }
@@ -192,43 +195,57 @@ drive() {
   ab mouse move "$cx" "$cy" >/dev/null && ab mouse down left >/dev/null && ab mouse up left >/dev/null || return 1
 
   ab wait --fn "(() => { const s = window.__archiveOcellus.snapshot(), spawn = ${SPAWN_TILE}; return (s.player.x !== spawn.x || s.player.y !== spawn.y) && s.player.x === s.destination.x && s.player.y === s.destination.y; })()" \
-    --timeout 15000 >/dev/null || { log "player did not reach a new tile after the click"; }
+    --timeout 15000 >/dev/null || log "player did not settle on a new tile after the click"
   after="$(snapshot)"
   echo "$after" >"$VERIFY_DIR/after.json"
   ab wait 1200 >/dev/null
-  ab screenshot "$VERIFY_DIR/after.png" >/dev/null
+  ab screenshot "$VERIFY_DIR/after.png" >/dev/null || { log "after screenshot failed"; return 1; }
 
-  ab console >"$VERIFY_DIR/console.log" 2>&1
-  ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json"
+  ab console >"$VERIFY_DIR/console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json" || { log "page error capture failed"; return 1; }
+
+  local capture
+  for capture in before.json before.png after.json after.png console.log page-errors.json; do
+    [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
+  done
 
   node -e '
-    const [before, after, errors, spawn] = process.argv.slice(1).map((s) => JSON.parse(s));
-    const same = (a, b) => a.x === b.x && a.y === b.y;
+    const [before, after, errors, spawn, target] = process.argv.slice(1).map((s) => JSON.parse(s));
+    const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const checks = {
       spawnedOnSpawnTile: same(before.player, spawn),
-      movedOffSpawn: !same(after.player, spawn),
-      arrivedAtClickedTile: same(after.player, after.destination),
+      clickTargetedExpectedTile: same(after.destination, target),
+      arrivedAtExpectedTile: same(after.player, target),
       worldTicked: after.tick > before.tick,
       noPageErrors: errors.length === 0,
     };
-    console.log(JSON.stringify({ before, after, checks }, null, 2));
+    if (!checks.clickTargetedExpectedTile) {
+      console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(target)}; the click-to-tile mapping for this viewport and camera changed`);
+    }
+    console.log(JSON.stringify({ before, after, target, checks }, null, 2));
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
-  ' "$before" "$after" "$(cat "$VERIFY_DIR/page-errors.json")" "$SPAWN_TILE" >"$VERIFY_DIR/observed.json"
+  ' "$before" "$after" "$(cat "$VERIFY_DIR/page-errors.json")" "$SPAWN_TILE" "$WALK_TARGET_TILE" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict
 }
 
+release_browser() {
+  ab close >/dev/null 2>&1
+  [[ -n "$LAUNCHED_PID" && -f "$STATE_FILE" && "$(state pid)" == "$LAUNCHED_PID" ]] || return 0
+  stop
+}
+
 stage_browser() {
   BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")"
+  LAUNCHED_PID=
   local result=1
-  trap 'ab close >/dev/null 2>&1; stop; exit 130' INT TERM
+  trap 'release_browser; exit 130' INT TERM
   if serve && doctor; then
     drive
     result=$?
   fi
-  ab close >/dev/null 2>&1
-  stop || result=1
+  release_browser || result=1
   trap - INT TERM
   return $result
 }

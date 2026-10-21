@@ -50,7 +50,7 @@ agent-browser open http://127.0.0.1:8002/
 agent-browser wait --fn "window.__archiveOcellus?.snapshot().tick >= 8" --timeout 90000
 ```
 
-Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point 160 px right of and 50 px below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to (13, 11).
+Drive with real input only: page loads, `agent-browser mouse move/down/up` on the canvas, and visible elements by CSS id. The canvas has no accessible children, so tiles are reached by pixel position relative to `agent-browser get box "#world"`. The camera centres on the player. At a 1280x800 viewport, the point 160 px right of and 50 px below the canvas centre is a floor tile; from the spawn tile (10, 10) the player walks to (13, 11). The `browser` stage fails when the click resolves to any other tile, so a changed viewport, camera or default setting shows up as a failure. It does not pass silently.
 
 Development builds expose `window.__archiveOcellus.snapshot()`. It returns a fresh copy of `{ ticking, tick, player, destination }` and has no setters. Use it to record state the UI does not show. Never use it, `eval`, or SDK internals to change state; a proof that mutates the world through code proves nothing about the user path. Production builds (`npm run build`) do not contain the handle.
 
@@ -69,10 +69,10 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `click.json` | Canvas pixel that was clicked |
 | `after.json`, `after.png` | State and screenshot after the walk |
 | `console.log`, `page-errors.json` | Browser console and uncaught page errors |
-| `observed.json` | Before and after state with each check's result |
+| `observed.json` | Before and after state, the expected tile and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
 
-A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage.
+A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture.
 
 ## Cleanup
 
@@ -81,12 +81,13 @@ agent-browser close
 scripts/verify.sh stop
 ```
 
-`stop` signals only the recorded PID, and only while its start time still matches, so a reused PID is never signalled. It waits for the process to exit, confirms the port is free, then removes `.verify/current-server`. It never deletes evidence. Never stop the server by process name or pattern. Run cleanup after every failed attempt too. The `browser` stage does all of this itself, including on Ctrl-C.
+`stop` signals only the recorded PID, and only while its start time still matches, so a reused PID is never signalled. It waits for the process to exit, confirms the port is free, then removes `.verify/current-server`. It never deletes evidence. Never stop the server by process name or pattern. Run cleanup after every failed attempt too. The `browser` stage does all of this itself, including on Ctrl-C. It stops only an instance it started. When `.verify/current-server` already records an instance, for example one from `scripts/verify.sh serve`, the stage fails and leaves that instance running.
 
 ## Helpers
 
 - `scripts/verify.sh [build] [test] [assets] [browser]`: the stages; no argument runs all four.
 - `scripts/verify.sh serve | doctor | stop`: a manual instance, as above.
+- `scripts/verify.test.sh`: browser-free checks of `verify.sh` itself, with the dev server and agent-browser stubbed. Run it after changing `verify.sh`; CI runs it too.
 - `scripts/install-beta-sdk.sh`: installs the beta SDK packages with `--no-save`. CI calls it without `OSRS_SDK_PACKS`, so it builds from the pinned commit.
 
 The `assets` stage skips extraction when `public/osrs-assets/manifest.json` already contains `npc-16673` from `openrs2:2746`. Delete `public/osrs-assets/` to force a rebuild. Extracted assets are never committed.

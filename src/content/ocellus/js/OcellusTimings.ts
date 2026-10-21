@@ -1,13 +1,17 @@
-// V1 and V2 are the two Molgoatkirby clips of https://www.twitch.tv/videos/2906214879. V1 tick G is t = G - 25 and
-// V2 tick k is t = k - 40.
 import type { Cycle, Mechanic, Seed, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
 
+const VODS = {
+  V1: { streamer: "Molgoatkirby", url: "https://www.twitch.tv/videos/2906214879", tickPrefix: "G", clipTickAtP4Zero: 25 },
+  V2: { streamer: "Molgoatkirby", url: "https://www.twitch.tv/videos/2906214879", tickPrefix: "k", clipTickAtP4Zero: 40 },
+} as const;
+type Vod = keyof typeof VODS;
+
 type Source =
-  | Readonly<{ kind: "vod"; vod: "V1" | "V2"; at: string }>
+  | Readonly<{ kind: "vod"; vod: Vod; at: string }>
   | Readonly<{ kind: "wiki"; page: string; oldid: number | null }>
   | Readonly<{ kind: "cache"; build: 2746; record: string }>
   | Readonly<{ kind: "owner"; date: "2026-10-21"; topic: string }>;
@@ -32,7 +36,7 @@ function choice<O extends Options>(defaultKey: keyof O & string, options: O): Ch
   return { default: defaultKey, options };
 }
 
-const vod = (which: "V1" | "V2", at: string): Source => ({ kind: "vod", vod: which, at });
+const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at });
 const wiki = (page: string, oldid: number | null): Source => ({ kind: "wiki", page, oldid });
 const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
 const owner = (topic: string): Source => ({ kind: "owner", date: "2026-10-21", topic });
@@ -241,6 +245,7 @@ const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus> =>
   selected<Focus>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs in full; only these mechanics act", PRACTICE);
 
 export const OCELLUS_P4 = {
+  vods: VODS,
   boss: BOSS,
   leadIn: LEAD_IN,
   cycle: CYCLE,

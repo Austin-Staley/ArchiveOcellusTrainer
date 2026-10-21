@@ -34,4 +34,38 @@ describe("U6 boss overheads, heals and rifts", () => {
     expect(drill.events("player-hit-judged").map((e) => [e.at, e.outcome])).toEqual([[39, outcome]]);
     drill.dispose();
   });
+
+  test("Soul Split heals the boss two ticks after each unprotected transition hit, by the damage that hit applied", () => {
+    const drill = startDrill({ selection: TRANSITIONS });
+    drill.tickTo(68);
+    expect(drill.events("boss-healed").map((e) => [e.at, e.cause, e.receipt])).toEqual([
+      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1355, afterHp: 1404 }],
+      [67, { kind: "soul-split", ordinal: 1 }, { requested: 47, applied: 47, beforeHp: 1404, afterHp: 1451 }],
+    ]);
+    drill.dispose();
+  });
+
+  test("the Soul Split and unclaimed-orb heals coexist, and a protected transition hit heals nothing", () => {
+    const drill = startDrill({ selection: { focus: "boss-heals", specialSelection: "replay-v2" } });
+    drill.tickTo(13);
+    drill.walkTo({ x: 3, y: 2 });
+    drill.tickTo(63);
+    drill.pray("Protect from Range");
+    drill.tickTo(68);
+    expect(drill.events("special-hit").map((e) => [e.at, e.style, e.receipt.prayer, e.receipt.applied])).toEqual([[37, "magic", null, 49], [65, "ranged", "ranged", 7]]);
+    expect(drill.events("boss-healed").map((e) => [e.at, e.cause, e.receipt])).toEqual([
+      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1355, afterHp: 1404 }],
+      [62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1404, afterHp: 1429 }],
+    ]);
+    drill.dispose();
+  });
+
+  test("a kill on the Soul Split tick ends the run before the boss heals", () => {
+    const drill = startDrill({ selection: TRANSITIONS });
+    drill.tickTo(38);
+    drill.hit(drill.player(), drill.boss(), 1355);
+    drill.tickTo(40);
+    expect([drill.events("boss-healed"), drill.events("run-ended").map((e) => [e.at, e.reason])]).toEqual([[], [[39, "kill"]]]);
+    drill.dispose();
+  });
 });

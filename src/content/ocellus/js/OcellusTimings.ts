@@ -615,6 +615,7 @@ export const OCELLUS_P4 = {
       "orb-retrieval": drill("lifeforce-orb", "void-floor"),
       explosions: drill("explosions"),
       "transition-attacks": drill("transition-attacks"),
+      "boss-heals": drill("transition-attacks", "lifeforce-orb"),
       rifts: drill("rifts"),
     }),
   },

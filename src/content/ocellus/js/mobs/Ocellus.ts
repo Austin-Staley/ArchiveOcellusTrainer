@@ -7,6 +7,7 @@ import type {
   Beat,
   ExplosionOutcome,
   FightEvent,
+  HealCause,
   HitJudgement,
   HitReceipt,
   IncomingStyle,
@@ -99,6 +100,7 @@ export class Ocellus extends Mob {
   private run: Run = { kind: "waiting", inputs: [] };
   private orbs: readonly Orb[] = [];
   private marks: readonly Mark[] = [];
+  private stolen: readonly Readonly<{ ordinal: Ordinal; credit: number }>[] = [];
 
   constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
@@ -354,6 +356,7 @@ export class Ocellus extends Mob {
       case "special-sound":
         return { kind: "special-sounded", at, ordinal: beat.ordinal, cue: beat.cue };
       case "soul-split-heal":
+        return this.soulSplit(beat.ordinal, at);
       case "rifts-spawn":
       case "rift-charge-ends":
         return null;
@@ -376,8 +379,25 @@ export class Ocellus extends Mob {
     const { protectedDamage, unprotectedDamage } = OCELLUS_P4.special;
     const special = specialAttack(at, ordinal, variant);
     const amount = () => rollInt(this.config.seed, "specialDamage", at, this.target.protection === special.style ? protectedDamage.value : unprotectedDamage.value, 0);
-    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", ...special, receipt }));
+    const hit = new P4Hit(this, this.target, amount, (receipt) => {
+      if (receipt.prayer !== special.style) this.stolen = [...this.stolen, { ordinal, credit: receipt.applied }];
+      this.recordEvent({ kind: "special-hit", ...special, receipt });
+    });
     this.target.addProjectile(hit);
+  }
+
+  private soulSplit(ordinal: Ordinal, at: Tick): FightEvent | null {
+    const stolen = this.stolen.find((theft) => theft.ordinal === ordinal);
+    if (!stolen) return null;
+    this.stolen = this.stolen.filter((theft) => theft !== stolen);
+    return this.healBoss({ kind: "soul-split", ordinal }, stolen.credit, at);
+  }
+
+  private healBoss(cause: HealCause, requested: number, at: Tick): FightEvent {
+    const beforeHp = this.currentStats.hitpoint;
+    const afterHp = Math.min(this.stats.hitpoint, beforeHp + requested);
+    this.currentStats.hitpoint = afterHp;
+    return { kind: "boss-healed", at, cause, receipt: { requested, applied: afterHp - beforeHp, beforeHp, afterHp } };
   }
 
   private markExplosion(kind: VoidKind, pulse: number, at: Tick, player: Tile): FightEvent {
@@ -439,10 +459,7 @@ export class Ocellus extends Mob {
     const orb = this.orb("outer-void");
     if (orb?.kind !== "expired") return null;
     this.replaceOrb("outer-void", null);
-    const beforeHp = this.currentStats.hitpoint;
-    const afterHp = Math.min(this.stats.hitpoint, beforeHp + orb.credit);
-    this.currentStats.hitpoint = afterHp;
-    return { kind: "boss-healed", at, cause: { kind: "unclaimed-orb" }, receipt: { requested: orb.credit, applied: afterHp - beforeHp, beforeHp, afterHp } };
+    return this.healBoss({ kind: "unclaimed-orb" }, orb.credit, at);
   }
 
   private claimOrbs(at: Tick, player: Tile): void {

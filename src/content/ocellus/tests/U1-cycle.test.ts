@@ -178,7 +178,7 @@ describe("U1 cycle skeleton", () => {
   test("native combat rolls replay from the seed, and the SDK's random source is restored between ticks", () => {
     const fight = (global: number) => {
       Random.setRandom(() => global);
-      const drill = startDrill({ selection: { focus: "transition-attacks" } });
+      const drill = startDrill({ selection: { focus: "rifts" } });
       drill.tickTo(8);
       drill.player().setAggro(drill.boss());
       drill.tickTo(40);

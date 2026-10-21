@@ -113,6 +113,42 @@ describe("U1 cycle skeleton", () => {
     drill.dispose();
   });
 
+  test.each([
+    {
+      at: 8,
+      phase: { stage: "inner-void", cycle: 1, boss: "present-damageable", overhead: "deflect-melee" },
+      entered: [
+        { kind: "stage-entered", at: 8, stage: "inner-void" },
+        { kind: "overhead-switched", at: 8, overhead: "deflect-melee" },
+        { kind: "boss-state-changed", at: 8, state: "present-damageable" },
+      ],
+    },
+    {
+      at: 39,
+      phase: { stage: "outer-void", cycle: 1, boss: "present-damageable", overhead: "deflect-range" },
+      entered: [
+        { kind: "stage-entered", at: 39, stage: "outer-void" },
+        { kind: "overhead-switched", at: 39, overhead: "deflect-range" },
+      ],
+    },
+  ])("a lethal hit on phase-change tick $at logs the phase that tick enters and none of its beats", ({ at, phase, entered }) => {
+    const drill = startDrill();
+    drill.tickTo(at - 1);
+    drill.hit(drill.player(), drill.boss(), 1355);
+    drill.tickTo(at + 2);
+    const row = drill.row(at);
+    expect([row.phase, row.beats, row.events]).toEqual([
+      phase,
+      [],
+      [
+        { kind: "player-hit-judged", at, style: "typeless", outcome: "passed", requested: 1355 },
+        ...entered,
+        { kind: "run-ended", at, reason: "kill" },
+      ],
+    ]);
+    drill.dispose();
+  });
+
   test("a lethal hit on the player ends the run on the tick it lands", () => {
     const drill = startDrill();
     drill.tickTo(9);

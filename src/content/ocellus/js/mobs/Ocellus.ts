@@ -215,12 +215,13 @@ export class Ocellus extends Mob {
     };
     const judged = this.judgeLandingHits(moment);
     super.queueStep();
+    const logged = [...judged, ...phaseEvents(last, moment.phase, moment.tick)];
     if (this.currentStats.hitpoint <= 0) {
-      this.run = { kind: "killed", draft: { ...draft, beats: [], events: [...judged, { kind: "run-ended", at: moment.tick, reason: "kill" }] } };
+      this.run = { kind: "killed", draft: { ...draft, beats: [], events: [...logged, { kind: "run-ended", at: moment.tick, reason: "kill" }] } };
       return;
     }
     const reactions = moment.beats.flatMap((beat) => this.react(beat, moment.tick) ?? []);
-    this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...judged, ...phaseEvents(last, moment.phase, moment.tick), ...reactions] } };
+    this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...reactions] } };
   }
 
   private judgeLandingHits(moment: Moment): FightEvent[] {

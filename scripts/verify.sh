@@ -57,11 +57,13 @@ VOID_FLOOR_HITS='[[44,9],[45,11],[46,10],[47,11],[48,10],[49,9],[50,9],[51,10],[
 VOID_RUN_END='[[54,"death"]]'
 VOID_PIXEL="#1e2529"
 ORB_DRILL="lifeforce-orb"
-ORB_SPAWN_TICK=13
+ORB_DORMANT_TICK=20
 ORB_GLOW_TICK=24
-ORB_LAST_TICK=26
+ORB_LAST_TICK=30
+ORB_FRAMES=6
 ORB_CLICK_LEFT_PX=155
 ORB_CLICK_UP_PX=16
+ORB_BOX='{"minX":-60,"maxX":50,"minY":-75,"maxY":5}'
 ORB_SKIP_LAST_TICK=63
 ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[13,{"x":7,"y":9},49]],"matured":[[24,{"x":7,"y":9}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
@@ -379,22 +381,27 @@ drive_void_floor() {
 }
 
 drive_lifeforce_orb() {
-  local box ox oy
+  local box ox oy frame
   ab select "#focus" "$ORB_DRILL" >/dev/null && ab click "#restart" >/dev/null || { log "focus control did not accept ${ORB_DRILL}"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).get('focus') === '${ORB_DRILL}'" --timeout 30000 >/dev/null || { log "restart did not load focus=${ORB_DRILL}"; return 1; }
   fight_tick_at_least 12 120000 || { log "the orb drill never reached the lifeforce hit"; return 1; }
   ab screenshot "$VERIFY_DIR/orb-hit.png" >/dev/null || { log "lifeforce hit screenshot failed"; return 1; }
-  fight_tick_at_least "$ORB_SPAWN_TICK" 30000 || { log "the boss never stepped to P4 tick ${ORB_SPAWN_TICK}"; return 1; }
   box="$(ab --json get box "#world")"
   ox=$(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 - ORB_CLICK_LEFT_PX ))
   oy=$(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 - ORB_CLICK_UP_PX ))
+  # The orb's teal pulses within a tick, so each look is a burst of frames. The player stays on spawn until the glow burst, because on the orb it hides the glow.
+  fight_tick_at_least "$ORB_DORMANT_TICK" 30000 || { log "the boss never stepped to P4 tick ${ORB_DORMANT_TICK}"; return 1; }
+  for frame in $(seq 1 "$ORB_FRAMES"); do
+    ab screenshot "$VERIFY_DIR/orb-dormant-${frame}.png" >/dev/null || { log "dormant orb screenshot failed"; return 1; }
+  done
+  fight_tick_at_least "$ORB_GLOW_TICK" 30000 || { log "the boss never stepped to P4 tick ${ORB_GLOW_TICK}"; return 1; }
+  for frame in $(seq 1 "$ORB_FRAMES"); do
+    ab screenshot "$VERIFY_DIR/orb-glow-${frame}.png" >/dev/null || { log "glowing orb screenshot failed"; return 1; }
+  done
   click_at "$ox" "$oy" || return 1
-  ab screenshot "$VERIFY_DIR/orb-dormant.png" >/dev/null || { log "dormant orb screenshot failed"; return 1; }
   ab wait --fn "(() => { const d = window.__archiveOcellusProbe.snapshot().destination, spawn = ${SPAWN_TILE}; return d !== null && (d.x !== spawn.x || d.y !== spawn.y); })()" \
     --timeout 5000 >/dev/null || log "the orb click set no new destination"
   echo "{\"x\":${ox},\"y\":${oy},\"snapshot\":$(probe "snapshot()")}" >"$VERIFY_DIR/orb-click.json"
-  fight_tick_at_least "$ORB_GLOW_TICK" 30000 || { log "the boss never stepped to P4 tick ${ORB_GLOW_TICK}"; return 1; }
-  ab screenshot "$VERIFY_DIR/orb-glow.png" >/dev/null || { log "glowing orb screenshot failed"; return 1; }
   fight_tick_at_least "$ORB_LAST_TICK" 30000 || { log "the boss never stepped to P4 tick ${ORB_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/orb.json"
   ab console >"$VERIFY_DIR/orb-console.log" 2>&1 || { log "console capture failed"; return 1; }
@@ -422,14 +429,14 @@ drive() {
   for capture in hidden.json hidden.png before.json before.png after.json after.png boss.png cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json \
     void-inner.png void-flood.png void-floor.json void-console.log void-page-errors.json \
     attack-click.json ring-click.json flood-ring.png void-shot.json void-shot-console.log void-shot-page-errors.json \
-    orb-hit.png orb-dormant.png orb-click.json orb-glow.png orb.json orb-console.log orb-page-errors.json orb-skip.png orb-skip.json orb-skip-console.log orb-skip-page-errors.json \
+    orb-hit.png $(seq -f "orb-dormant-%g.png" 1 "$ORB_FRAMES") $(seq -f "orb-glow-%g.png" 1 "$ORB_FRAMES") orb-click.json orb.json orb-console.log orb-page-errors.json orb-skip.png orb-skip.json orb-skip-console.log orb-skip-page-errors.json \
     loadout-before.json loadout-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
 
   node -e '
-    const [dir, spawn, target, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected] = process.argv.slice(1);
+    const [dir, spawn, target, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected, orbBox, orbFrames] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -443,7 +450,7 @@ drive() {
     const upTo = (rows, last) => rows.filter((row) => row.tick <= last);
     const between = (rows, from, to) => rows.filter((row) => row.tick >= Number(from) && row.tick <= Number(to));
     const events = (rows, kind, pick) => upTo(rows, Number(lastTick)).flatMap((row) => row.events.filter((e) => e.kind === kind).map(pick));
-    function pixelShare(file, matches) {
+    function pixelShare(file, matches, area) {
       const zlib = require("zlib");
       const buf = fs.readFileSync(`${dir}/${file}`);
       let pos = 8, width = 0, height = 0, channels = 0;
@@ -462,13 +469,21 @@ drive() {
           px[y * stride + i] = (raw[y * (stride + 1) + 1 + i] + [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][raw[y * (stride + 1)]]) & 255;
         }
       }
+      const { minX, maxX, minY, maxY } = area ?? { minX: 0, maxX: width - 1, minY: 0, maxY: height - 1 };
       let hits = 0;
-      for (let i = 0; i < width * height; i++) if (matches(px[i * channels], px[i * channels + 1], px[i * channels + 2])) hits++;
-      return Math.round((100000 * hits) / (width * height)) / 1000;
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const i = (y * width + x) * channels;
+          if (matches(px[i], px[i + 1], px[i + 2])) hits++;
+        }
+      }
+      return Math.round((100000 * hits) / ((maxX - minX + 1) * (maxY - minY + 1))) / 1000;
     }
     const want = [1, 3, 5].map((i) => parseInt(voidPixel.slice(i, i + 2), 16));
     const voidShare = (file) => pixelShare(file, (...rgb) => want.every((v, c) => Math.abs(rgb[c] - v) <= 10));
-    const tealShare = (file) => pixelShare(file, (r, g, b) => g >= 120 && g - r >= 60 && b - r >= 30);
+    const offset = JSON.parse(orbBox);
+    const around = { minX: orbClick.x + offset.minX, maxX: orbClick.x + offset.maxX, minY: orbClick.y + offset.minY, maxY: orbClick.y + offset.maxY };
+    const orbTeal = (look) => Array.from({ length: Number(orbFrames) }, (_, i) => pixelShare(`orb-${look}-${i + 1}.png`, (r, g, b) => g >= 120 && g - r >= 60 && b - r >= 30, around));
     const expectedOrb = JSON.parse(orbExpected);
     const kindOf = (rows, kind) => rows.flatMap((row) => row.events.filter((e) => e.kind === kind));
     const orbTile = expectedOrb.spawned[0][1];
@@ -507,7 +522,7 @@ drive() {
         skipExpired: kindOf(orbSkip.rows, "orb-expired").map((e) => [e.at, e.void]),
         skipHeal: kindOf(orbSkip.rows, "boss-healed").map((e) => [e.at, e.cause, e.receipt]),
         skipReturned: kindOf(orbSkip.rows, "orb-returned").length,
-        tealShare: { "orb-hit.png": tealShare("orb-hit.png"), "orb-glow.png": tealShare("orb-glow.png") },
+        tealShare: { box: around, dormant: orbTeal("dormant"), glow: orbTeal("glow") },
       },
     };
     const sameJson = (a, b) => require("util").isDeepStrictEqual(a, JSON.parse(b));
@@ -546,7 +561,7 @@ drive() {
       orbClickTargetedOrb: same(orb.clicked, orbTile),
       orbGlowsOnSchedule: sameJson(orb.matured, JSON.stringify(expectedOrb.matured)),
       orbReturnedTickAfterArrival: orb.returned.length === 1 && orb.returned[0][0] === readyAt + 1 && sameJson(orb.returned[0][1], JSON.stringify(expectedOrb.returned)),
-      orbGlowDrawn: orb.tealShare["orb-glow.png"] - orb.tealShare["orb-hit.png"] >= 0.04,
+      orbGlowDrawn: Math.max(...orb.tealShare.glow) - Math.max(...orb.tealShare.dormant) >= 7,
       skippedOrbHealsBoss: sameJson(orb.skipExpired, JSON.stringify(expectedOrb.skipExpired)) && sameJson(orb.skipHeal, JSON.stringify(expectedOrb.skipHeal)) && orb.skipReturned === 0,
       noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, loadoutErrors, selectorErrors].every((list) => list.length === 0),
     };
@@ -557,7 +572,7 @@ drive() {
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
   ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$BOSS_NPC" "$CYCLE_LAST_HIDDEN_TICK" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_BEATS" \
     "$NEAR_SQUARE" "$FLOOD_DAMAGE_TICK" "$FLOOD_LAST_TICK" "$VOID_FLOOR_HITS" "$VOID_RUN_END" "$VOID_PIXEL" \
-    "$LOADOUT_RANGED_WORN" "$LOADOUT_MELEE_WORN" "$LOADOUT_DIVISION_DRAIN" "$ORB_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$LOADOUT_RANGED_WORN" "$LOADOUT_MELEE_WORN" "$LOADOUT_DIVISION_DRAIN" "$ORB_EXPECTED" "$ORB_BOX" "$ORB_FRAMES" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

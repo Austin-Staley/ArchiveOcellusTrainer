@@ -66,7 +66,6 @@ class P4Hit extends Projectile {
     super(null, 0, boss, player, "typeless", { setDelay: 1, visuals: { hidden: true } });
   }
 
-  // Amounts are taken at landing because hits that land earlier in the same tick can lower HP.
   override beforeHit(): void {
     super.beforeHit();
     const beforeHp = this.player.currentStats.hitpoint;

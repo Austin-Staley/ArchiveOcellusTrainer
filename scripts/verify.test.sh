@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|LOADOUT_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -138,19 +138,38 @@ fixture_logs() {
     write("focus-log.json", focus, focused);
     write("void-log.json", "void-floor", standing);
     write("void-shot-log.json", "void-floor", shot);
+    const orbReturn = fault === "late-orb-return" ? 26 : 25;
+    const orbAt = (x, y, hp) => ({ tile: { x, y }, hp });
+    const orbEvents = {
+      11: [{ kind: "lifeforce-told", at: 11, void: "inner-void" }],
+      12: [{ kind: "lifeforce-drained", at: 12, void: "inner-void", receipt: { applied: 49, afterHp: 50 } }],
+      13: [{ kind: "orb-spawned", at: 13, void: "inner-void", tile: { x: 7, y: 9 }, credit: 49 }],
+      24: [{ kind: "orb-matured", at: 24, void: "inner-void", tile: { x: 7, y: 9 } }],
+      [orbReturn]: [{ kind: "orb-returned", at: orbReturn, void: "inner-void", receipt: { afterHp: 99, applied: 49, beforeHp: 50, requested: 49 } }],
+    };
+    const orb = Array.from({ length: 27 }, (_, t) => ({ tick: t, playerAtPostTick: t < 15 ? orbAt(10, 10, 99) : orbAt(7, 9, t < orbReturn ? 50 : 99), events: orbEvents[t] ?? [] }));
+    const skipEvents = {
+      30: [{ kind: "orb-expired", at: 30, void: "inner-void" }],
+      61: [{ kind: "orb-expired", at: 61, void: "outer-void" }],
+      62: fault === "no-boss-heal" ? [] : [{ kind: "boss-healed", at: 62, cause: { kind: "unclaimed-orb" }, receipt: { afterHp: 1380, applied: 25, beforeHp: 1355, requested: 25 } }],
+    };
+    const skip = Array.from({ length: 64 }, (_, t) => ({ tick: t, playerAtPostTick: orbAt(10, 10, 99), events: skipEvents[t] ?? [] }));
+    write("orb-log.json", "lifeforce-orb", orb);
+    write("orb-skip-log.json", "lifeforce-orb", skip);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
 fixture_png() {
   command node -e '
-    const [file, voidPercent] = process.argv.slice(1);
+    const [file, voidPercent, tealPercent = 0] = process.argv.slice(1);
     const zlib = require("zlib");
     const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; } return ~c >>> 0; };
     const chunk = (type, data) => { const head = Buffer.alloc(8), tail = Buffer.alloc(4); head.writeUInt32BE(data.length); head.write(type, 4); tail.writeUInt32BE(crc(Buffer.concat([Buffer.from(type), data]))); return Buffer.concat([head, data, tail]); };
     const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(10, 0); ihdr.writeUInt32BE(10, 4); ihdr[8] = 8; ihdr[9] = 2;
-    const rows = Array.from({ length: 10 }, (_, y) => Buffer.from([0, ...Array.from({ length: 10 }, (_, x) => (y * 10 + x < Number(voidPercent) ? [0x1e, 0x25, 0x29] : [0x68, 0x60, 0x58])).flat()]));
+    const colour = (i) => (i < Number(voidPercent) ? [0x1e, 0x25, 0x29] : i < Number(voidPercent) + Number(tealPercent) ? [0x7c, 0xec, 0xb2] : [0x68, 0x60, 0x58]);
+    const rows = Array.from({ length: 10 }, (_, y) => Buffer.from([0, ...Array.from({ length: 10 }, (_, x) => colour(y * 10 + x)).flat()]));
     require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]));
-  ' "$1" "$2"
+  ' "$1" "$2" "${3:-0}"
 }
 
 loadout_snapshot() {
@@ -187,16 +206,20 @@ fake_browser() {
         echo "$n" >"$T/evals"
         [[ "$n" -ne 1 ]] || tick=6
         [[ "$n" -lt 3 ]] || { tile="$FINAL_TILE"; tick=12; fight="$PRESENT_FIGHT"; }
+        [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":7,"y":9}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
       "--json eval window.__archiveOcellusProbe.log()")
+        [[ ! -e "$T/orb-skip" ]] || { cat "$T/orb-skip-log.json"; return; }
         case "$(cat "$T/restarts" 2>/dev/null || echo 0)" in
           0) cat "$T/cycle-log.json" ;;
           1) cat "$T/focus-log.json" ;;
-          *) if [[ -e "$T/void-shot" ]]; then cat "$T/void-shot-log.json"; else cat "$T/void-log.json"; fi ;;
+          2) if [[ -e "$T/void-shot" ]]; then cat "$T/void-shot-log.json"; else cat "$T/void-log.json"; fi ;;
+          *) cat "$T/orb-log.json" ;;
         esac
         ;;
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
+      "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "click #restart") echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts" ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;
@@ -206,7 +229,10 @@ fake_browser() {
         case "$SCREENSHOT:$(basename "$2")" in
           ok:void-flood.png | ok:flood-ring.png) fixture_png "$2" 60 ;;
           ok:void-inner.png) fixture_png "$2" 2 ;;
-          ok:* | novoid:*) fixture_png "$2" 0 ;;
+          ok:orb-glow.png) fixture_png "$2" 0 1 ;;
+          noorb:void-flood.png | noorb:flood-ring.png) fixture_png "$2" 60 ;;
+          noorb:void-inner.png) fixture_png "$2" 2 ;;
+          ok:* | novoid:* | noorb:*) fixture_png "$2" 0 ;;
           fail:*) return 1 ;;
         esac
         ;;
@@ -296,6 +322,27 @@ void_not_drawn_fails() {
   grep -q '"innerVoidDrawn": false' "$T/drive.log" || { echo "the inner drawing check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+orb_returned_a_tick_late_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '' late-orb-return
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the orb returned two ticks after it was ready"; return 1; fi
+  grep -q '"orbReturnedTickAfterArrival": false' "$T/drive.log" || { echo "the return check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+skipped_orb_without_boss_heal_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '' no-boss-heal
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the skipped outer orb never healed the boss"; return 1; fi
+  grep -q '"skippedOrbHealsBoss": false' "$T/drive.log" || { echo "the heal check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+orb_glow_not_drawn_fails() {
+  setup
+  fake_browser '{"x":13,"y":11}' noorb
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although no screenshot showed the glowing orb"; return 1; fi
+  grep -q '"orbGlowDrawn": false' "$T/drive.log" || { echo "the orb drawing check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 boss_never_drawn_fails() {
   setup
   fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '{"run":{"kind":"running","tick":70},"boss":{"npcId":16677,"visible":false}}'
@@ -347,6 +394,9 @@ for t in \
   ranged_shot_from_the_ring_fails \
   void_not_drawn_fails \
   boss_never_drawn_fails \
+  orb_returned_a_tick_late_fails \
+  skipped_orb_without_boss_heal_fails \
+  orb_glow_not_drawn_fails \
   loadout_not_switched_fails \
   division_not_spent_fails \
   division_extra_drains_fail; do

@@ -15,12 +15,12 @@ function sources(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) return sources(file);
-    return /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts") ? [file] : [];
+    return /\.[cm]?[jt]sx?$/.test(entry.name) ? [file] : [];
   });
 }
 
 function resolveImport(from, specifier) {
-  if (!specifier.startsWith(".")) return null;
+  if (!specifier.startsWith(".") && !path.isAbsolute(specifier)) return null;
   const base = path.resolve(path.dirname(from), specifier);
   return [".ts", ".tsx", "/index.ts"].map((ext) => base + ext).find((file) => fs.existsSync(file)) ?? base;
 }
@@ -28,8 +28,7 @@ function resolveImport(from, specifier) {
 const findings = [];
 for (const file of [...sources(path.join(root, "src")), ...sources(path.join(root, "test"))]) {
   const text = fs.readFileSync(file, "utf8");
-  const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind);
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const inSrc = file.startsWith(path.join(root, "src") + path.sep);
   const insideFight = file.startsWith(FIGHT + path.sep);
   const report = (pos, rule) => {
@@ -57,8 +56,8 @@ for (const file of [...sources(path.join(root, "src")), ...sources(path.join(roo
         report(node.getStart(sf), "definite assignment assertion");
       }
     }
-    if (!insideFight && (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      const target = resolveImport(file, node.moduleSpecifier.text);
+    if (!insideFight && ts.isStringLiteralLike(node)) {
+      const target = resolveImport(file, node.text);
       if (target && target.startsWith(FIGHT + path.sep) && !PUBLIC.has(target)) {
         report(node.getStart(sf), `import of fight internal ${path.relative(root, target)}`);
       }

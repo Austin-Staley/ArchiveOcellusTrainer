@@ -26,9 +26,24 @@ import { region } from "../js/OcellusRegion";
 import type { Tick } from "../js/P4Types";
 export const used: [typeof region, Tick | null] = [region, null];
 EOF
+  cat >"$T/src/content/ocellus/tests/public-forms.test.ts" <<'EOF'
+import region = require("../js/OcellusRegion");
+export const load = () => import("../js/OcellusRegion");
+export type Region = typeof import("../js/OcellusRegion").region;
+export const types = require("../js/P4Types");
+export const used = region;
+EOF
+  cat >"$T/src/content/ocellus/tests/public-forms.js" <<'EOF'
+export { region } from "../js/OcellusRegion";
+EOF
   cat >"$T/test/setupFiles.ts" <<'EOF'
 export const canvas = {} as unknown as HTMLCanvasElement;
 EOF
+}
+
+plant() {
+  mkdir -p "$(dirname "$T/$1")"
+  printf '%s\n' "${2//@ROOT@/$T}" >"$T/$1"
 }
 
 expect_clean() {
@@ -40,8 +55,7 @@ expect_clean() {
 expect_finding() {
   local file="$1" body="$2" rule="$3"
   clean_tree
-  mkdir -p "$(dirname "$T/$file")"
-  printf '%s\n' "$body" >"$T/$file"
+  plant "$file" "$body"
   if node "$CHECK" "$T" >"$T/out.txt" 2>&1; then
     echo "check passed although ${file} contains: ${body}"
     return 1
@@ -62,6 +76,13 @@ ts_nocheck_fails() { expect_finding src/assets.ts $'// @ts-nocheck\nexport const
 test_import_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'import { later } from "../js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
 app_import_of_internal_fails() { expect_finding src/DrillControls.tsx 'export { later } from "./content/ocellus/js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
 test_helper_import_of_internal_fails() { expect_finding test/helper.ts 'import { later } from "../src/content/ocellus/js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+import_equals_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'import schedule = require("../js/p4/schedule");' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+dynamic_import_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'export const load = () => import("../js/p4/schedule");' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+import_type_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'export type Later = typeof import("../js/p4/schedule").later;' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+require_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'export const schedule = require("../js/p4/schedule");' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+js_reexport_of_internal_fails() { expect_finding src/content/ocellus/tests/helper.js 'export { later } from "../js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+declaration_file_import_of_internal_fails() { expect_finding src/globals.d.ts 'export type Later = typeof import("./content/ocellus/js/p4/schedule").later;' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+absolute_import_of_internal_fails() { expect_finding src/App.tsx 'export { later } from "@ROOT@/src/content/ocellus/js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
 
 failed=0
 for t in \
@@ -77,7 +98,14 @@ for t in \
   ts_nocheck_fails \
   test_import_of_internal_fails \
   app_import_of_internal_fails \
-  test_helper_import_of_internal_fails; do
+  test_helper_import_of_internal_fails \
+  import_equals_of_internal_fails \
+  dynamic_import_of_internal_fails \
+  import_type_of_internal_fails \
+  require_of_internal_fails \
+  js_reexport_of_internal_fails \
+  declaration_file_import_of_internal_fails \
+  absolute_import_of_internal_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

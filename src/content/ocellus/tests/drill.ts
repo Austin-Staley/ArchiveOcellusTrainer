@@ -27,6 +27,15 @@ export function startDrill(options: DrillOptions = {}) {
     const all = rows();
     return all.length === 0 ? -1 : all[all.length - 1].tick;
   };
+  const advance = (t: number, onRow: (row: TickRow) => void) => {
+    for (let guard = 0; !ended() && lastTick() < t; guard++) {
+      if (guard > t + 20) throw new Error(`the boss never reached P4 tick ${t}`);
+      const before = lastTick();
+      region.world.tickWorld();
+      const all = rows();
+      if (lastTick() !== before) onRow(all[all.length - 1]);
+    }
+  };
 
   return {
     region,
@@ -34,10 +43,17 @@ export function startDrill(options: DrillOptions = {}) {
     boss,
     rows,
     tickTo(t: number) {
-      for (let guard = 0; !ended() && lastTick() < t; guard++) {
-        if (guard > t + 20) throw new Error(`the boss never reached P4 tick ${t}`);
-        region.world.tickWorld();
-      }
+      advance(t, () => undefined);
+    },
+    /** Steps into the 5x5 as each outer void forms and back to spawn as it clears, so the floor never lands a hit. */
+    playCorrectlyTo(t: number) {
+      advance(t, (row) => {
+        for (const event of row.events) {
+          if (event.kind !== "stage-entered") continue;
+          if (event.stage === "outer-void") player().moveTo(10, 7);
+          if (event.stage === "after-outer") player().moveTo(10, 10);
+        }
+      });
     },
     row(t: number): TickRow {
       const found = rows().find((row) => row.tick === t);

@@ -14,20 +14,24 @@ const STEP: Readonly<Record<Side, Readonly<{ dx: number; dy: number }>>> = {
 };
 const SIDES: readonly Side[] = ["north", "south", "west", "east"];
 
-export class TileMask {
-  private constructor(private readonly byKey: ReadonlyMap<string, Tile>) {}
+export class TileMask<K extends VoidKind | null = VoidKind | null> {
+  private constructor(readonly kind: K, private readonly byKey: ReadonlyMap<string, Tile>) {}
 
-  static area(from: Tile, to: Tile): TileMask {
+  static area(from: Tile, to: Tile): TileMask<null> {
     if (from.x > to.x || from.y > to.y) throw new RangeError(`empty area from ${key(from)} to ${key(to)}`);
     const tiles = new Map<string, Tile>();
     for (let x: number = from.x; x <= to.x; x++) {
       for (let y: number = from.y; y <= to.y; y++) tiles.set(`${x},${y}`, tile(x, y));
     }
-    return new TileMask(tiles);
+    return new TileMask(null, tiles);
   }
 
-  minus(other: TileMask): TileMask {
-    return new TileMask(new Map([...this.byKey].filter(([at]) => !other.byKey.has(at))));
+  minus(other: TileMask): TileMask<null> {
+    return new TileMask(null, new Map([...this.byKey].filter(([at]) => !other.byKey.has(at))));
+  }
+
+  forVoid<V extends VoidKind>(kind: V): TileMask<V> {
+    return new TileMask(kind, this.byKey);
   }
 
   contains(at: Tile): boolean {
@@ -68,9 +72,13 @@ function shaped(shape: FloorShape): TileMask {
   }
 }
 
-export const VOID_MASKS: Readonly<Record<VoidKind, TileMask>> = {
-  "inner-void": shaped(floor.shapes["inner-void"].value),
-  "outer-void": shaped(floor.shapes["outer-void"].value),
+function voidMask<K extends VoidKind>(kind: K): TileMask<K> {
+  return shaped(floor.shapes[kind].value).forVoid(kind);
+}
+
+export const VOID_MASKS: { readonly [K in VoidKind]: TileMask<K> } = {
+  "inner-void": voidMask("inner-void"),
+  "outer-void": voidMask("outer-void"),
 };
 
 export function floorRule(kind: VoidKind, choices: ResolvedChoices): FloorRule {

@@ -396,10 +396,12 @@ supply_probe() {
       n=$(($(cat "$T/panel-probes" 2>/dev/null || echo 0) + 1))
       echo "$n" >"$T/panel-probes"
       case "$n:$FAULT" in
+        1:keybinds-closed) tab=INVENTORY ;;
         2:*) key="$KEYBIND_NEW_KEY" ;;
         3:unsaved-key | 4:unsaved-key) tab=PRAYER ;;
         3:*) tab=PRAYER key="$KEYBIND_NEW_KEY" ;;
         4:*) tab=INVENTORY key="$KEYBIND_NEW_KEY" ;;
+        5:unrestored-key) key="$KEYBIND_NEW_KEY" ;;
       esac
       printf '{"data":{"result":{"keys":{"combat":"F5","equipment":"F1","inventory":"%s","prayer":"F3","spellbook":"F2"},"tab":"%s"}}}\n' "$key" "$tab"
       ;;
@@ -781,6 +783,24 @@ key_binding_lost_on_reload_fails() {
   grep -q '"boundKeyOpensTabAfterReload": false' "$T/drive.log" || { echo "the reload check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+failed_checks() {
+  command node -e 'const { checks } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log(Object.keys(checks).filter((name) => !checks[name]).join(" "))' "$VERIFY_DIR/observed.json"
+}
+
+keybinds_button_not_opening_settings_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' keybinds-closed
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the Keybinds button left the inventory open"; return 1; fi
+  [[ "$(failed_checks)" == keybindsButtonOpensSettings ]] || { echo "expected only keybindsButtonOpensSettings to fail, got: $(failed_checks)"; return 1; }
+}
+
+default_key_not_restored_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' unrestored-key
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the inventory key stayed ${KEYBIND_NEW_KEY}"; return 1; fi
+  [[ "$(failed_checks)" == defaultKeyRestored ]] || { echo "expected only defaultKeyRestored to fail, got: $(failed_checks)"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -829,7 +849,9 @@ for t in \
   item_names_shown_as_null_fail \
   supplies_missing_fail \
   brew_without_heal_fails \
-  key_binding_lost_on_reload_fails; do
+  key_binding_lost_on_reload_fails \
+  keybinds_button_not_opening_settings_fails \
+  default_key_not_restored_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

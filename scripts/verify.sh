@@ -18,6 +18,7 @@ WALK_CLICK_RIGHT_PX=160
 WALK_CLICK_DOWN_PX=50
 WALK_TARGET_TILE='{"x":13,"y":11}'
 CYCLE_LAST_HIDDEN_TICK=3
+CYCLE_RING_TICK=39
 CYCLE_LAST_TICK=70
 CYCLE_STAGE_ENTRIES='[[0,"lead-in"],[8,"inner-void"],[30,"after-inner"],[39,"outer-void"],[59,"after-outer"],[68,"inner-void"]]'
 CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[39,"deflect-range"],[61,"soul-split"],[68,"deflect-melee"]]'
@@ -265,9 +266,15 @@ drive_flood_shot() {
 }
 
 drive_cycle() {
+  local box cx cy
   fight_tick_at_least 12 30000 || { log "the boss never stepped to P4 tick 12"; return 1; }
   ab screenshot "$VERIFY_DIR/boss.png" >/dev/null || { log "boss screenshot failed"; return 1; }
-  drive_flood_shot || return 1
+  fight_tick_at_least "$CYCLE_RING_TICK" 60000 || { log "the boss never stepped to P4 tick ${CYCLE_RING_TICK}"; return 1; }
+  box="$(ab --json get box "#world")"
+  cx=$(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 - RING_CLICK_LEFT_PX ))
+  cy=$(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 - RING_CLICK_UP_PX ))
+  echo "{\"x\":${cx},\"y\":${cy}}" >"$VERIFY_DIR/cycle-ring-click.json"
+  click_at "$cx" "$cy" || return 1
   fight_tick_at_least "$CYCLE_LAST_TICK" 90000 || { log "the boss never stepped to P4 tick ${CYCLE_LAST_TICK}"; return 1; }
   probe "snapshot()" >"$VERIFY_DIR/cycle-snapshot.json"
   probe "log()" >"$VERIFY_DIR/cycle.json"
@@ -283,6 +290,23 @@ drive_focus() {
   ab screenshot "$VERIFY_DIR/focus.png" >/dev/null || { log "focus screenshot failed"; return 1; }
   ab console >"$VERIFY_DIR/focus-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/focus-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
+drive_void_shot() {
+  local box
+  ab open "${URL}?seed=1&focus=${VOID_DRILL}" >/dev/null || return 1
+  ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
+    --timeout 90000 >/dev/null || { log "the reloaded ${VOID_DRILL} drill never started ticking"; return 1; }
+  box="$(ab --json get box "#world")"
+  click_at $(( $(json data.x <<<"$box") + $(json data.width <<<"$box") / 2 + WALK_CLICK_RIGHT_PX )) \
+    $(( $(json data.y <<<"$box") + $(json data.height <<<"$box") / 2 + WALK_CLICK_DOWN_PX )) || return 1
+  ab wait --fn "(() => { const p = window.__archiveOcellusProbe.snapshot().player, t = ${WALK_TARGET_TILE}; return p.x === t.x && p.y === t.y; })()" \
+    --timeout 15000 >/dev/null || log "the player did not reach the walk target on the reloaded drill"
+  drive_flood_shot || return 1
+  fight_tick_at_least "$FLOOD_LAST_TICK" 30000 || { log "the reloaded drill never stepped to P4 tick ${FLOOD_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/void-shot.json"
+  ab console >"$VERIFY_DIR/void-shot-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/void-shot-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
 click_at() {
@@ -353,11 +377,12 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_cycle && drive_focus && drive_void_floor && drive_loadouts || return 1
+  drive_walk && drive_cycle && drive_focus && drive_void_floor && drive_void_shot && drive_loadouts || return 1
 
   local capture
-  for capture in hidden.json hidden.png before.json before.png after.json after.png boss.png attack-click.json ring-click.json flood-ring.png cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json \
+  for capture in hidden.json hidden.png before.json before.png after.json after.png boss.png cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus.png focus-console.log focus-page-errors.json \
     void-inner.png void-flood.png void-floor.json void-console.log void-page-errors.json \
+    attack-click.json ring-click.json flood-ring.png void-shot.json void-shot-console.log void-shot-page-errors.json \
     loadout-before.json loadout-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
@@ -367,8 +392,8 @@ drive() {
     const [dir, spawn, target, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
-    const [hidden, before, after, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors] =
-      ["hidden.json", "before.json", "after.json", "page-errors.json", "cycle.json", "cycle-snapshot.json", "focus.json", "focus-page-errors.json", "void-floor.json", "void-page-errors.json"].map(read);
+    const [hidden, before, after, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
+      ["hidden.json", "before.json", "after.json", "page-errors.json", "cycle.json", "cycle-snapshot.json", "focus.json", "focus-page-errors.json", "void-floor.json", "void-page-errors.json", "void-shot.json", "void-shot-page-errors.json"].map(read);
     const [dressed, switched, spec, selector, loadoutErrors, selectorErrors] =
       ["loadout-before.json", "loadout-after.json", "loadout-spec.json", "loadout-selector.json", "loadout-page-errors.json", "loadout-selector-page-errors.json"].map(read);
     const [spawnTile, targetTile, nearSquare] = [JSON.parse(spawn), JSON.parse(target), JSON.parse(square)];
@@ -401,7 +426,7 @@ drive() {
       for (let i = 0; i < width * height; i++) if (want.every((v, c) => Math.abs(px[i * channels + c] - v) <= 10)) near++;
       return Math.round((10000 * near) / (width * height)) / 100;
     }
-    const flood = between(cycle.rows, floodDamage, floodLast);
+    const flood = between(shot.rows, floodDamage, floodLast);
     const floorHit = (row) => row.events.some((e) => e.kind === "floor-hit" && same(e.tile, row.playerAtBossStep.tile));
     const launch = flood.find((row) => row.combatDraws > 0);
     const landing = flood.flatMap((row) => row.events.filter((e) => e.kind === "player-hit-judged" && e.style === "ranged").map((e) => ({ ...e, bossHp: row.bossHp })))[0];
@@ -455,7 +480,7 @@ drive() {
       divisionSpentHalfTheBar: switched.player.specialEnergy === 100 && spec.player.specialEnergy === 50,
       divisionDrainedBossDefence: switched.boss.defence - spec.boss.defence === Number(drain),
       setupSelectorApplied: sameJson(selector.player.equipped, meleeWorn),
-      noPageErrors: [errors, focusErrors, voidErrors, loadoutErrors, selectorErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, loadoutErrors, selectorErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);

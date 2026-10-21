@@ -72,12 +72,14 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `after.json`, `after.png` | State and screenshot after the walk |
 | `console.log`, `page-errors.json` | Browser console and uncaught page errors of the first page |
 | `boss.png` | The default 3D view once the boss is present (P4 tick 12 or later) |
-| `attack-click.json`, `ring-click.json`, `flood-ring.png` | Canvas pixels of the boss click from the flood at P4 tick 44 and of the ring click after the bow fires, and the screen at tick 52 with the player in the safe ring |
+| `cycle-ring-click.json` | Canvas pixel of the click at P4 tick 39 that walks the player into the ring before the flood |
 | `cycle-snapshot.json`, `cycle.json` | Probe snapshot and fight log once P4 tick 70 has run |
 | `focus.json`, `focus.png` | Fight log and screen after the focus control reloaded the drill on `transition-attacks` |
 | `focus-console.log`, `focus-page-errors.json` | Console and page errors of the reloaded page |
 | `void-inner.png`, `void-flood.png`, `void-floor.json` | The `void-floor` drill reloaded with the player standing on spawn: the inner square at P4 tick 12, the flood at 45, and the fight log once the flood has killed the player |
 | `void-console.log`, `void-page-errors.json` | Console and page errors of the `void-floor` page |
+| `attack-click.json`, `ring-click.json`, `flood-ring.png`, `void-shot.json` | The `void-floor` drill reloaded with the player walked to (13, 11): canvas pixels of the boss click from the flood at P4 tick 44 and of the ring click after the bow fires, the screen at tick 52 with the player in the safe ring, and the fight log at tick 58 |
+| `void-shot-console.log`, `void-shot-page-errors.json` | Console and page errors of the reloaded `void-floor` page |
 | `loadout-before.json`, `loadout-ranged.png` | Fight snapshot and screen of `?seed=1&setup=ranged` with the inventory tab open |
 | `loadout-after.json`, `loadout-melee.png` | Snapshot and screen after clicking the nine switches |
 | `loadout-spec.json`, `loadout-spec.png` | Snapshot and screen after Division on the boss |

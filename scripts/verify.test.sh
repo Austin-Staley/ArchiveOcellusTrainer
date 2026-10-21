@@ -6,7 +6,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_CLICK_RIGHT_PX|WALK_CLICK_DOWN_PX|WALK_TARGET_TILE|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|LOADOUT_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
+for fn in json process_start serve state doctor stop probe fight_tick_at_least drive_lead_in drive_walk drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -90,22 +90,33 @@ fixture_logs() {
     const overheads = { 8: "deflect-melee", 33: "soul-split", 39: "deflect-range", 61: "soul-split", 68: "deflect-melee" };
     const specials = { 37: "vortex", 65: "spike-disk" };
     const at = (x, y) => ({ tile: { x, y } });
+    const cycle = Array.from({ length: 71 }, (_, t) => ({
+      tick: t,
+      beats: specials[t] ? [{ kind: "special-hit", variant: specials[t] }] : [],
+      playerAtBossStep: t <= 40 ? at(13, 11) : t === 41 ? at(13, 9) : at(12, 7),
+      playerAtPostTick: t <= 39 ? at(13, 11) : t === 40 ? at(13, 9) : at(12, 7),
+      bossHp: { atBossStep: 1355, atPostTick: 1355 },
+      combatDraws: 0,
+      inputs: t === 40 ? [{ kind: "walk-ordered", destination: { x: 12, y: 7 } }] : [],
+      events: [
+        ...(stages[t] ? [{ kind: "stage-entered", at: t, stage: stages[t] }] : []),
+        ...(overheads[t] ? [{ kind: "overhead-switched", at: t, overhead: overheads[t] }] : []),
+      ],
+    }));
     const startOn = (t) => (t <= 47 ? at(13, 11) : t === 48 ? at(13, 9) : at(12, 7));
     const endOn = (t) => (t <= 46 ? at(13, 11) : t === 47 ? at(13, 9) : at(12, 7));
     const floodHits = { 44: 9, 45: 11, 46: 10, 47: 11, 48: 10, ...(fault === "ring-hit" ? { 50: 10 } : {}) };
     const launchTick = fault === "shot-from-the-ring" ? 50 : 45;
     const landingTick = fault === "no-ranged-landing" ? null : launchTick + 3;
-    const cycle = Array.from({ length: 71 }, (_, t) => ({
+    const shot = Array.from({ length: 59 }, (_, t) => ({
       tick: t,
-      beats: specials[t] ? [{ kind: "special-hit", variant: specials[t] }] : [],
+      beats: [],
       playerAtBossStep: startOn(t),
       playerAtPostTick: endOn(t),
       bossHp: landingTick === null ? { atBossStep: 1355, atPostTick: 1355 } : { atBossStep: t <= landingTick ? 1355 : 1298, atPostTick: t < landingTick ? 1355 : 1298 },
       combatDraws: t === launchTick ? 2 : 0,
       inputs: t === 47 ? [{ kind: "walk-ordered", destination: { x: 12, y: 7 } }] : [],
       events: [
-        ...(stages[t] ? [{ kind: "stage-entered", at: t, stage: stages[t] }] : []),
-        ...(overheads[t] ? [{ kind: "overhead-switched", at: t, overhead: overheads[t] }] : []),
         ...(t === landingTick ? [{ kind: "player-hit-judged", at: t, style: "ranged", outcome: "passed", requested: 57 }] : []),
         ...(floodHits[t] ? [{ kind: "floor-hit", at: t, tile: startOn(t).tile, receipt: { applied: floodHits[t] } }] : []),
       ],
@@ -126,6 +137,7 @@ fixture_logs() {
     write("cycle-log.json", "full-fight", cycle);
     write("focus-log.json", focus, focused);
     write("void-log.json", "void-floor", standing);
+    write("void-shot-log.json", "void-floor", shot);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
@@ -181,9 +193,10 @@ fake_browser() {
         case "$(cat "$T/restarts" 2>/dev/null || echo 0)" in
           0) cat "$T/cycle-log.json" ;;
           1) cat "$T/focus-log.json" ;;
-          *) cat "$T/void-log.json" ;;
+          *) if [[ -e "$T/void-shot" ]]; then cat "$T/void-shot-log.json"; else cat "$T/void-log.json"; fi ;;
         esac
         ;;
+      "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "click #restart") echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts" ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;

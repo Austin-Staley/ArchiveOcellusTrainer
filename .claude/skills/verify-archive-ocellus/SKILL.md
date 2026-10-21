@@ -5,7 +5,7 @@ description: Verify Archive Ocellus Trainer, a browser trainer built on osrs-sdk
 
 # Verify Archive Ocellus Trainer
 
-The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena, their player and Ocellus (NPC 16677), clicks floor tiles to walk, switches gear from the inventory, and plays the phase 4 cycle, stepping in and out of the 5x5 under the boss as the void floor changes and stepping off each explosion mark. A setup selector, a focus selector, a seed field and a Restart button sit at the bottom left. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
+The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena, their player and Ocellus (NPC 16677), clicks floor tiles to walk, switches gear from the inventory, and plays the phase 4 cycle, stepping in and out of the 5x5 under the boss as the void floor changes, stepping off each explosion mark and praying against each transition attack. A setup selector, a focus selector, a seed field and a Restart button sit at the bottom left. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
 
 ```sh
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
@@ -87,12 +87,15 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `explosion-left.png`, `explosion-standing.png`, `explosions.json`, `explosion-audio.json` | The `explosions` drill with sound and area sound saved on: the shards left on their tile 450 ms after the first dodge, the shards under the player before the late step, the fight log at P4 tick 59, and every audio buffer start with its P4 tick, length, sample rate and context state |
 | `explosion-under.png`, `explosions-under.json` | The same drill reloaded with the player walked under the hidden boss: the screen at the first mark and the fight log after the inner series |
 | `explosion-console.log`, `explosion-page-errors.json`, `explosion-under-console.log`, `explosion-under-page-errors.json` | Console and page errors of both explosion pages |
+| `special-before.png`, `special-vortex.png`, `special.json` | The `transition-attacks` drill on `replay-v2` with Protect from Magic clicked after P4 tick 33: the boss before the tell at 31, the vortex tell at 35, and the fight log after the hit at 37 |
+| `special-spike-disk.png`, `special-black-disk.png`, `special-late.json` | The same drill reloaded with Protect from Magic clicked after 37: the spike disk tell at 63, the black disk tell at 95, and the fight log once the player died at 97 |
+| `special-console.log`, `special-page-errors.json`, `special-late-console.log`, `special-late-page-errors.json` | Console and page errors of both transition pages |
 | `loadout-before.json`, `loadout-ranged.png` | Fight snapshot and screen of `?seed=1&setup=ranged` with the inventory tab open |
 | `loadout-after.json`, `loadout-melee.png` | Snapshot and screen after clicking the nine switches |
 | `loadout-spec.json`, `loadout-spec.png` | Snapshot and screen after Division on the boss |
 | `loadout-console.log`, `loadout-page-errors.json` | Console and page errors of the loadout page |
 | `loadout-selector.json`, `loadout-selector-page-errors.json` | Snapshot and page errors after the setup control reloaded the drill on `melee` |
-| `observed.json` | Lead-in, before and after state, the first two walk orders and the edge stop, the cycle's stage, overhead and transition attack ticks, the focused beats, the bow shot across the flood, the floor hits, the void pixel shares, the orb events and teal shares, the explosion dodges, late step, under-boss hits, sounds and shard positions, the worn setups, special energy and boss Defence, and each check's result |
+| `observed.json` | Lead-in, before and after state, the first two walk orders and the edge stop, the cycle's stage, overhead and transition attack ticks, the focused beats, the bow shot across the flood, the floor hits, the void pixel shares, the orb events and teal shares, the explosion dodges, late step, under-boss hits, sounds and shard positions, the transition hits, tells and tell pixel shares, the worn setups, special energy and boss Defence, and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
 
 A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture.

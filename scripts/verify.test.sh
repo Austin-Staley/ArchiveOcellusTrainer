@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -196,6 +196,30 @@ fixture_logs() {
     ].sort((a, b) => a.tick - b.tick);
     fs.writeFileSync(`${dir}/explosion-audio.json`, JSON.stringify({ data: { result: audio } }));
     write("explosion-under-log.json", "explosions", underRows);
+    const told = (t, variant, style) => ({ kind: "special-told", at: t, variant, style });
+    const struck = (t, style, isProtected, receipt) => ({ kind: "special-hit", at: t, style, protected: isProtected, receipt });
+    const prayed = { kind: "prayer-published", prayer: "magic" };
+    const protectedHit = struck(37, "magic", true, { requested: 8, applied: 8, beforeHp: 99, afterHp: 91, prayer: "magic" });
+    const unprotectedHit = struck(37, "magic", false, { requested: 49, applied: 49, beforeHp: 99, afterHp: 50, prayer: null });
+    const inTime = Array.from({ length: 39 }, (_, t) => ({
+      tick: t,
+      inputs: t === 34 ? [prayed] : [],
+      events: [...(t === 32 ? [told(32, "vortex", "magic")] : []), ...(t === 37 ? [fault === "unprotected" ? unprotectedHit : protectedHit] : [])],
+    }));
+    const firstTell = fault === "tell-late" ? 33 : 32;
+    const lateTells = { [firstTell]: told(firstTell, "vortex", "magic"), 60: told(60, "spike-disk", "ranged"), 92: told(92, "black-disk", "melee") };
+    const lateHits = {
+      37: fault === "late-protected" ? protectedHit : unprotectedHit,
+      65: struck(65, "ranged", false, { requested: 47, applied: 47, beforeHp: 50, afterHp: 3, prayer: "magic" }),
+      97: struck(97, "melee", false, { requested: 49, applied: 3, beforeHp: 3, afterHp: 0, prayer: "magic" }),
+    };
+    const lateRows = Array.from({ length: 98 }, (_, t) => ({
+      tick: t,
+      inputs: t === 38 ? [prayed] : [],
+      events: [...(lateTells[t] ? [lateTells[t]] : []), ...(lateHits[t] ? [lateHits[t]] : []), ...(t === 97 ? [{ kind: "run-ended", at: 97, reason: "death" }] : [])],
+    }));
+    write("special-log.json", "transition-attacks", inTime);
+    write("special-late-log.json", "transition-attacks", lateRows);
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
@@ -210,6 +234,28 @@ fixture_shards() {
     const rows = Array.from({ length: 100 }, (_, y) => Buffer.from([0, ...Array.from({ length: 100 }, (_, x) => (shard(x, y) ? [0x5e, 0x31, 0x7b] : [0x68, 0x60, 0x58])).flat()]));
     require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]));
   ' "$1" "$2"
+}
+
+fixture_tell() {
+  command node -e '
+    const [file, percent, tellBox] = process.argv.slice(1);
+    const zlib = require("zlib");
+    const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; } return ~c >>> 0; };
+    const chunk = (type, data) => { const head = Buffer.alloc(8), tail = Buffer.alloc(4); head.writeUInt32BE(data.length); head.write(type, 4); tail.writeUInt32BE(crc(Buffer.concat([Buffer.from(type), data]))); return Buffer.concat([head, data, tail]); };
+    const [width, height] = [1280, 800];
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const offset = JSON.parse(tellBox);
+    const box = { minX: width / 2 + offset.minX, maxX: width / 2 + offset.maxX, minY: height / 2 + offset.minY, maxY: height / 2 + offset.maxY };
+    let left = ((box.maxX - box.minX + 1) * (box.maxY - box.minY + 1) * Number(percent)) / 100;
+    const raw = Buffer.alloc(height * (1 + width * 3));
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const inBox = x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
+        raw.set(inBox && left-- > 0 ? [0x9b, 0x30, 0xff] : [0x68, 0x60, 0x58], y * (1 + width * 3) + 1 + x * 3);
+      }
+    }
+    require("fs").writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+  ' "$1" "$2" "$TELL_BOX"
 }
 
 fixture_png() {
@@ -253,6 +299,9 @@ fake_screenshot() {
     empty:*) ;;
     markerfollows:explosion-left.png | *:explosion-standing.png) fixture_shards "$1" 0.5 ;;
     *:explosion-left.png) fixture_shards "$1" 0.44 ;;
+    notell:special-* | *:special-before.png) fixture_tell "$1" 0 ;;
+    *:special-*) fixture_tell "$1" 4 ;;
+    notell:*) SCREENSHOT=ok fake_screenshot "$1" ;;
     ok:void-flood.png | ok:flood-ring.png | noorb:void-flood.png | noorb:flood-ring.png | markerfollows:void-flood.png | markerfollows:flood-ring.png) fixture_png "$1" 60 ;;
     ok:void-inner.png | noorb:void-inner.png | markerfollows:void-inner.png) fixture_png "$1" 2 ;;
     swapped:void-flood.png | swapped:flood-ring.png) fixture_png "$1" 2 ;;
@@ -308,6 +357,8 @@ fake_browser() {
         ;;
       "--json eval window.__cueAudio") cat "$T/explosion-audio.json" ;;
       "--json eval window.__archiveOcellusProbe.log()")
+        [[ ! -e "$T/special-late" ]] || { cat "$T/special-late-log.json"; return; }
+        [[ ! -e "$T/special" ]] || { cat "$T/special-log.json"; return; }
         [[ ! -e "$T/explosion-under" ]] || { cat "$T/explosion-under-log.json"; return; }
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 4 ]] || { cat "$T/explosion-log.json"; return; }
         [[ ! -e "$T/orb-skip" ]] || { cat "$T/orb-skip-log.json"; return; }
@@ -321,6 +372,7 @@ fake_browser() {
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;
+      "open "*"${SPECIAL_QUERY}") if [[ -e "$T/special" ]]; then : >"$T/special-late"; else : >"$T/special"; fi ;;
       "batch --bail")
         local shot
         for shot in $(command node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>JSON.parse(s).filter((c)=>c[0]==="screenshot").forEach((c)=>console.log(c[1])))'); do
@@ -497,6 +549,34 @@ boss_never_drawn_fails() {
   grep -q '"bossDrawnOncePresent": false' "$T/drive.log" || { echo "the presence check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+prayer_before_landing_unprotected_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' unprotected
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the prayer clicked before the landing did not protect"; return 1; fi
+  grep -q '"prayerBeforeLandingProtects": false' "$T/drive.log" || { echo "the in-time prayer check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+late_click_protected_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' late-protected
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although a prayer clicked after the landing protected"; return 1; fi
+  grep -q '"lateClickTakesFullHit": false' "$T/drive.log" || { echo "the late prayer check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+tell_off_schedule_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' tell-late
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the vortex was told a tick late"; return 1; fi
+  grep -q '"tellsToldOnSchedule": false' "$T/drive.log" || { echo "the tell schedule check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
+tells_not_drawn_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' notell
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although no tell was drawn over the boss"; return 1; fi
+  grep -q '"tellsDrawn": false' "$T/drive.log" || { echo "the tell drawing check did not name the failure"; cat "$T/drive.log"; return 1; }
+}
+
 loadout_not_switched_fails() {
   setup
   fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' unswitched
@@ -575,6 +655,10 @@ for t in \
   explosion_marker_following_the_player_fails \
   explosion_sound_on_the_impact_fails \
   explosion_sound_on_a_suspended_context_fails \
+  prayer_before_landing_unprotected_fails \
+  late_click_protected_fails \
+  tell_off_schedule_fails \
+  tells_not_drawn_fails \
   loadout_not_switched_fails \
   division_not_spent_fails \
   division_extra_drains_fail; do

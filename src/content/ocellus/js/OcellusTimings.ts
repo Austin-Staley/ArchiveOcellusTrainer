@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { Cycle, Mechanic, Seed, SoundId, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
@@ -105,10 +105,11 @@ export type SpecialSelection =
 
 export type UnclaimedOrbRule = Readonly<{ kind: "heals-boss"; afterHit: TickSpan }> | Readonly<{ kind: "off" }>;
 type SpecialRecipe = Readonly<{
-  styles: Readonly<Record<Special, Selected<Style>>>;
+  styles: Readonly<{ "black-disk": Selected<"melee">; "spike-disk": Selected<"ranged">; vortex: Selected<"magic"> }>;
   protectedDamage: Selected<DamageRange>;
   unprotectedDamage: Selected<DamageRange>;
 }>;
+export type SpecialStyle<V extends Special> = SpecialRecipe["styles"][V]["value"];
 type BossHealRecipe = Readonly<{ soulSplitAfterHit: Selected<TickSpan> }>;
 type RiftRecipe = Readonly<{ spawnBeforeOnset: Selected<TickSpan>; chargeAfterSpawn: Selected<TickSpan> }>;
 

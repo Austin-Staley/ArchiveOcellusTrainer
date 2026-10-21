@@ -16,6 +16,7 @@ import type {
   RunEnd,
   RunState,
   Special,
+  SpecialAttack,
   Tick,
   TickRow,
   Tile,
@@ -86,6 +87,10 @@ function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   if (now.overhead !== null && last?.overhead !== now.overhead) events.push({ kind: "overhead-switched", at, overhead: now.overhead });
   if (last?.boss !== now.boss) events.push({ kind: "boss-state-changed", at, state: now.boss });
   return events;
+}
+
+function specialAttack<V extends Special>(at: Tick, ordinal: Ordinal, variant: V): SpecialAttack<V> {
+  return { at, ordinal, variant, style: OCELLUS_P4.special.styles[variant].value };
 }
 
 export class Ocellus extends Mob {
@@ -320,7 +325,7 @@ export class Ocellus extends Mob {
       case "explosion-impact":
         return this.detonate(beat.void, beat.pulse, at, player.tile);
       case "special-tell":
-        return { kind: "special-told", at, ordinal: beat.ordinal, variant: beat.variant, style: OCELLUS_P4.special.styles[beat.variant].value };
+        return { kind: "special-told", ...specialAttack(at, beat.ordinal, beat.variant) };
       case "special-hit":
         this.strikeSpecial(beat.ordinal, beat.variant, at);
         return null;
@@ -344,10 +349,10 @@ export class Ocellus extends Mob {
   }
 
   private strikeSpecial(ordinal: Ordinal, variant: Special, at: Tick): void {
-    const { styles, protectedDamage, unprotectedDamage } = OCELLUS_P4.special;
-    const style = styles[variant].value;
-    const amount = () => rollInt(this.config.seed, "specialDamage", at, this.target.protection === style ? protectedDamage.value : unprotectedDamage.value, 0);
-    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", at, ordinal, variant, style, protected: receipt.prayer === style, receipt }));
+    const { protectedDamage, unprotectedDamage } = OCELLUS_P4.special;
+    const special = specialAttack(at, ordinal, variant);
+    const amount = () => rollInt(this.config.seed, "specialDamage", at, this.target.protection === special.style ? protectedDamage.value : unprotectedDamage.value, 0);
+    const hit = new P4Hit(this, this.target, amount, (receipt) => this.recordEvent({ kind: "special-hit", ...special, protected: receipt.prayer === special.style, receipt }));
     this.target.addProjectile(hit);
   }
 

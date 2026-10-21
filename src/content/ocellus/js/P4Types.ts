@@ -1,4 +1,4 @@
-import type { GearSlot, ResolvedChoices } from "./OcellusTimings";
+import type { GearSlot, ResolvedChoices, SpecialStyle } from "./OcellusTimings";
 
 declare const brand: unique symbol;
 type Brand<B extends string> = number & { readonly [brand]: B };
@@ -104,6 +104,7 @@ export type HitReceipt = Readonly<{ requested: number; applied: number; beforeHp
 export type HealReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number }>;
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }>;
 export type ExplosionOutcome = Readonly<{ kind: "hit"; receipt: HitReceipt }> | Readonly<{ kind: "avoided" }>;
+export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>
@@ -122,8 +123,8 @@ export type FightEvent =
   | Readonly<{ kind: "explosion-series-started"; at: Tick; void: VoidKind }>
   | Readonly<{ kind: "explosion-marked"; at: Tick; void: VoidKind; pulse: number; tile: Tile }>
   | Readonly<{ kind: "explosion-resolved"; at: Tick; void: VoidKind; pulse: number; tile: Tile; underBoss: boolean; outcome: ExplosionOutcome }>
-  | Readonly<{ kind: "special-told"; at: Tick; ordinal: Ordinal; variant: Special; style: Style }>
-  | Readonly<{ kind: "special-hit"; at: Tick; ordinal: Ordinal; variant: Special; style: Style; protected: boolean; receipt: HitReceipt }>
+  | (Readonly<{ kind: "special-told" }> & SpecialAttack)
+  | (Readonly<{ kind: "special-hit"; protected: boolean; receipt: HitReceipt }> & SpecialAttack)
   | Readonly<{ kind: "run-ended"; at: Tick; reason: RunEnd }>;
 
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;

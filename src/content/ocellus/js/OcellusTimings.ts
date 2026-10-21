@@ -179,6 +179,7 @@ export type GearKeys = Readonly<{
   ammo: "dragonArrows";
 }>;
 export type Setup = Readonly<{ [S in GearSlot]: GearKeys[S] }>;
+export type SupplyKey = "superCombatPotion" | "bastionPotion" | "saradominBrew" | "superRestore";
 export type TrainerItemKey =
   | "voidRangerHelm"
   | "eliteVoidTop"
@@ -195,6 +196,7 @@ export type StanceSpeeds<T extends number = TickSpan> = Readonly<{ rapidSpeed: T
 type GearRecipe = Readonly<{
   items: Readonly<Record<TrainerItemKey, TrainerItem>>;
   sdkCacheIds: Readonly<{ necklaceOfRupture: Selected<number> }>;
+  supplies: Selected<readonly SupplyKey[]>;
   twistedBow: Selected<StanceSpeeds<TwistedBow["attackSpeed"]>>;
   ralos: Selected<StanceSpeeds & Readonly<{ range: number; longrangeRange: number; hits: number; hitMaxFraction: number }>>;
   division: Selected<Readonly<{ energy: number; accuracyFactor: number; defenceDrainOfMagic: number }>>;
@@ -469,6 +471,7 @@ const RUPTURE_PAGE = wiki(`${OSRS_WIKI}Necklace_of_rupture`, 15264776);
 const ANGUISH_PAGE = wiki(`${OSRS_WIKI}Necklace_of_anguish`, 15301384);
 const RANCOUR_PAGE = wiki(`${OSRS_WIKI}Amulet_of_rancour`, 15343231);
 const TREADS_PAGE = wiki(`${OSRS_WIKI}Avernic_treads_(max)`, 15320239);
+const RAID_INVENTORY = wiki(`${OSRS_WIKI}The_Fractured_Archive/Strategies`, 15378756);
 
 type Five = readonly [stab: number, slash: number, crush: number, magic: number, range: number];
 const stats = (attack: Five, defence: Five, other: readonly [meleeStrength: number, rangedStrength: number, magicDamage: number, prayer: number]): ItemStats => ({
@@ -495,6 +498,17 @@ const GEAR: GearRecipe = {
   sdkCacheIds: {
     necklaceOfRupture: selected(33639, "spec-confirmed", "unscaled", "the SDK's class carries anguish's id 19547 as a stand-in; cache 2746 holds item 33639 with male model 61426", cache("item 33639 maleModel0 61426"), RUPTURE_PAGE),
   },
+  supplies: selected<readonly SupplyKey[]>(
+    [
+      "superCombatPotion", "bastionPotion", "saradominBrew", "superRestore",
+      "superCombatPotion", "bastionPotion", "saradominBrew", "superRestore",
+      "saradominBrew", "saradominBrew", "saradominBrew", "superRestore",
+      "saradominBrew", "saradominBrew", "saradominBrew", "superRestore",
+      "saradominBrew", "saradominBrew", "superRestore",
+    ],
+    "spec-single", "unscaled", "slots 9 to 27 of the wiki's recommended raid inventory, in its order: 2 super combat potions, 2 ranging potions, 10 Saradomin brews and 5 super restores, with no fish; the SDK has no ranging potion, so the Bastion potion stands in, with the same Ranged boost plus a Defence boost (inferred)",
+    RAID_INVENTORY, wiki(`${OSRS_WIKI}Ranging_potion`, 15293943), wiki(`${OSRS_WIKI}Bastion_potion`, 15293966),
+  ),
   twistedBow: selected({ rapidSpeed: 5, otherSpeed: 6 }, "spec-single", "unscaled", "attack speed by stance: 5 ticks on Rapid, 6 on Accurate and Longrange", TWISTED_BOW_PAGE),
   ralos: selected({ rapidSpeed: span(6), otherSpeed: span(7), range: 7, longrangeRange: 9, hits: 2, hitMaxFraction: 0.75 }, "spec-single", "unscaled", "charged, one-handed thrown: two independent hits, each 0 to 75% of the max ranged hit", RALOS_PAGE),
   division: selected({ energy: 50, accuracyFactor: 1.5, defenceDrainOfMagic: 0.125 }, "spec-single", "unscaled", "+50% accuracy; each hit that deals damage lowers Defence by 12.5% of Magic (10% before 2026-07-22) and, on NPCs, before the second roll; the drain applies as each glaive lands, so a hit the target rejects drains nothing (inferred); rounding not stated, floored (inferred)", RALOS_PAGE),

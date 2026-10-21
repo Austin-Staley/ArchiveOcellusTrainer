@@ -3,15 +3,19 @@ import {
   AttackStyle,
   AttackStylesController,
   AvernicTreadsMax,
+  BastionPotion,
   DizanasQuiver,
   DragonArrows,
   FerociousGloves,
   InfernalCape,
+  SaradominBrew,
+  SuperCombatPotion,
+  SuperRestore,
   UltorRing,
   VenatorRing,
 } from "osrs-sdk";
 import type { Item, Player, UnitEquipment } from "osrs-sdk";
-import type { GearKeys, GearSlot, ResolvedChoices, Setup } from "./OcellusTimings";
+import type { GearKeys, GearSlot, ResolvedChoices, Setup, SupplyKey } from "./OcellusTimings";
 import { GEAR_SLOTS, OCELLUS_P4 } from "./OcellusTimings";
 import {
   EliteVoidRobe,
@@ -55,6 +59,13 @@ const ITEMS: { readonly [S in GearSlot]: { readonly [K in GearKeys[S]]: () => Sl
   ammo: { dragonArrows: () => new DragonArrows() },
 };
 
+const SUPPLIES: { readonly [K in SupplyKey]: () => Item } = {
+  superCombatPotion: () => new SuperCombatPotion(),
+  bastionPotion: () => new BastionPotion(),
+  saradominBrew: () => new SaradominBrew(),
+  superRestore: () => new SuperRestore(),
+};
+
 function create<S extends GearSlot>(slot: S, key: GearKeys[S]): SlotItem<S> {
   return ITEMS[slot][key]();
 }
@@ -76,7 +87,8 @@ export function dress(player: Player, setup: ResolvedChoices["setup"]): void {
       if (other.value[slot] !== worn[slot]) switches.push(create(slot, other.value[slot]));
     }
   }
-  switches.forEach((item, index) => (player.inventory[index] = item));
+  const supplies = OCELLUS_P4.gear.supplies.value.map((key) => SUPPLIES[key]());
+  [...switches, ...supplies].forEach((item, index) => (player.inventory[index] = item));
   player.equipmentChanged();
   AttackStylesController.controller.setWeaponAttackStyle(new OcellusScythe(), STANCES[OCELLUS_P4.gear.scytheStance.value]);
 }

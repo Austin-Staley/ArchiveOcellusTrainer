@@ -12,12 +12,13 @@ describe("U7 item names and supplies", () => {
     const carried = hovers(drill);
     const helm = drill.player().inventory[2];
     const helmMenu = helm ? menu(drill, helm) : [];
-    for (const item of [...drill.player().inventory].slice(1)) item?.inventoryLeftClick(drill.player());
+    for (const item of [...drill.player().inventory].slice(1, 9)) item?.inventoryLeftClick(drill.player());
     const switchedOut = hovers(drill);
     drill.dispose();
 
     expect(helmMenu).toEqual(["Equip Inquisitor's great helm", "Drop Inquisitor's great helm", "Examine Inquisitor's great helm"]);
-    expect(carried).toEqual([
+    expect(new Set(carried.slice(9))).toEqual(new Set(["Drink Super combat potion", "Drink Bastion Potion", "Drink Saradomin Brew", "Drink Super Restore"]));
+    expect(carried.slice(0, 9)).toEqual([
       "Equip Tonalztics of Ralos",
       "Equip Scythe of Vitur",
       "Equip Inquisitor's great helm",
@@ -28,7 +29,7 @@ describe("U7 item names and supplies", () => {
       "Equip Amulet of rancour",
       "Equip Ultor ring",
     ]);
-    expect(switchedOut).toEqual([
+    expect(switchedOut.slice(0, 9)).toEqual([
       "Equip Tonalztics of Ralos",
       "Equip Twisted Bow",
       "Equip Void ranger helm",
@@ -38,6 +39,28 @@ describe("U7 item names and supplies", () => {
       "Equip Dizana's Quiver",
       "Equip Necklace of rupture",
       "Equip Venator ring",
+    ]);
+  });
+
+  test("a carried Saradomin brew heals 16 the tick after the click, and a super restore waits out the 3-tick potion delay", () => {
+    const drill = startDrill();
+    const player = drill.player();
+    player.currentStats.prayer = 50;
+    const carried = (cacheItemId: number) => player.inventory.find((item) => item?.cacheItemId === cacheItemId);
+    carried(6685)?.inventoryLeftClick(player);
+    const afterEachTick: number[][] = [];
+    for (let tick = 0; tick < 4; tick++) {
+      carried(3024)?.inventoryLeftClick(player);
+      drill.region.world.tickWorld();
+      afterEachTick.push([player.currentStats.hitpoint, player.currentStats.prayer, player.currentStats.range]);
+    }
+    drill.dispose();
+
+    expect(afterEachTick).toEqual([
+      [115, 50, 88],
+      [115, 50, 88],
+      [115, 50, 88],
+      [115, 84, 99],
     ]);
   });
 });

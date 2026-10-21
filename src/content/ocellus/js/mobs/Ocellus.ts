@@ -26,7 +26,8 @@ import type {
   Tile,
   VoidKind,
 } from "../P4Types";
-import { after, riftId, tick, tile, worldTick } from "../P4Types";
+import { after, riftId, span, tick, tile, worldTick } from "../P4Types";
+import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
 import { FOOTPRINT, VOID_MASKS, floorRule } from "../p4/floor";
 import { orbTile, reach } from "../p4/orb";
 import { rollInt } from "../p4/roll";
@@ -55,6 +56,9 @@ type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 type Rift =
   | Readonly<{ kind: "charging"; id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift }>
   | Readonly<{ kind: "fallen"; id: RiftId; tile: Tile }>;
+
+/** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
+const HEAL_SPLAT_TICKS = span(1);
 
 function incomingStyle(attackStyle: string): IncomingStyle {
   switch (attackStyle) {
@@ -109,6 +113,7 @@ export class Ocellus extends Mob {
   private marks: readonly Mark[] = [];
   private stolen: readonly Readonly<{ ordinal: Ordinal; credit: number }>[] = [];
   private rifts: readonly Rift[] = [];
+  private healSplats: readonly Readonly<{ amount: number; lastShown: Tick }>[] = [];
 
   constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
@@ -156,6 +161,16 @@ export class Ocellus extends Mob {
   override get idlePoseId(): number {
     const { deflectLoop, idle } = OCELLUS_P4.presentation.bossPoses;
     return this.phase().stage === "inner-void" ? deflectLoop.value : idle.value;
+  }
+
+  override drawOverheadPrayers(context: OffscreenCanvasRenderingContext2D, scale: number): void {
+    const { overhead } = this.phase();
+    if (overhead !== null) drawOverheadIcon(context, scale, overhead);
+  }
+
+  override drawHitsplats(context: OffscreenCanvasRenderingContext2D, scale: number, verticalOffset = 0): void {
+    super.drawHitsplats(context, scale, verticalOffset);
+    drawHealSplats(context, this.healHitsplatImage, this.healSplats.map((splat) => splat.amount), verticalOffset);
   }
 
   override movementStep(): void {}
@@ -288,6 +303,7 @@ export class Ocellus extends Mob {
       bossHpAtBossStep: this.currentStats.hitpoint,
       drawsAtBossStep: this.target.combatDraws,
     };
+    this.healSplats = this.healSplats.filter((splat) => splat.lastShown >= moment.tick);
     const judged = this.judgeLandingHits(moment);
     super.queueStep();
     const logged = [...judged, ...phaseEvents(last, moment.phase, moment.tick)];
@@ -441,6 +457,7 @@ export class Ocellus extends Mob {
     const beforeHp = this.currentStats.hitpoint;
     const afterHp = Math.min(this.stats.hitpoint, beforeHp + requested);
     this.currentStats.hitpoint = afterHp;
+    this.healSplats = [...this.healSplats, { amount: afterHp - beforeHp, lastShown: after(at, HEAL_SPLAT_TICKS) }];
     return { kind: "boss-healed", at, cause, receipt: { requested, applied: afterHp - beforeHp, beforeHp, afterHp } };
   }
 

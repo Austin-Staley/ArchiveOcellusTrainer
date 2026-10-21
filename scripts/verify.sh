@@ -147,6 +147,7 @@ manifest_ready() {
     import { dirname, join } from "node:path";
     const { assets } = await loadConfig();
     const m = JSON.parse(readFileSync(process.argv[1], "utf8"));
+    const npcs = Object.values(assets.npcs).every(({ id }) => m.assets?.[`npc-${id}`]);
     const items = Object.values(assets.items).every(({ id }) => m.playerItems?.[`item:${id}`]);
     const spotAnims = Object.values(assets.spotAnims).every(({ id }) => m.spotAnims?.[id]);
     const pack = m.soundEffects && join(dirname(process.argv[1]), m.soundEffects.file);
@@ -154,8 +155,8 @@ manifest_ready() {
     const packed = new Set();
     for (let at = 6, n = 0; n < bytes.readUInt16BE(4); n++, at += 4 + bytes.readUInt16BE(at + 2)) packed.add(bytes.readUInt16BE(at));
     const sounds = Object.values(assets.sounds).every(({ id }) => packed.has(id));
-    process.exit(m.cache?.source === "openrs2:2746" && m.assets?.[`npc-${process.argv[2]}`] && items && spotAnims && sounds ? 0 : 1);
-  ' "$MANIFEST" "$BOSS_NPC"
+    process.exit(m.cache?.source === "openrs2:2746" && npcs && items && spotAnims && sounds ? 0 : 1);
+  ' "$MANIFEST" && node scripts/extract-sprites.mjs --check
 }
 
 stage_build() {
@@ -177,11 +178,12 @@ stage_test() {
 stage_assets() {
   local flags=(--cache-dir "$OSRS_CACHE_DIR" --reader-path "$OSRS_CACHE_READER")
   if manifest_ready; then
-    log "assets: manifest already has npc-${BOSS_NPC} and every configured item, spotanim and sound from openrs2:2746, skipping the model rebuild" | tee "$VERIFY_DIR/assets.log"
+    log "assets: manifest already has every configured npc, item, spotanim and sound from openrs2:2746, and every sprite, skipping the model rebuild" | tee "$VERIFY_DIR/assets.log"
     npm run item-icons -- "${flags[@]}" >>"$VERIFY_DIR/assets.log" 2>&1
     return
   fi
-  npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
+  npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 &&
+    node scripts/extract-sprites.mjs "${flags[@]}" >>"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
 }
 
 port_listener() {

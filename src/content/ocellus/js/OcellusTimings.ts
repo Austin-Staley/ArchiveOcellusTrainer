@@ -165,6 +165,8 @@ export type TransitionCue = Readonly<{ sound: TransitionSound; afterTell: TickSp
 type CueSound = "explosionSeriesStart" | "explosionMark" | TransitionSound;
 type SoundPlayback = Readonly<{ volume: number; range: number; retain: number }>;
 
+export type SpriteFrame = Readonly<{ archive: number; frame: number }>;
+
 type PresentationRecipe = Readonly<{
   bossPoses: Readonly<Record<BossPose, Selected<number>>>;
   sounds: Readonly<Record<CueSound, Selected<SoundId>>>;
@@ -172,7 +174,11 @@ type PresentationRecipe = Readonly<{
   landingBeforeInnerClears: Selected<TickSpan>;
   transitionTells: Readonly<Record<Special, Selected<number>>>;
   tellCentre: Selected<Readonly<{ faceColour: number; rgb: number }>>;
+  overheadIcons: Readonly<Record<BossOverhead, Selected<SpriteFrame>>>;
 }>;
+
+const headIcon = (frame: number, note: string, seen: Source): Selected<SpriteFrame> =>
+  selected({ archive: 440, frame }, "inferred", "unscaled", note, cache(`sprite 440 headicons_prayer frame ${frame}`), seen);
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
 export type ItemStats = Readonly<{
@@ -503,6 +509,11 @@ const PRESENTATION: PresentationRecipe = {
     cache("texture 215 sprite 8803, mean texel #020203"),
     vod("V2", "k72 to k78, k100 to k106, k132 to k137"),
   ),
+  overheadIcons: {
+    "deflect-melee": headIcon(15, "a sword over a purple badge with blue arrows; matches the boss's icon by eye", vod("V2", "k60, k71")),
+    "deflect-range": headIcon(16, "an arrow over the same badge; matches the boss's icon by eye", vod("V2", "k80, k90")),
+    "soul-split": headIcon(11, "a white star with red arrows over a purple badge; matches the boss's icon by eye", vod("V2", "k73 to k77")),
+  },
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";

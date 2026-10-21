@@ -75,7 +75,12 @@ describe("U6 boss overheads, heals and rifts", () => {
   });
 
   test.each([
-    { killLandsAt: 77, destroyed: [[78, "rift-67-1"]], bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]] },
+    {
+      killLandsAt: 77,
+      destroyed: [[78, "rift-67-1"]],
+      bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
+      chat: ["Destroying the void rift empowers you!"],
+    },
     {
       killLandsAt: 78,
       destroyed: [],
@@ -83,15 +88,16 @@ describe("U6 boss overheads, heals and rifts", () => {
         [78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
         [78, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
       ],
+      chat: [],
     },
-  ])("a rift dead by the end of 77 is destroyed at 78 and a standing one bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts }) => {
+  ])("a rift dead by the end of 77 is destroyed at 78 and a standing one bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat }) => {
     const drill = startDrill({ selection: { focus: "rifts" } });
     drill.tickTo(killLandsAt - 1);
     const northEast = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
     if (!northEast) throw new Error("no rift on (11, 2)");
     drill.hit(drill.player(), northEast, 44);
     drill.tickTo(79);
-    expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt])]).toEqual([destroyed, bursts]);
+    expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat()]).toEqual([destroyed, bursts, chat]);
     drill.dispose();
   });
 

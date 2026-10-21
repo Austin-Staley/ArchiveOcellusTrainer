@@ -113,6 +113,8 @@ loadout_snapshot() {
     2:unswitched) ;;
     2:* | 4:*) worn="$LOADOUT_MELEE_WORN" ;;
     3:unspent) worn="$LOADOUT_MELEE_WORN" ;;
+    3:two-drains) worn="$LOADOUT_MELEE_WORN" energy=50 defence=176 ;;
+    3:three-drains) worn="$LOADOUT_MELEE_WORN" energy=50 defence=139 ;;
     3:*) worn="$LOADOUT_MELEE_WORN" energy=50 defence=213 ;;
   esac
   # agent-browser returns object keys sorted, unlike the literals in verify.sh.
@@ -232,6 +234,16 @@ division_not_spent_fails() {
   grep -q '"divisionDrainedBossDefence": false' "$T/drive.log" || { echo "the Defence check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+division_extra_drains_fail() {
+  local drains
+  for drains in three-drains two-drains; do
+    setup
+    fake_browser '{"x":13,"y":11}' ok 8 "$FOCUS_DRILL" '' '' "$drains"
+    if drive >"$T/drive.log" 2>&1; then echo "drive passed with ${drains} from seed 1's one damaging glaive"; return 1; fi
+    grep -q '"divisionDrainedBossDefence": false' "$T/drive.log" || { echo "the Defence check did not name the ${drains} failure"; cat "$T/drive.log"; return 1; }
+  done
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -248,7 +260,8 @@ for t in \
   lead_in_captured_after_the_hidden_ticks_fails \
   boss_never_drawn_fails \
   loadout_not_switched_fails \
-  division_not_spent_fails; do
+  division_not_spent_fails \
+  division_extra_drains_fail; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

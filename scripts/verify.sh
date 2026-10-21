@@ -357,7 +357,7 @@ drive() {
       rangedSetupWorn: sameJson(dressed.player.equipped, rangedWorn),
       switchesWornByClick: sameJson(switched.player.equipped, meleeWorn),
       divisionSpentHalfTheBar: switched.player.specialEnergy === 100 && spec.player.specialEnergy === 50,
-      divisionDrainedBossDefence: switched.boss.defence > spec.boss.defence && (switched.boss.defence - spec.boss.defence) % Number(drain) === 0,
+      divisionDrainedBossDefence: switched.boss.defence - spec.boss.defence === Number(drain),
       setupSelectorApplied: sameJson(selector.player.equipped, meleeWorn),
       noPageErrors: [errors, focusErrors, loadoutErrors, selectorErrors].every((list) => list.length === 0),
     };

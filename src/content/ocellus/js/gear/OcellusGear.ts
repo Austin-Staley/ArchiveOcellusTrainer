@@ -13,7 +13,7 @@ function bonuses(key: TrainerItemKey): UnitBonuses {
   return { attack: { ...attack }, defence: { ...defence }, other: { ...other }, targetSpecific: { undead: 0, slayer: 0 } };
 }
 
-const ICONS: Readonly<Record<TrainerItemKey, Readonly<{ set: string; piece: string; colour: string }>>> = {
+const PLACEHOLDER_LABELS: Readonly<Record<TrainerItemKey, Readonly<{ set: string; piece: string; colour: string }>>> = {
   voidRangerHelm: { set: "Void", piece: "helm", colour: "#3d6b4f" },
   eliteVoidTop: { set: "Elite", piece: "top", colour: "#3d6b4f" },
   eliteVoidRobe: { set: "Elite", piece: "robe", colour: "#3d6b4f" },
@@ -24,14 +24,14 @@ const ICONS: Readonly<Record<TrainerItemKey, Readonly<{ set: string; piece: stri
   tonalzticsOfRalos: { set: "Ralos", piece: "spec", colour: "#8a5a2b" },
 };
 
-function icon(key: TrainerItemKey): HTMLImageElement {
-  const { set, piece, colour } = ICONS[key];
+function placeholderLabel(key: TrainerItemKey): HTMLImageElement {
+  const { set, piece, colour } = PLACEHOLDER_LABELS[key];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect x="1" y="1" width="30" height="30" rx="5" fill="${colour}" stroke="#000"/><g fill="#fff" font-family="sans-serif" font-size="9" text-anchor="middle"><text x="16" y="14">${set}</text><text x="16" y="25">${piece}</text></g></svg>`;
   return ImageLoader.createImage(`data:image/svg+xml,${encodeURIComponent(svg)}`);
 }
 
 export class VoidRangerHelm extends Helmet {
-  override inventorySprite = icon("voidRangerHelm");
+  override inventorySprite = placeholderLabel("voidRangerHelm");
   override get cacheItemId(): number {
     return gear.items.voidRangerHelm.itemId.value;
   }
@@ -41,7 +41,7 @@ export class VoidRangerHelm extends Helmet {
 }
 
 export class EliteVoidTop extends Chest {
-  override inventorySprite = icon("eliteVoidTop");
+  override inventorySprite = placeholderLabel("eliteVoidTop");
   override get cacheItemId(): number {
     return gear.items.eliteVoidTop.itemId.value;
   }
@@ -51,7 +51,7 @@ export class EliteVoidTop extends Chest {
 }
 
 export class EliteVoidRobe extends Legs {
-  override inventorySprite = icon("eliteVoidRobe");
+  override inventorySprite = placeholderLabel("eliteVoidRobe");
   override get cacheItemId(): number {
     return gear.items.eliteVoidRobe.itemId.value;
   }
@@ -61,7 +61,7 @@ export class EliteVoidRobe extends Legs {
 }
 
 export class VoidKnightGloves extends Gloves {
-  override inventorySprite = icon("voidKnightGloves");
+  override inventorySprite = placeholderLabel("voidKnightGloves");
   override get cacheItemId(): number {
     return gear.items.voidKnightGloves.itemId.value;
   }
@@ -71,7 +71,7 @@ export class VoidKnightGloves extends Gloves {
 }
 
 export class InquisitorsGreatHelm extends Helmet {
-  override inventorySprite = icon("inquisitorsGreatHelm");
+  override inventorySprite = placeholderLabel("inquisitorsGreatHelm");
   override get cacheItemId(): number {
     return gear.items.inquisitorsGreatHelm.itemId.value;
   }
@@ -81,7 +81,7 @@ export class InquisitorsGreatHelm extends Helmet {
 }
 
 export class InquisitorsHauberk extends Chest {
-  override inventorySprite = icon("inquisitorsHauberk");
+  override inventorySprite = placeholderLabel("inquisitorsHauberk");
   override get cacheItemId(): number {
     return gear.items.inquisitorsHauberk.itemId.value;
   }
@@ -91,7 +91,7 @@ export class InquisitorsHauberk extends Chest {
 }
 
 export class InquisitorsPlateskirt extends Legs {
-  override inventorySprite = icon("inquisitorsPlateskirt");
+  override inventorySprite = placeholderLabel("inquisitorsPlateskirt");
   override get cacheItemId(): number {
     return gear.items.inquisitorsPlateskirt.itemId.value;
   }
@@ -159,7 +159,7 @@ export class OcellusScythe extends ScytheOfVitur {
 }
 
 export class TonalzticsOfRalos extends RangedWeapon {
-  override inventorySprite = icon("tonalzticsOfRalos");
+  override inventorySprite = placeholderLabel("tonalzticsOfRalos");
 
   override get cacheItemId(): number {
     return gear.items.tonalzticsOfRalos.itemId.value;

@@ -1,7 +1,7 @@
 import { CACHE_ASSETS } from "osrs-sdk";
 import type { Loadout } from "osrs-sdk";
 
-// Placeholder melee kit until the phase 4 gear setup is chosen. The SDK draws the player only from equipped item models.
+// The SDK draws the player only from equipped item models.
 export const ocellusLoadout: Loadout = {
   name: "Placeholder melee",
   equipment: {

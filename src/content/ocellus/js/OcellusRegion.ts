@@ -2,7 +2,6 @@ import { CardinalDirection, Player, Region } from "osrs-sdk";
 import type { Location } from "osrs-sdk";
 import { ocellusLoadout } from "./OcellusLoadout";
 
-// Placeholder geometry: cache 2746 has no XTEA keys for the raid, so the real arena scene is not available yet.
 export const ARENA_SIZE = { width: 20, height: 20 } as const;
 export const SPAWN_TILE: Readonly<Location> = { x: 10, y: 10 };
 

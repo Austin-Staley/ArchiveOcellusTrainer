@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Installs osrs-sdk, osrs-sdk-assets and osrs-sdk-react from the beta branch with --no-save.
-# The beta packages are not on npm, so any later `npm ci` or `npm install` removes them again.
-#
-#   scripts/install-beta-sdk.sh                         build packs from the pinned osrs-sdk commit
-#   OSRS_SDK_PACKS=~/osrs-sims/packs scripts/install-beta-sdk.sh   install prebuilt packs from a directory
 set -euo pipefail
 
 OSRS_SDK_REPO="${OSRS_SDK_REPO:-https://github.com/OldSchoolSDK/osrs-sdk.git}"

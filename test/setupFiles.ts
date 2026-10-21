@@ -1,4 +1,3 @@
-// jsdom has no canvas implementation; the engine only needs drawing calls to succeed.
 const canvasContext = new Proxy({}, {
   get: (target, property) => property === "measureText" ? () => ({ width: 0 }) : () => undefined,
   set: () => true,

@@ -19,7 +19,6 @@ type ArchiveOcellusSnapshot = {
   destination: { x: number; y: number } | null;
 };
 
-// Development builds expose a read-only view of world state so the verify skill can record evidence the UI does not show.
 function exposeReadOnlyState(trainer: TrainerInstance) {
   window.__archiveOcellus = Object.freeze({
     snapshot(): ArchiveOcellusSnapshot {

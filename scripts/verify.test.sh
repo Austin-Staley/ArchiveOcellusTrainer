@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Browser-free checks of scripts/verify.sh. The dev server, curl, lsof and agent-browser are shell
-# stubs; process ownership, cleanup and the walk verdict run through the real script functions.
 set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
@@ -84,8 +82,6 @@ interrupt_leaves_the_recorded_instance() {
   [[ ! -e "$T/stop-called" ]] || { echo "stop was called for an instance this run did not start"; return 1; }
 }
 
-# The fake browser answers the commands drive sends. The first snapshot is the spawn state; later
-# snapshots put the player and destination on $1. $2 is ok, fail (exit 1) or empty (exit 0, no file).
 fake_browser() {
   FINAL_TILE="$1"
   SCREENSHOT="${2:-ok}"

@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Verification loop for Archive Ocellus Trainer. The recipe is .claude/skills/verify-archive-ocellus/SKILL.md.
-#
-#   scripts/verify.sh                       all stages: build test assets browser
-#   scripts/verify.sh test browser          selected stages, run in the order given
-#   scripts/verify.sh serve | doctor | stop manual instance for driving other mapped features
-#
-# Every stage prints PASS or FAIL; the script exits non-zero when any stage fails.
-# Evidence goes to VERIFY_DIR (default .verify/<UTC timestamp>/) and is never deleted.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -20,7 +12,6 @@ STATE_FILE="$ROOT/.verify/current-server"
 MANIFEST="$ROOT/public/osrs-assets/manifest.json"
 URL="http://127.0.0.1:${VERIFY_PORT}/"
 SPAWN_TILE='{"x":10,"y":10}'
-# Where the documented click (160 px right of and 50 px below the canvas centre at 1280x800) lands.
 WALK_TARGET_TILE='{"x":13,"y":11}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 

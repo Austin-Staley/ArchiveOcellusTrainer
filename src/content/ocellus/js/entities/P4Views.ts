@@ -444,10 +444,8 @@ export class BossLook {
       case "inner-void":
         this.boss.playAnimation(bossPoses.deflectIn.value);
         return;
-      case "after-inner":
-        this.boss.playAnimation(bossPoses.deflectOut.value);
-        return;
       case "lead-in":
+      case "after-inner":
       case "outer-void":
       case "after-outer":
         return;
@@ -456,6 +454,10 @@ export class BossLook {
         return unhandled;
       }
     }
+  }
+
+  land(): void {
+    this.boss.playAnimation(bossPoses.deflectOut.value);
   }
 
   tell(variant: Special): void {

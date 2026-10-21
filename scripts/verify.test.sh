@@ -122,7 +122,7 @@ fixture_logs() {
         ...(floodHits[t] ? [{ kind: "floor-hit", at: t, tile: startOn(t).tile, receipt: { applied: floodHits[t] } }] : []),
       ],
     }));
-    const focusBeats = { 5: "boss-shouts", 32: "special-tell", 37: "special-hit", 39: "soul-split-heal" };
+    const focusBeats = { 5: "boss-shouts", 29: "boss-landing-starts", 32: "special-tell", 37: "special-hit", 39: "soul-split-heal" };
     const focused = Array.from({ length: 41 }, (_, t) => ({ tick: t, beats: focusBeats[t] ? [{ kind: focusBeats[t] }] : [], events: [] }));
     const standingHits = { 44: 9, 45: 11, 46: 10, 47: 11, 48: 10, 49: 9, 50: 9, 51: 10, 52: 9, 53: 10, 54: 1 };
     const standing = Array.from({ length: 55 }, (_, t) => ({

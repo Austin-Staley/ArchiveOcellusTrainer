@@ -34,6 +34,14 @@ describe("U5 transition attacks", () => {
     drill.dispose();
   });
 
+  test("the boss starts landing a tick before each inner void clears", () => {
+    const drill = startDrill({ selection: REPLAY_V2 });
+    drill.playCorrectlyTo(90);
+    const clears = drill.events("stage-entered").filter((e) => e.stage === "after-inner");
+    expect([drill.events("boss-landing-started").map((e) => e.at), clears.map((e) => e.at)]).toEqual([[29, 89], [30, 90]]);
+    drill.dispose();
+  });
+
   test("standing under the boss gives no cover from the transition attack", () => {
     const drill = startDrill({ selection: REPLAY_V2 });
     drill.tickTo(31);

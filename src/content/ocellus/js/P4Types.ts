@@ -81,6 +81,7 @@ export type Mechanic = "void-floor" | "lifeforce-orb" | "explosions" | "transiti
 
 export type Beat =
   | Readonly<{ kind: "boss-shouts"; text: string; lasts: TickSpan }>
+  | Readonly<{ kind: "boss-landing-starts" }>
   | Readonly<{ kind: "lifeforce-tell"; void: VoidKind }>
   | Readonly<{ kind: "lifeforce-hit"; void: VoidKind }>
   | Readonly<{ kind: "orb-spawns"; void: VoidKind }>
@@ -111,6 +112,7 @@ export type FightEvent =
   | Readonly<{ kind: "overhead-switched"; at: Tick; overhead: BossOverhead }>
   | Readonly<{ kind: "boss-state-changed"; at: Tick; state: BossState }>
   | Readonly<{ kind: "boss-shouted"; at: Tick; text: string }>
+  | Readonly<{ kind: "boss-landing-started"; at: Tick }>
   | Readonly<{ kind: "player-hit-judged"; at: Tick; style: IncomingStyle; outcome: "passed" | "invulnerable"; requested: number }>
   | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "lifeforce-told"; at: Tick; void: VoidKind }>

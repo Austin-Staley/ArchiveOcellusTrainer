@@ -64,6 +64,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "special-told":
       views.boss.tell(event.variant);
       return;
+    case "boss-landing-started":
+      views.boss.land();
+      return;
     case "overhead-switched":
     case "boss-state-changed":
     case "boss-shouted":

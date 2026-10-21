@@ -148,6 +148,7 @@ type PresentationRecipe = Readonly<{
   bossPoses: Readonly<Record<BossPose, Selected<number>>>;
   sounds: Readonly<Record<CueSound, Selected<SoundId>>>;
   soundPlayback: Selected<SoundPlayback>;
+  landingBeforeInnerClears: Selected<TickSpan>;
   transitionTells: Readonly<Record<Special, Selected<number>>>;
 }>;
 
@@ -413,6 +414,7 @@ const PRESENTATION: PresentationRecipe = {
     explosionMark: sound(12537, "one per explosion mark, six per void every 2 ticks from hit + 5, in 3 V1 and 3 V2 cycles", vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
   },
   soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
+  landingBeforeInnerClears: selected(span(1), "footage-repeated", "team-4-and-5", "the landing's frame sounds 12584, 12587, 12586 and 12585 at S+21.1, S+21.8, S+23.0 and S+23.5 put its start at S+21, a tick before the inner void clears; 12586 is heard in 3 V1 and 3 V2 cycles", vod("V1", "3:54:15.01, t31.0"), vod("V2", "5:20:38.13, t31.0"), cache("seq 14865 frames 3, 25, 61 and 74")),
   transitionTells: {
     vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across; the centre renders white where the footage shows black", cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
     "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players; the centre renders white where the footage shows black", cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),

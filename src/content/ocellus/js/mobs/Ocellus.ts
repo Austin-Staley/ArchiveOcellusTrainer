@@ -302,6 +302,8 @@ export class Ocellus extends Mob {
         this.setOverheadText(beat.text);
         this.overheadTextTimer = beat.lasts;
         return { kind: "boss-shouted", at, text: beat.text };
+      case "boss-landing-starts":
+        return { kind: "boss-landing-started", at };
       case "floor-damage":
         this.strikeFloor(beat.void, at, player);
         return null;

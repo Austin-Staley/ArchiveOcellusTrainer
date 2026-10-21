@@ -31,6 +31,7 @@ function specialFor(selection: SpecialSelection, nth: number, seed: Seed, hitAt:
 function mechanicOf(beat: Beat): Mechanic | null {
   switch (beat.kind) {
     case "boss-shouts":
+    case "boss-landing-starts":
       return null;
     case "lifeforce-tell":
     case "lifeforce-hit":
@@ -72,7 +73,7 @@ export class Schedule {
   ) {}
 
   static compile(seed: Seed, choices: ResolvedChoices): Schedule {
-    const { leadIn, cycle: stages, overheads, lifeforce, orb, bossHeals, rifts, explosion: explosionCues } = OCELLUS_P4;
+    const { leadIn, cycle: stages, overheads, lifeforce, orb, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
     const hidden = leadIn.hiddenFor.value;
     const leadInLength = hidden + leadIn.presentFor.value;
     const shout = leadIn.shout.value;
@@ -140,6 +141,7 @@ export class Schedule {
     };
 
     voidBeats(inner, 0);
+    put(afterInnerStart - presentation.landingBeforeInnerClears.value, "boss landing", () => ({ kind: "boss-landing-starts" }));
     transitionBeats(afterInner, afterInnerStart);
     voidBeats(outer, outerStart);
     transitionBeats(afterOuter, afterOuterStart);

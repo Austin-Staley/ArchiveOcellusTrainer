@@ -52,7 +52,13 @@ export class OcellusRegion extends Region {
   }
 
   initialiseRegion(): { player: Player } {
-    const player: OcellusPlayer = new OcellusPlayer(this, { ...OCELLUS_P4.geometry.playerSpawn.value }, new CombatStream(this.config.seed), (input) => ocellus.recordInput(input));
+    const player: OcellusPlayer = new OcellusPlayer(
+      this,
+      { ...OCELLUS_P4.geometry.playerSpawn.value },
+      new CombatStream(this.config.seed),
+      (input) => ocellus.recordInput(input),
+      () => ocellus.settlePlayerHits(),
+    );
     const ocellus: Ocellus = new Ocellus(this, this.config, player);
     dress(player, this.config.choices.setup);
     const field = new VoidField(this);

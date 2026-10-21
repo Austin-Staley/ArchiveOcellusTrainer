@@ -1,10 +1,11 @@
 # Personal explosions
 
-Five ticks after each lifeforce hit, Ocellus marks the tile the player starts that tick on, and marks again every 2 ticks, 6 times by default. A ring of dark purple shards stands on each marked tile. A tick later the explosion goes off there: the shards flare out and fade, and a player who starts that tick on the marked tile takes 16. The mark captures the tile before the player moves, so a player who moves during the mark tick leaves it behind, and a step first taken on the impact tick is too late. Standing under the boss gives no cover.
+Five ticks after each lifeforce hit, Ocellus marks the tile the player starts that tick on, and marks again every 2 ticks, 6 times by default. A ring of dark purple shards stands on each marked tile. A tick later the explosion goes off there: the shards flare out and fade, and a player who starts that tick on the marked tile takes 16. The mark captures the tile before the player moves, so a player who moves during the mark tick leaves it behind, and a step first taken on the impact tick is too late. Standing under the boss gives no cover. Two sounds set the rhythm players step to: synth 12638 starts each series two ticks after the lifeforce hit, and synth 12537 plays on every mark.
 
 ## Sub-features
 
-- `explosion-mark` logs `explosion-marked` at P4 tick 17, 19, 21, 23, 25 and 27 (inner void) and 48 to 58 (outer void), with the tile the player started that tick on, and places the shards on that tile.
+- `explosion-series-start` logs `explosion-series-started` at P4 tick 14 (inner void) and 45 (outer void), two ticks after each lifeforce hit, and plays 12638 on the player's tile.
+- `explosion-mark` logs `explosion-marked` at P4 tick 17, 19, 21, 23, 25 and 27 (inner void) and 48 to 58 (outer void), with the tile the player started that tick on, and places the shards on that tile and plays 12537 on the player's tile.
 - `explosion-impact` logs `explosion-resolved` a tick after each mark. The outcome is `hit` with a 16 receipt when the player starts the impact tick on the marked tile, and `avoided` otherwise. The shards flare and fade either way.
 - `explosion-under-boss` records `underBoss: true` when the marked tile is under the boss. Such a mark still hits.
 - `explosion-choices` select the series with `explosions`: `v2-tell-then-six` (default, marks from hit + 5, 17 to 27, in step with sound 12537), `wiki-six` (marks from hit + 3, 15 to 25) or `v2-seven` (marks from hit + 3 with a seventh at 27).
@@ -13,6 +14,7 @@ Five ticks after each lifeforce hit, Ocellus marks the tile the player starts th
 
 - Open `http://127.0.0.1:8002/` and stand still after the lifeforce hit at P4 tick 12. Shards appear under the player at 17 and a 16 lands at 18.
 - Click a neighbouring tile on each mark tick, or keep walking, and every mark is left behind.
+- Turn on area sound, the second icon in the settings tab, to hear 12638 and 12537. The SDK starts both sound toggles off.
 - Pick `Explosions` in the `Focus` selector and press `Restart` to practise the explosions alone.
 - Add `explosions=wiki-six` or `explosions=v2-seven` to the URL for the other readings of the footage.
 

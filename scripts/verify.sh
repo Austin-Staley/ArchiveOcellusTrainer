@@ -100,12 +100,18 @@ ensure_deps() {
 manifest_ready() {
   [[ -f "$MANIFEST" ]] && node --input-type=module -e '
     import { loadConfig } from "osrs-sdk-assets";
-    import { readFileSync } from "node:fs";
+    import { existsSync, readFileSync } from "node:fs";
+    import { dirname, join } from "node:path";
     const { assets } = await loadConfig();
     const m = JSON.parse(readFileSync(process.argv[1], "utf8"));
     const items = Object.values(assets.items).every(({ id }) => m.playerItems?.[`item:${id}`]);
     const spotAnims = Object.values(assets.spotAnims).every(({ id }) => m.spotAnims?.[id]);
-    process.exit(m.cache?.source === "openrs2:2746" && m.assets?.[`npc-${process.argv[2]}`] && items && spotAnims ? 0 : 1);
+    const pack = m.soundEffects && join(dirname(process.argv[1]), m.soundEffects.file);
+    const bytes = pack && existsSync(pack) ? readFileSync(pack) : Buffer.alloc(6);
+    const packed = new Set();
+    for (let at = 6, n = 0; n < bytes.readUInt16BE(4); n++, at += 4 + bytes.readUInt16BE(at + 2)) packed.add(bytes.readUInt16BE(at));
+    const sounds = Object.values(assets.sounds).every(({ id }) => packed.has(id));
+    process.exit(m.cache?.source === "openrs2:2746" && m.assets?.[`npc-${process.argv[2]}`] && items && spotAnims && sounds ? 0 : 1);
   ' "$MANIFEST" "$BOSS_NPC"
 }
 
@@ -127,7 +133,7 @@ stage_test() {
 
 stage_assets() {
   if manifest_ready; then
-    log "assets: manifest already has npc-${BOSS_NPC} and every configured item and spotanim from openrs2:2746, skipping rebuild" | tee "$VERIFY_DIR/assets.log"
+    log "assets: manifest already has npc-${BOSS_NPC} and every configured item, spotanim and sound from openrs2:2746, skipping rebuild" | tee "$VERIFY_DIR/assets.log"
     return 0
   fi
   npm run assets -- --cache-dir "$OSRS_CACHE_DIR" --reader-path "$OSRS_CACHE_READER" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready

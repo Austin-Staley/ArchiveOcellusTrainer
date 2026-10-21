@@ -1,6 +1,6 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Mechanic, Seed, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
-import { cycle, seed, span, tile } from "./P4Types";
+import type { Cycle, Mechanic, Seed, SoundId, Special, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
@@ -135,7 +135,14 @@ type BossPose =
   | "unleashLoop"
   | "unleashOut";
 
-type PresentationRecipe = Readonly<{ bossPoses: Readonly<Record<BossPose, Selected<number>>> }>;
+type CueSound = "explosionSeriesStart" | "explosionMark";
+type SoundPlayback = Readonly<{ volume: number; range: number; retain: number }>;
+
+type PresentationRecipe = Readonly<{
+  bossPoses: Readonly<Record<BossPose, Selected<number>>>;
+  sounds: Readonly<Record<CueSound, Selected<SoundId>>>;
+  soundPlayback: Selected<SoundPlayback>;
+}>;
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
 export type ItemStats = Readonly<{
@@ -319,9 +326,10 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", vod("V2", "k53"), vod("V2", "k64")),
 };
 
-type ExplosionLookRecipe = Readonly<{ shards: Selected<string> }>;
+type ExplosionCueRecipe = Readonly<{ seriesStartsAfterHit: Selected<TickSpan>; shards: Selected<string> }>;
 
-const EXPLOSION: ExplosionLookRecipe = {
+const EXPLOSION: ExplosionCueRecipe = {
+  seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
   shards: selected(
     "#5e317b",
     "footage-repeated",
@@ -331,6 +339,9 @@ const EXPLOSION: ExplosionLookRecipe = {
     STRATEGIES,
   ),
 };
+
+const sound = (id: number, note: string, first: Source, ...rest: Source[]): Selected<SoundId> =>
+  selected(soundId(id), "footage-repeated", "team-4-and-5", note, first, ...rest, cache(`synth ${id}`));
 
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
@@ -356,6 +367,11 @@ const PRESENTATION: PresentationRecipe = {
     unleashLoop: pose(14858, "phase3_unleash_loop", "inferred", "transition attack candidate, 2-tick loop"),
     unleashOut: pose(14861, "phase3_unleash_out", "inferred", "transition attack candidate, 4 ticks"),
   },
+  sounds: {
+    explosionSeriesStart: sound(12638, "starts each explosion series, in 5 V1 and 5 V2 voids; no sequence references it, so the server sends it", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
+    explosionMark: sound(12537, "one per explosion mark, six per void every 2 ticks from hit + 5, in 3 V1 and 3 V2 cycles", vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
+  },
+  soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";

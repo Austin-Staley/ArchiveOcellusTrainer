@@ -306,6 +306,8 @@ export class Ocellus extends Mob {
         return this.expireOrb(beat.void, at);
       case "unclaimed-orb-heals":
         return this.healFromUnclaimedOuterOrb(at);
+      case "explosion-series-starts":
+        return { kind: "explosion-series-started", at, void: beat.void };
       case "explosion-mark":
         return this.markExplosion(beat.void, beat.pulse, at, player.tile);
       case "explosion-impact":

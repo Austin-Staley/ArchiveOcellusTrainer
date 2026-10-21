@@ -1,10 +1,10 @@
-import { CardinalDirection, Region } from "osrs-sdk";
+import { CardinalDirection, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
 import type { Item, Player } from "osrs-sdk";
 import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
 import { dress } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
-import type { FightEvent, FightLog, FightSnapshot, Tile, TickRow, VoidKind } from "./P4Types";
+import type { FightEvent, FightLog, FightSnapshot, SoundId, Tile, TickRow, VoidKind } from "./P4Types";
 import { ExplosionViews, FragmentFlash, OrbView, VoidField } from "./entities/P4Views";
 import { Ocellus } from "./mobs/Ocellus";
 import { voidUnder } from "./p4/floor";
@@ -16,6 +16,13 @@ function itemId(item: Item | null | undefined): number | null {
 }
 
 type Views = Readonly<{ field: VoidField; orbs: Readonly<Record<VoidKind, OrbView>>; fragment: FragmentFlash; explosions: ExplosionViews }>;
+
+const { sounds, soundPlayback } = OCELLUS_P4.presentation;
+
+function playCue(id: SoundId, at: Tile): void {
+  const { volume, range, retain } = soundPlayback.value;
+  SoundCache.play(new Sound(cacheSound(id), volume, 0, { location: at, range, retain }));
+}
 
 type Mounted =
   | Readonly<{ kind: "unmounted" }>
@@ -39,8 +46,12 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "orb-expired":
       views.orbs[event.void].leave();
       return;
+    case "explosion-series-started":
+      playCue(sounds.explosionSeriesStart.value, player);
+      return;
     case "explosion-marked":
       views.explosions.mark(event.void, event.pulse, event.tile);
+      playCue(sounds.explosionMark.value, player);
       return;
     case "explosion-resolved":
       views.explosions.detonate(event.void, event.pulse);
@@ -104,6 +115,7 @@ export class OcellusRegion extends Region {
     );
     const ocellus: Ocellus = new Ocellus(this, this.config, player);
     dress(player, this.config.choices.setup);
+    Object.values(sounds).forEach((sound) => SoundCache.preload(cacheSound(sound.value)));
     const views: Views = {
       field: new VoidField(this),
       orbs: { "inner-void": new OrbView(this), "outer-void": new OrbView(this) },

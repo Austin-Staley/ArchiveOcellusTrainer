@@ -19,6 +19,22 @@ npm start                       # http://127.0.0.1:8002
 
 `npm run assets` extracts models from OpenRS2 cache 2746 into `public/osrs-assets/`, which is never committed.
 
+## Deploy
+
+`netlify.toml` tells Netlify to run `scripts/netlify-build.sh` on Node 22 and publish `dist`. The script installs the dependencies and the beta SDK, installs the cache reader at a pinned commit, extracts the models from OpenRS2 cache 2746, and builds the app. The models are published with the app under `dist/osrs-assets/`. The cache and the reader go in Netlify's build cache directory, `/opt/build/cache`, which Netlify restores after a successful build. A deploy that reused them logs `Using cached OpenRS2 cache 2746` and `reusing cache reader`.
+
+To connect the repository in the Netlify dashboard:
+
+1. Import an existing project from GitHub and pick `Julian-Dasilva/ArchiveOcellusTrainer`.
+2. Leave the base directory empty. Netlify reads the build command, the publish directory and the Node version from `netlify.toml`, so leave those fields as Netlify fills them.
+3. Set the production branch to `main`, then deploy.
+
+No environment variables are needed. `OSRS_CACHE_READER_REPO` and `OSRS_CACHE_READER_COMMIT` override the reader pin. To run the same build locally, set `NETLIFY_CACHE_DIR` to a writable directory:
+
+```sh
+NETLIFY_CACHE_DIR=/tmp/netlify-cache scripts/netlify-build.sh
+```
+
 ## Credit
 
 Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.

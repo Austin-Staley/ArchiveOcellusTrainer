@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { CacheRender, Settings, TrainerInstance, TrainerLoadingState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash } from "osrs-sdk-react";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
+import { parseDrillRequest } from "./content/ocellus/js/OcellusTimings";
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
@@ -38,7 +39,8 @@ function exposeVerificationProbe(trainer: TrainerInstance) {
 function createTrainer() {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
   Settings.readFromStorage();
-  const trainer = new TrainerInstance(new OcellusRegion());
+  const { config } = parseDrillRequest(new URL(window.location.href), () => crypto.getRandomValues(new Uint32Array(1))[0]);
+  const trainer = new TrainerInstance(new OcellusRegion(config));
   if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer);
   return trainer;
 }

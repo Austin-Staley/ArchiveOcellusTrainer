@@ -5,7 +5,7 @@ Opening the trainer loads cache assets, counts down GET READY, and shows a check
 ## Sub-features
 
 - `arena-load` loads the page and reaches the ticking state without page errors.
-- `arena-floor` draws the 20x20 checkered placeholder floor (`PLACEHOLDER_ARENA_SIZE`) around the player.
+- `arena-floor` draws the 20x20 checkered placeholder floor (`placeholderArena` in `OcellusTimings.ts`) around the player.
 - `arena-player` draws the player model, in its placeholder melee gear, on spawn tile (10, 10).
 - `arena-hud` shows the minimap orbs, inventory tabs and inventory panel.
 

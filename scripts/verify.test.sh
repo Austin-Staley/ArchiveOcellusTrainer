@@ -177,6 +177,21 @@ fixture_logs() {
       ],
     }));
     write("invincible-log.json", "void-floor", invincible);
+    const overheal = fault === "invincible-orb-overheal";
+    const revivalWalks = { 1: { x: 5, y: 5 }, 20: { x: 4, y: 8 } };
+    const revivalEvents = {
+      12: [{ kind: "orb-spawned", at: 12, void: "inner-void", tile: { x: 4, y: 8 }, credit: 38 }],
+      15: [{ kind: "death-prevented", at: 15, source: "floor-hit", clearedOrbCredit: 38 }],
+      24: [{ kind: "death-prevented", at: 24, source: "explosion-resolved", clearedOrbCredit: 0 }],
+      25: [{ kind: "orb-returned", at: 25, void: "inner-void", tile: { x: 4, y: 8 }, receipt: overheal ? { afterHp: 137, applied: 38, beforeHp: 99, requested: 38 } : { afterHp: 99, applied: 0, beforeHp: 99, requested: 0 } }],
+    };
+    const revival = Array.from({ length: 27 }, (_, t) => ({
+      tick: t,
+      inputs: revivalWalks[t] ? [{ kind: "walk-ordered", destination: revivalWalks[t] }] : [],
+      playerAtPostTick: { hp: overheal && t >= 25 ? 137 : 99 },
+      events: revivalEvents[t] ?? [],
+    }));
+    write("invincible-orb-log.json", "full-fight", revival);
     const orbReturn = fault === "late-orb-return" ? 29 : 28;
     const orbAt = (x, y, hp) => ({ tile: { x, y }, hp });
     const orbEvents = {
@@ -771,6 +786,7 @@ fake_browser() {
       "--json eval localStorage.getItem('osrs-sdk:settings')") if [[ -e "$T/cues" ]]; then cue_probe saved; else supply_probe saved; fi ;;
       "--json eval window.__archiveOcellusProbe.log()")
         [[ ! -e "$T/cues" ]] || { cat "$T/cue-log.json"; return; }
+        [[ ! -e "$T/invincible-orb" ]] || { cat "$T/invincible-orb-log.json"; return; }
         [[ ! -e "$T/invincible" ]] || { cat "$T/invincible-log.json"; return; }
         [[ ! -e "$T/scenery" ]] || { scenery_probe log; return; }
         [[ ! -e "$T/deflect" ]] || { cat "$T/deflect-log.json"; return; }
@@ -798,6 +814,7 @@ fake_browser() {
       "--json eval location.search") if [[ -e "$T/invincible" ]]; then invincible_probe search; else seed_probe search; fi ;;
       "--json eval performance.timeOrigin") seed_probe origin ;;
       "open "*"?seed=1&focus=void-floor&invincible=on") : >"$T/invincible" ;;
+      "open "*"?seed=1&invincible=on") : >"$T/invincible-orb" ;;
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;
@@ -1461,6 +1478,13 @@ invincible_without_the_parameter_fails() {
   [[ "$(failed_checks)" == "floodHitsStandingStill mortalWithoutTheParameter" ]] || { echo "expected the flood and mortal checks to fail, got: $(failed_checks)"; return 1; }
 }
 
+invincible_orb_overheal_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' invincible-orb-overheal
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the orb collected after a prevented death returned 38 HP"; return 1; fi
+  [[ "$(failed_checks)" == invincibleOrbReturnsNothingAfterRevival ]] || { echo "expected only invincibleOrbReturnsNothingAfterRevival to fail, got: $(failed_checks)"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -1559,7 +1583,8 @@ for t in \
   invincible_toggle_checked_by_default_fails \
   invincible_run_that_dies_fails \
   invincible_lost_on_restart_fails \
-  invincible_without_the_parameter_fails; do
+  invincible_without_the_parameter_fails \
+  invincible_orb_overheal_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

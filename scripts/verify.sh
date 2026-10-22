@@ -109,6 +109,13 @@ VOID_PIXEL="#1e2529"
 INVINCIBLE_QUERY="?seed=1&focus=${VOID_DRILL}&invincible=on"
 INVINCIBLE_LAST_TICK=56
 INVINCIBLE_EXPECTED='{"prevented":[[54,"floor-hit"]],"hp":[[53,1],[54,99]],"chat":"Invincible: the void floor would have killed you on tick 54."}'
+INVINCIBLE_ORB_QUERY="?seed=1&invincible=on"
+INVINCIBLE_ORB_UNDER_BOSS_CLICK_UP_PX=100
+INVINCIBLE_ORB_CLICK_TICK=19
+INVINCIBLE_ORB_CLICK_RIGHT_PX=50
+INVINCIBLE_ORB_CLICK_UP_PX=75
+INVINCIBLE_ORB_LAST_TICK=26
+INVINCIBLE_ORB_EXPECTED='{"revived":[15,"floor-hit",38],"returned":[[25,{"requested":0,"applied":0,"beforeHp":99,"afterHp":99}]],"hp":[25,99],"maxHp":99}'
 ORB_DRILL="lifeforce-orb"
 ORB_DORMANT_TICK=20
 ORB_GLOW_TICK=24
@@ -980,6 +987,17 @@ drive_invincible() {
   search="$(ab --json eval "location.search" | json data.result)" || return 1
   toggle="$(invincible_toggle)" || { log "invincible toggle capture failed"; return 1; }
   node -e 'console.log(JSON.stringify({ search: process.argv[1], toggle: JSON.parse(process.argv[2]) }))' "$search" "$toggle" >"$VERIFY_DIR/invincible-restarted.json"
+
+  ab open "${URL}${INVINCIBLE_ORB_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the invincible full fight never took its first P4 step"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_at "$CX" $((CY - INVINCIBLE_ORB_UNDER_BOSS_CLICK_UP_PX)) || { log "the walk under the boss was not clicked"; return 1; }
+  click_after_tick "$INVINCIBLE_ORB_CLICK_TICK" "$INVINCIBLE_ORB_CLICK_RIGHT_PX" "-$INVINCIBLE_ORB_CLICK_UP_PX" || { log "the walk to the orb was not clicked"; return 1; }
+  fight_tick_at_least "$INVINCIBLE_ORB_LAST_TICK" 30000 || { log "the invincible full fight never stepped to P4 tick ${INVINCIBLE_ORB_LAST_TICK}"; return 1; }
+  ab screenshot "$VERIFY_DIR/invincible-orb.png" >/dev/null || { log "invincible orb screenshot failed"; return 1; }
+  probe "log()" >"$VERIFY_DIR/invincible-orb.json"
+  ab console >"$VERIFY_DIR/invincible-orb-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/invincible-orb-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
 audio_contexts() {
@@ -1070,6 +1088,7 @@ drive() {
     walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
     invincible-default.json invincible-linked.json invincible.png invincible-chat.json invincible.json invincible-console.log invincible-page-errors.json invincible-restarted.json \
+    invincible-orb.png invincible-orb.json invincible-orb-console.log invincible-orb-page-errors.json \
     autoplay-policy.js cue-recording-from.json cue-contexts-loaded.json cue-toggles-off.json cue-toggle-click.json cue-contexts-toggled.json cue-toggles-on.json cue-sound-saved.json cue-toggle-audio.json cue-toggle-console.log cue-toggle-page-errors.json \
     cue-contexts-reloaded.json cue-toggles-reloaded.json cue-contexts-clicked.json cue-chat-before.json cue-chat.json cues.json cue-audio.json cue-console.log cue-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
@@ -1083,7 +1102,7 @@ drive() {
       riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws, hoverTile, hoverTicks, firstMeleeTick,
       walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, cornerHole, cornerNub,
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
-      cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected] = process.argv.slice(1);
+      cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1107,8 +1126,8 @@ drive() {
     const [cueLog, cueToggleAudio, cueAudio, cueToggleErrors, cueErrors, cueSaved, cueChatBefore, cueChatAfter] =
       ["cues.json", "cue-toggle-audio.json", "cue-audio.json", "cue-toggle-page-errors.json", "cue-page-errors.json", "cue-sound-saved.json", "cue-chat-before.json", "cue-chat.json"].map(read);
     const [recordingFrom, toggledAt] = ["cue-recording-from.json", "cue-toggle-click.json"].map(read);
-    const [invincibleDefault, invincibleLinked, invincibleChat, invincibleLog, invincibleErrors, invincibleRestarted] =
-      ["invincible-default.json", "invincible-linked.json", "invincible-chat.json", "invincible.json", "invincible-page-errors.json", "invincible-restarted.json"].map(read);
+    const [invincibleDefault, invincibleLinked, invincibleChat, invincibleLog, invincibleErrors, invincibleRestarted, invincibleOrbLog, invincibleOrbErrors] =
+      ["invincible-default.json", "invincible-linked.json", "invincible-chat.json", "invincible.json", "invincible-page-errors.json", "invincible-restarted.json", "invincible-orb.json", "invincible-orb-page-errors.json"].map(read);
     const contexts = Object.fromEntries(["loaded", "toggled", "reloaded", "clicked"].map((when) => [when, read(`cue-contexts-${when}.json`)]));
     const toggles = Object.fromEntries(["off", "on", "reloaded"].map((when) => [when, read(`cue-toggles-${when}.json`)]));
     const [spawnTile, targetTile, edgeOrderTile, edgeStopTile, nearSquare] = [spawn, target, edgeOrder, edgeStop, square].map((tile) => JSON.parse(tile));
@@ -1412,6 +1431,12 @@ drive() {
         chat: invincibleChat.data?.text ?? null,
         preventedWithoutTheParameter: kindOf(voidLog.rows, "death-prevented").map((e) => [e.at, e.source]),
         restarted: invincibleRestarted,
+        orb: {
+          walks: invincibleOrbLog.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => [row.tick, i.destination])),
+          prevented: kindOf(invincibleOrbLog.rows, "death-prevented").map((e) => [e.at, e.source, e.clearedOrbCredit]),
+          returned: kindOf(invincibleOrbLog.rows, "orb-returned").map((e) => [e.at, e.receipt]),
+          hp: invincibleOrbLog.rows.map((row) => [row.tick, row.playerAtPostTick.hp]),
+        },
       },
     };
     const sameJson = (a, b) => require("util").isDeepStrictEqual(a, JSON.parse(b));
@@ -1423,6 +1448,7 @@ drive() {
     const { shots: iconShots, gapDraws: drawnAroundGaps, hover, meleeJudged } = observed.overheads;
     const { soulSplit, rifts, cues, invincible } = observed;
     const expectedInvincible = JSON.parse(invincibleExpected);
+    const expectedRevival = JSON.parse(invincibleOrbExpected);
     const allIn = (states, state) => states.length > 0 && states.every((s) => s === state);
     const timedOnly = (heard) => heard.map(([at, samples]) => [at, samples]);
     const readyAt = Math.max(orb.arrivedAt ?? Infinity, orb.matured[0]?.[0] ?? Infinity);
@@ -1534,7 +1560,11 @@ drive() {
       invincibleChatShown: invincible.chat === expectedInvincible.chat,
       mortalWithoutTheParameter: invincible.preventedWithoutTheParameter.length === 0 && sameJson(observed.voidRunEnd, voidEnd),
       restartKeepsInvincible: new URLSearchParams(invincible.restarted.search).get("invincible") === "on" && invincible.restarted.toggle.checked === true,
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      invincibleOrbReturnsNothingAfterRevival: sameJson(invincible.orb.prevented[0], JSON.stringify(expectedRevival.revived)) &&
+        sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
+        sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
+        invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1553,7 +1583,7 @@ drive() {
     "$DEFLECT_HOVER_TILE" "$DEFLECT_HOVER_TICKS" "$DEFLECT_FIRST_MELEE_TICK" \
     "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
-    "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

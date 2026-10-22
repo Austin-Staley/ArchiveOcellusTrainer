@@ -38,7 +38,7 @@ describe("Invincible", () => {
     });
   });
 
-  test("with invincible turned off before it, the same lethal hit ends the run on tick 54", () => {
+  test("guard, mortal play: with invincible turned off before it, the same lethal hit ends the run on tick 54", () => {
     expect(standOnTheFlood(50)).toEqual({
       floorHits: HITS_TO_THE_LETHAL_ONE,
       prevented: [],
@@ -48,7 +48,7 @@ describe("Invincible", () => {
     });
   });
 
-  test("a hit that leaves HP above 0 lands the same with invincible on or off", () => {
+  test("guard, damage unchanged: a hit that leaves HP above 0 lands the same with invincible on or off", () => {
     const hitsBeforeTick54 = (invincible: boolean) => {
       const drill = startDrill({ selection: VOID_FLOOR });
       drill.region.invincible = invincible;
@@ -62,7 +62,7 @@ describe("Invincible", () => {
     expect({ off: hitsBeforeTick54(false), on: hitsBeforeTick54(true) }).toEqual({ off: nonLethal, on: nonLethal });
   });
 
-  test("with invincible on, the lifeforce steal still halves the player's HP", () => {
+  test("guard, damage unchanged: with invincible on, the lifeforce steal still halves the player's HP", () => {
     const drill = startDrill({ selection: { focus: "lifeforce-orb" } });
     drill.region.invincible = true;
     drill.tickTo(13);
@@ -98,7 +98,7 @@ describe("Invincible", () => {
     });
   });
 
-  test("with no death prevented, the orb returns the stolen HP the same with invincible on or off", () => {
+  test("guard, orb return unchanged: with no death prevented, the orb returns the stolen HP the same with invincible on or off", () => {
     const orbReturn = (invincible: boolean) => {
       const drill = startDrill({ selection: { focus: "lifeforce-orb" } });
       drill.region.invincible = invincible;

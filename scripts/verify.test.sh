@@ -725,7 +725,7 @@ invincible_probe() {
       printf '{"data":{"result":"%s"}}\n' "$search"
       ;;
     chat)
-      if [[ "$FAULT" == invincible-died ]]; then echo '{"data":{"text":""}}'; else printf '{"data":{"text":"%s"}}\n' "$(command node -e 'console.log(JSON.parse(process.argv[1]).chat)' "$INVINCIBLE_EXPECTED")"; fi
+      if [[ "$FAULT" == invincible-died ]]; then echo '{"data":{"text":""}}'; else echo '{"data":{"text":"Invincible: the void floor would have killed you on tick 54."}}'; fi
       ;;
   esac
 }
@@ -797,7 +797,7 @@ fake_browser() {
       "--json eval window.__archiveOcellusProbe.log().header.seed") seed_probe seed ;;
       "--json eval location.search") if [[ -e "$T/invincible" ]]; then invincible_probe search; else seed_probe search; fi ;;
       "--json eval performance.timeOrigin") seed_probe origin ;;
-      "open "*"${INVINCIBLE_QUERY}") : >"$T/invincible" ;;
+      "open "*"?seed=1&focus=void-floor&invincible=on") : >"$T/invincible" ;;
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;

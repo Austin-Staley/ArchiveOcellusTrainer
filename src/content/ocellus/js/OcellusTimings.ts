@@ -51,6 +51,8 @@ const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133
 const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379038);
+const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
+const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
 const HOTFIX_NEWS = wiki("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1", null);
 const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
@@ -298,7 +300,7 @@ const OVERHEADS: OverheadRecipe = {
   offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
 
-export type DeflectRule = Readonly<{ kind: "block" }> | Readonly<{ kind: "none" }>;
+export type DeflectRule = Readonly<{ kind: "block"; reflectPercent: number }> | Readonly<{ kind: "none" }>;
 
 const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
   "deflect-melee": selected("melee", "inferred", "unscaled", "named for the style it turns away; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
@@ -764,8 +766,18 @@ export const OCELLUS_P4 = {
     innerVoidFloor: INNER_VOID_FLOOR,
     floorHoleLayout: FLOOR_HOLE_LAYOUT,
     floorHoleDamage: FLOOR_HOLE_DAMAGE,
-    deflect: choice("block-at-launch", {
-      "block-at-launch": selected<DeflectRule>({ kind: "block" }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8)", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
+    deflect: choice("block-and-reflect", {
+      "block-and-reflect": selected<DeflectRule>(
+        { kind: "block", reflectPercent: 10 },
+        "owner-estimated",
+        "unscaled",
+        "blocked as under block-at-launch, and the player takes 10% of the damage the blocked hit would have dealt, rounded down, as its own hitsplat, and nothing when that is 0; the owner named Nex's Deflect, about 10%; the wiki says Nex's Deflect Melee turns back the damage a melee hit would have dealt but gives no fraction, and the Ocellus pages name the prayers without saying what they do; the rounding is inferred",
+        owner("deflect reflects about 10%, as on Nex", "2026-10-22"),
+        DEFLECT_MELEE_PAGE,
+        BOSS_PAGE,
+        STRATEGIES_RIFTS,
+      ),
+      "block-at-launch": selected<DeflectRule>({ kind: "block", reflectPercent: 0 }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8); nothing comes back to the player", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
       none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
     }),
     hoverMeleeReach: choice("unreachable", {

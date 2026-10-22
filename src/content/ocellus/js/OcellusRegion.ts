@@ -32,6 +32,7 @@ type Views = Readonly<{
 const { sounds, soundPlayback } = OCELLUS_P4.presentation;
 
 const LETHAL_HIT: Readonly<Record<PlayerHitSource, string>> = {
+  "deflect-reflected": "a deflected hit's reflection",
   "floor-hit": "the void floor",
   "hole-hit": "a floor hole",
   "lifeforce-drained": "the lifeforce steal",
@@ -106,6 +107,7 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "overhead-switched":
     case "boss-state-changed":
     case "player-hit-judged":
+    case "deflect-reflected":
     case "floor-hit":
     case "hole-hit":
     case "lifeforce-drained":

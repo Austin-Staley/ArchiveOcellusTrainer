@@ -13,6 +13,37 @@ function northEastRift(drill: Drill) {
   return rift;
 }
 
+type DeflectAttack = Readonly<{
+  attack: string;
+  selection: DrillSelection;
+  seed: number;
+  wield: number | null;
+  special: boolean;
+  from: number;
+  to: number;
+  judged: readonly unknown[];
+  reflected: readonly unknown[];
+  playerHp: number;
+  bossLost: number;
+}>;
+
+function attackIntoDeflect({ selection, seed, wield, special, from, to, judged, reflected, playerHp, bossLost }: DeflectAttack) {
+  const drill = startDrill({ seed, selection });
+  drill.tickTo(from - 1);
+  if (wield !== null) drill.clickInventory(wield);
+  drill.player().useSpecialAttack = special;
+  drill.player().setAggro(drill.boss());
+  drill.tickTo(to);
+  const lost = drill.rows().filter((row) => row.tick >= from).reduce((sum, row) => sum + row.bossHp.atBossStep - row.bossHp.atPostTick, 0);
+  expect({
+    judged: drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]),
+    reflected: drill.events("deflect-reflected").map((e) => [e.at, e.style, e.receipt]),
+    playerHp: drill.row(to).playerAtPostTick.hp,
+    bossLost: lost,
+  }).toEqual({ judged, reflected, playerHp, bossLost });
+  drill.dispose();
+}
+
 describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     { target: "the size-1 north-east rift once", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 71, hits: [35], hpAfter: 9 },
@@ -57,6 +88,66 @@ describe("U6 boss overheads, heals and rifts", () => {
     expect([drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]), atBossStep - atPostTick]).toEqual([[[landsAt, style, outcome, 20]], taken]);
     drill.dispose();
   });
+
+  test.each([
+    {
+      attack: "Twisted Bow shots into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 4, wield: null, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
+      reflected: [[47, "ranged", { requested: 4, applied: 4, beforeHp: 99, afterHp: 95, prayer: null }], [52, "ranged", { requested: 6, applied: 6, beforeHp: 95, afterHp: 89, prayer: null }]],
+      playerHp: 89,
+      bossLost: 0,
+    },
+    {
+      attack: "Ralos throws into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 5, wield: 28922, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 0], [42, "ranged", "blocked", 0], [48, "ranged", "blocked", 13], [48, "ranged", "blocked", 2]],
+      reflected: [[48, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+    {
+      attack: "a Division into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 4, wield: 28922, special: true, from: 39, to: 46,
+      judged: [[42, "ranged", "blocked", 2], [42, "ranged", "blocked", 13]],
+      reflected: [[42, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+    {
+      attack: "a scythe swing into Deflect Melee",
+      selection: { focus: "rifts", setup: "melee" },
+      seed: 4, wield: null, special: false, from: 29, to: 33,
+      judged: [[31, "melee", "blocked", 4], [31, "melee", "blocked", 12], [31, "melee", "blocked", 8]],
+      reflected: [[31, "melee", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+  ] as const)("Deflect blocks a hit of its style and reflects 10% of it, rounded down, onto the player: $attack", attackIntoDeflect);
+
+  test.each([
+    {
+      attack: "Twisted Bow shots into Deflect Melee and Soul Split, which do not turn them away",
+      selection: { focus: "rifts" },
+      seed: 4, wield: null, special: false, from: 30, to: 38,
+      judged: [[33, "ranged", "passed", 8], [38, "ranged", "passed", 44]],
+      reflected: [],
+      playerHp: 99,
+      bossLost: 52,
+    },
+    {
+      attack: "Twisted Bow shots into Deflect Range under deflect=block-at-launch",
+      selection: { focus: "rifts", deflect: "block-at-launch" },
+      seed: 4, wield: null, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
+      reflected: [],
+      playerHp: 99,
+      bossLost: 0,
+    },
+  ] as const)("guard, nothing reflected: $attack", attackIntoDeflect);
 
   test.each([
     { weapon: "a scythe", selection: { focus: "rifts", setup: "melee" }, standsOn: { x: 5, y: 3 }, judged: [[31, "melee", "blocked"], [31, "melee", "blocked"], [31, "melee", "blocked"]] },

@@ -10,7 +10,6 @@ import type {
   ExplosionOutcome,
   FightEvent,
   HealCause,
-  HitJudgement,
   HitReceipt,
   IncomingStyle,
   InputObservation,
@@ -23,6 +22,7 @@ import type {
   RunState,
   Special,
   SpecialAttack,
+  Style,
   Tick,
   TickRow,
   Tile,
@@ -54,6 +54,11 @@ type Orb =
   | Readonly<{ kind: "expired"; void: VoidKind; credit: number; tile: Tile }>;
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
+
+type Verdict =
+  | Readonly<{ outcome: "passed" }>
+  | Readonly<{ outcome: "invulnerable" }>
+  | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>;
 
 type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number; spawnedAt: Tick }>;
 
@@ -118,6 +123,7 @@ class P4Hit extends Projectile {
 
 function landedHit(event: FightEvent): Readonly<{ source: PlayerHitSource; receipt: HitReceipt }> | null {
   switch (event.kind) {
+    case "deflect-reflected":
     case "floor-hit":
     case "hole-hit":
     case "lifeforce-drained":
@@ -408,9 +414,10 @@ export class Ocellus extends Mob {
         const requested = projectile.damage;
         const style = incomingStyle(projectile.attackStyle);
         const launchedAt = tick(Math.max(0, moment.tick - projectile.totalDelay));
-        const outcome = this.judge(moment, style, launchedAt);
-        if (outcome !== "passed") projectile.damage = 0;
-        return { kind: "player-hit-judged", at: moment.tick, style, outcome, requested };
+        const verdict = this.judge(moment, style, launchedAt);
+        if (verdict.outcome !== "passed") projectile.damage = 0;
+        if (verdict.outcome === "blocked") this.reflect(verdict, requested, moment.tick);
+        return { kind: "player-hit-judged", at: moment.tick, style, outcome: verdict.outcome, requested };
       });
   }
 
@@ -423,21 +430,28 @@ export class Ocellus extends Mob {
     );
   }
 
-  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): HitJudgement {
-    if (!damageable(moment.phase.boss)) return "invulnerable";
+  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): Verdict {
+    if (!damageable(moment.phase.boss)) return { outcome: "invulnerable" };
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":
-        return "passed";
+        return { outcome: "passed" };
       case "block": {
         const { overhead } = this.schedule.at(launchedAt).phase;
-        return overhead !== null && OCELLUS_P4.deflects[overhead].value === style ? "blocked" : "passed";
+        const deflected = overhead === null ? null : OCELLUS_P4.deflects[overhead].value;
+        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : { outcome: "passed" };
       }
       default: {
         const unhandled: never = rule;
         return unhandled;
       }
     }
+  }
+
+  private reflect({ style, reflectPercent }: Extract<Verdict, { outcome: "blocked" }>, blocked: number, at: Tick): void {
+    const requested = Math.floor((blocked * reflectPercent) / 100);
+    if (requested === 0) return;
+    this.target.addProjectile(new P4Hit(this, this.target, () => requested, (receipt) => this.recordEvent({ kind: "deflect-reflected", at, style, receipt })));
   }
 
   private react(beat: Beat, at: Tick, player: PlayerObservation): FightEvent | readonly FightEvent[] | null {

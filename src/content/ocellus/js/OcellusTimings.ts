@@ -825,7 +825,7 @@ class ResolvedChoice<K extends ChoiceName> {
 export type ResolvedChoices = { readonly [K in ChoiceName]: ResolvedChoice<K> };
 
 type DrillRequest = Readonly<{ seed: Seed; selection?: DrillSelection }>;
-export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices }>;
+export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices; bossEntryHp: number | null }>;
 type ParsedDrill = Readonly<{ config: DrillConfig; invincible: boolean; rejected: readonly string[] }>;
 
 function hasKey<O extends object>(record: O, key: string): key is keyof O & string {
@@ -878,13 +878,13 @@ function isChoiceName(name: string): name is ChoiceName {
 
 export function resolveDrill(request: DrillRequest): DrillConfig {
   const selection: Readonly<Record<string, string | undefined>> = request.selection ?? {};
-  return { seed: request.seed, choices: resolveChoices((name) => selection[name], [], request.seed) };
+  return { seed: request.seed, choices: resolveChoices((name) => selection[name], [], request.seed), bossEntryHp: null };
 }
 
 export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {
   const rejected: string[] = [];
   for (const [key, value] of url.searchParams) {
-    if (key !== "seed" && key !== "invincible" && !isChoiceName(key)) rejected.push(`${key}=${value}`);
+    if (key !== "seed" && key !== "invincible" && key !== "bosshp" && !isChoiceName(key)) rejected.push(`${key}=${value}`);
   }
   const invincible = url.searchParams.get("invincible");
   if (invincible !== null && invincible !== "on") rejected.push(`invincible=${invincible}`);
@@ -893,5 +893,8 @@ export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDril
   const runSeed = seed(parsed ?? freshSeed());
   const choices = resolveChoices((name) => url.searchParams.get(name) ?? undefined, rejected, runSeed);
   if (raw !== null && parsed === null) rejected.push(`seed=${raw}`);
-  return { config: { seed: runSeed, choices }, invincible: invincible === "on", rejected };
+  const rawBossHp = url.searchParams.get("bosshp");
+  const bossEntryHp = rawBossHp !== null && /^\d{1,6}$/.test(rawBossHp) && Number(rawBossHp) >= 1 && Number(rawBossHp) <= choices.bossMaxHp.option.value ? Number(rawBossHp) : null;
+  if (rawBossHp !== null && bossEntryHp === null) rejected.push(`bosshp=${rawBossHp}`);
+  return { config: { seed: runSeed, choices, bossEntryHp }, invincible: invincible === "on", rejected };
 }

@@ -13,7 +13,7 @@ Ocellus rises when the inner void forms, hovers over it and starts landing a tic
 
 ## How to get to it (user POV)
 
-- Open `http://127.0.0.1:8002/` and watch the boss after the inner void clears at P4 tick 30. The prayer book is open in the side panel. Turn on sound and area sound in the settings to hear the cues.
+- Open `http://127.0.0.1:8002/` and watch the boss after the inner void clears at P4 tick 30. The prayer book is open in the side panel. Tick **Sound effects** and **Area sounds** at the bottom left to hear the cues.
 - Pick `Transition attacks` in the `Focus` selector to practise the tells alone. The drill reloads at once.
 - Add `specialSelection=replay-v2` to the URL for the order V2's kill ran: vortex, spike disk, black disk, then again.
 
@@ -36,6 +36,6 @@ Preconditions:
 
 - The prayer book positions hold for a 1280x800 viewport. A changed viewport or panel layout shows up as a missing `prayer-published` input, not a silent pass.
 - The SDK draws spotanims without textures. The tells' centre is texture 215, a near-black starfield, so the data file's `tellCentre` recolours those faces to its mean texel. Without it the centre draws near white.
-- The SDK never resumes its audio context. Chrome starts it `suspended` on a page that has had no click, unless a clicked page of the same origin navigated to it, as Restart and the focus selector do. A page loaded by `agent-browser open` has had no click, so its sounds start suspended until the first click. The probe still records those starts, so the checks require `running`.
+- Chrome starts the audio context `suspended` on a page that has had no click, unless a clicked page of the same origin navigated to it, as Restart and the focus selector do. A page loaded by `agent-browser open` has had no click, so its sounds start suspended until the first click resumes it. The probe still records those starts, so the checks require `running`.
 - With no prayer, `replay-v2` kills a 99 HP player at 97: 49 at 37, 47 at 65 and the rest at 97.
 - Clicking near a tick boundary can land the prayer a tick late. Click on the tick before you need it.

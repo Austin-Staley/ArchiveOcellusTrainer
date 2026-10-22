@@ -27,11 +27,32 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+declare const brand: unique symbol;
+type Brand<B extends string> = number & { readonly [brand]: B };
+type Unbranded = number & { readonly [brand]?: never };
+
+const PRIORITIES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
+
+export type Hsl = Brand<"Hsl">;
+export type Priority = (typeof PRIORITIES)[number];
+
+const isHsl = (n: Unbranded): n is Unbranded & Hsl => Number.isInteger(n) && n >= 0 && n <= 0xffff;
+
+export function hsl(n: Unbranded): Hsl {
+  if (!isHsl(n)) throw new RangeError(`not a packed HSL colour: ${n}`);
+  return n;
+}
+export function priority(n: Unbranded): Priority {
+  const known = PRIORITIES.find((p) => p === n);
+  if (known === undefined) throw new RangeError(`not a face priority: ${n}`);
+  return known;
+}
+
 export type Vertex = Readonly<{ x: number; y: number; z: number }>;
 export type Shading = "smooth" | "flat";
-export type Face = Readonly<{ corners: readonly [number, number, number]; colour: number; shading: Shading; priority: number }>;
+export type Face = Readonly<{ corners: readonly [number, number, number]; colour: Hsl; shading: Shading; priority: Priority }>;
 export type IconModel = Readonly<{ vertices: readonly Vertex[]; faces: readonly Face[] }>;
-export type Recolour = Readonly<{ from: number; to: number }>;
+export type Recolour = Readonly<{ from: Hsl; to: Hsl }>;
 export type IconItem = Readonly<{
   zoom2d: number;
   xan2d: number;
@@ -73,8 +94,8 @@ export function renderItemIcon(item: IconItem, model: IconModel): Sprite {
 }
 
 type Triple<T> = readonly [T, T, T];
-type Paint = Readonly<{ kind: "gouraud"; colours: Triple<number> }> | Readonly<{ kind: "flat"; rgb: number }>;
-type LitFace = Readonly<{ corners: readonly [number, number, number]; priority: number; paint: Paint }>;
+type Paint = Readonly<{ kind: "gouraud"; colours: Triple<Hsl> }> | Readonly<{ kind: "flat"; rgb: number }>;
+type LitFace = Readonly<{ corners: readonly [number, number, number]; priority: Priority; paint: Paint }>;
 type Normal = { x: number; y: number; z: number; faces: number };
 
 function light(vertices: readonly Vertex[], faces: readonly Face[], ambient: number, contrast: number): LitFace[] {
@@ -121,8 +142,8 @@ function light(vertices: readonly Vertex[], faces: readonly Face[], ambient: num
   });
 }
 
-function shade(hsl: number, lightness: number): number {
-  return (hsl & 0xff80) + Math.min(126, Math.max(2, ((hsl & 127) * lightness) >> 7));
+function shade(colour: Hsl, lightness: number): Hsl {
+  return hsl((colour & 0xff80) + Math.min(126, Math.max(2, ((colour & 127) * lightness) >> 7)));
 }
 
 type Point = Readonly<{ x: number; y: number }>;
@@ -171,8 +192,8 @@ function drawOrder(faces: readonly LitFace[], { points, depths, radius, diameter
     byDistance[Math.trunc((da + db + dc) / 3) + radius].push(face);
   }
 
-  const layers: LitFace[][] = Array.from({ length: 12 }, () => []);
-  const distanceSums = new Array<number>(12).fill(0);
+  const layers: LitFace[][] = PRIORITIES.map(() => []);
+  const distanceSums = PRIORITIES.map(() => 0);
   const late: { face: LitFace; distance: number }[][] = [[], []];
   for (let distance = diameter - 1; distance >= 0; distance--) {
     for (const face of byDistance[distance]) {
@@ -280,14 +301,14 @@ function crop(pixels: Uint32Array): Sprite {
 let cachedPalette: Uint32Array | null = null;
 
 function palette(): Uint32Array {
-  cachedPalette ??= Uint32Array.from({ length: 65536 }, (_, hsl) => hslToRgb(hsl));
+  cachedPalette ??= Uint32Array.from({ length: 65536 }, (_, packed) => hslToRgb(hsl(packed)));
   return cachedPalette;
 }
 
-function hslToRgb(hsl: number): number {
-  const hue = ((hsl >> 10) & 63) / 64 + 0.5 / 64;
-  const saturation = ((hsl >> 7) & 7) / 8 + 0.5 / 8;
-  const luminance = (hsl & 127) / 128;
+function hslToRgb(colour: Hsl): number {
+  const hue = ((colour >> 10) & 63) / 64 + 0.5 / 64;
+  const saturation = ((colour >> 7) & 7) / 8 + 0.5 / 8;
+  const luminance = (colour & 127) / 128;
   const chroma = (1 - Math.abs(2 * luminance - 1)) * saturation;
   const x = chroma * (1 - Math.abs(((hue * 6) % 2) - 1));
   const base = luminance - chroma / 2;

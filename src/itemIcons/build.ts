@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import config from "../../osrs-assets.config";
 import { ARCHIVE_OCELLUS_ASSETS, ITEM_ICON_DIR, itemIconFile } from "../assets";
-import { renderItemIcon } from "./ItemIcon";
+import { hsl, priority, renderItemIcon } from "./ItemIcon";
 import type { Face, IconItem, IconModel, Shading, Sprite } from "./ItemIcon";
 
 const ROOT = resolve(__dirname, "../..");
@@ -104,7 +104,7 @@ function parseItem(id: number, value: unknown): Readonly<{ inventoryModel: numbe
       xOffset2d: int("xOffset2d"),
       yOffset2d: int("yOffset2d"),
       resize: { x: int("resizeX"), y: int("resizeY"), z: int("resizeZ") },
-      recolours: from.map((colour, i) => ({ from: colour, to: to[i] })),
+      recolours: from.map((colour, i) => ({ from: hsl(colour), to: hsl(to[i]) })),
       ambient: optional("ambient"),
       contrast: optional("contrast"),
     },
@@ -123,9 +123,9 @@ function parseModel(itemId: number, value: unknown): IconModel {
   const [vertexCount, faceCount] = [count("vertexCount"), count("faceCount")];
   const [xs, ys, zs] = ["vertexPositionsX", "vertexPositionsY", "vertexPositionsZ"].map((key) => integers(owner(key), field(value, key), vertexCount));
   const [as, bs, cs] = ["faceVertexIndices1", "faceVertexIndices2", "faceVertexIndices3"].map((key) => integers(owner(key), field(value, key), faceCount));
-  const colours = integers(owner("faceColors"), field(value, "faceColors"), faceCount);
+  const colours = integers(owner("faceColors"), field(value, "faceColors"), faceCount).map(hsl);
   const types = perFace(owner("faceRenderTypes"), field(value, "faceRenderTypes"), faceCount);
-  const priorities = perFace(owner("faceRenderPriorities"), field(value, "faceRenderPriorities"), faceCount);
+  const priorities = (perFace(owner("faceRenderPriorities"), field(value, "faceRenderPriorities"), faceCount) ?? new Array<number>(faceCount).fill(0)).map(priority);
   if (perFace(owner("faceAlphas"), field(value, "faceAlphas"), faceCount)?.some((alpha) => alpha !== 0)) throw new Error(`${owner("faceAlphas")}: transparent faces are not drawn by this renderer`);
   if (perFace(owner("faceTextures"), field(value, "faceTextures"), faceCount)?.some((texture) => texture !== -1)) throw new Error(`${owner("faceTextures")}: textured faces are not drawn by this renderer`);
 
@@ -134,9 +134,7 @@ function parseModel(itemId: number, value: unknown): IconModel {
     const shading = SHADING[types?.[i] ?? 0];
     if (shading === undefined) throw new Error(`${owner("faceRenderTypes")}: face ${i} has render type ${types?.[i]}, which this renderer does not draw`);
     if (corners.some((corner) => corner < 0 || corner >= vertexCount)) throw new Error(`${owner("faceVertexIndices")}: face ${i} names a missing vertex`);
-    const priority = priorities?.[i] ?? 0;
-    if (priority < 0 || priority > 11) throw new Error(`${owner("faceRenderPriorities")}: face ${i} has priority ${priority}`);
-    return { corners, colour, shading, priority };
+    return { corners, colour, shading, priority: priorities[i] };
   });
   return { vertices: xs.map((x, i) => ({ x, y: ys[i], z: zs[i] })), faces };
 }

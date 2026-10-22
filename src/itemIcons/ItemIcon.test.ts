@@ -1,5 +1,5 @@
-import { renderItemIcon } from "./ItemIcon";
-import type { Face, IconItem, IconModel, Shading, Sprite } from "./ItemIcon";
+import { hsl, priority, renderItemIcon } from "./ItemIcon";
+import type { Face, Hsl, IconItem, IconModel, Priority, Shading, Sprite } from "./ItemIcon";
 
 const FRONT_ON: IconItem = {
   zoom2d: 512,
@@ -13,11 +13,11 @@ const FRONT_ON: IconItem = {
   ambient: 0,
   contrast: 0,
 };
-const RED = 960;
-const BLUE = 44992;
-const GREEN = 22464;
+const RED = hsl(960);
+const BLUE = hsl(44992);
+const GREEN = hsl(22464);
 
-function square(left: number, right: number, half: number, z: number, colour: number, priority: number, first: number): IconModel {
+function square(left: number, right: number, half: number, z: number, colour: Hsl, priority: Priority, first: number): IconModel {
   const vertices = [
     { x: left, y: -half, z },
     { x: right, y: -half, z },
@@ -85,4 +85,14 @@ test("the item's recolour applies before smooth faces are shaded pixel by pixel"
   expect(Array.from(sprite.pixels.subarray(12, 24))).toEqual([
     0x000001, 0x1df626, 0x1df126, 0x1dec24, 0x1ae524, 0x1ae022, 0x1ada22, 0x1ad320, 0x18cd20, 0x18c820, 0x18c21d, 0x000001,
   ]);
+});
+
+test("a face colour is a 16-bit packed HSL value", () => {
+  expect(hsl(0xffff)).toBe(0xffff);
+  expect(() => hsl(0x10000)).toThrow("not a packed HSL colour: 65536");
+});
+
+test("a face priority is 0 to 11", () => {
+  expect(priority(11)).toBe(11);
+  expect(() => priority(12)).toThrow("not a face priority: 12");
 });

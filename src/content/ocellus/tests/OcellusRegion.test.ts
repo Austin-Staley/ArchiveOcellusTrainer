@@ -1,3 +1,4 @@
+import { paintedTiles } from "../../../../test/paintedTiles";
 import { startDrill } from "./drill";
 import type { At } from "./drill";
 
@@ -17,8 +18,9 @@ describe("Ocellus arena", () => {
     drill.dispose();
   });
 
-  test("the player can stand on exactly the measured platform floor and on no tile around it", () => {
+  test("the arena paints the measured floor and the brazier walkway, and the player can stand on the floor and nowhere else", () => {
     const drill = startDrill({ selection: NON_LETHAL });
+    const painted = paintedTiles((context, scale) => drill.region.drawWorldBackground(context, scale));
     const standsOn = (to: At) => {
       drill.walkTo(to);
       for (let moved = true; moved; ) {
@@ -29,26 +31,30 @@ describe("Ocellus arena", () => {
       return drill.player().location.x === to.x && drill.player().location.y === to.y;
     };
     const rows: string[] = [];
-    for (let y = -1; y <= 12; y++) {
+    for (let y = -1; y <= 13; y++) {
       let row = "";
-      for (let x = -1; x <= 12; x++) row += standsOn({ x, y }) ? "#" : ".";
+      for (let x = -1; x <= 14; x++) {
+        const [stands, drawn] = [standsOn({ x, y }), painted.has(`${x},${y}`)];
+        row += stands ? (drawn ? "#" : "!") : drawn ? "w" : ".";
+      }
       rows.push(row);
     }
     expect(rows).toEqual([
-      "..............",
-      "..............",
-      "...##########.",
-      "..###########.",
-      "..##########..",
-      "..#########...",
-      "..########....",
-      "..#######.....",
-      "..#######.....",
-      "..######......",
-      "..#####.......",
-      "..####........",
-      "..###.........",
-      "..............",
+      "................",
+      ".............ww.",
+      "...##########ww.",
+      "..###########ww.",
+      "..##########ww..",
+      "..#########ww...",
+      "..########ww....",
+      "..#######ww.....",
+      "..#######ww.....",
+      "..######ww......",
+      "..#####ww.......",
+      "..####ww........",
+      "..###ww.........",
+      ".wwwww..........",
+      "................",
     ]);
     drill.dispose();
   });

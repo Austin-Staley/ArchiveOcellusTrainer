@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { CacheRender, ControlPanelController, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
-import type { Item } from "osrs-sdk";
+import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
+import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { DrillConfig } from "./content/ocellus/js/OcellusTimings";
@@ -67,9 +67,35 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion
   });
 }
 
+const SOUNDS_START_ON = true;
+
+type SoundChoice = Partial<Pick<SettingsState, "playsAudio" | "playsAreaAudio">>;
+
+function savedSoundChoice(): SoundChoice {
+  let stored: unknown;
+  try {
+    stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "null");
+  } catch {
+    return {};
+  }
+  const values: unknown = typeof stored === "object" && stored !== null && "values" in stored ? stored.values : null;
+  if (typeof values !== "object" || values === null) return {};
+  return {
+    ...("playsAudio" in values && typeof values.playsAudio === "boolean" && { playsAudio: values.playsAudio }),
+    ...("playsAreaAudio" in values && typeof values.playsAreaAudio === "boolean" && { playsAreaAudio: values.playsAreaAudio }),
+  };
+}
+
+function readSettings() {
+  // The SDK saves its own off defaults on a first load and turns sound off on every mobile load, so the player's choice is read before it loads.
+  const saved = savedSoundChoice();
+  Settings.readFromStorage();
+  Settings.set({ playsAudio: saved.playsAudio ?? SOUNDS_START_ON, playsAreaAudio: saved.playsAreaAudio ?? SOUNDS_START_ON });
+}
+
 function createTrainer() {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
-  Settings.readFromStorage();
+  readSettings();
   const { config, invincible, rejected } = parseDrillRequest(new URL(window.location.href), () => crypto.getRandomValues(new Uint32Array(1))[0]);
   const region = new OcellusRegion(config);
   region.invincible = invincible;

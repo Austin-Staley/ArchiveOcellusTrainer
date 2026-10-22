@@ -24,6 +24,11 @@ function cuesThrough(lastTick: number, selection: DrillSelection) {
 }
 
 describe("timing cues", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Settings._isMobileResult = null;
+  });
+
   test('the "End..." shout plays 12490 at 5, and each flood plays 12497 as it forms, at 39 and 99', () => {
     expect(cuesThrough(100, { focus: "lifeforce-orb" }).sounds).toEqual([
       [5, "cache-sound:12490"],
@@ -39,21 +44,49 @@ describe("timing cues", () => {
     ]);
   });
 
-  test("the sound toggles load unchecked, turn on the SDK's sound effects and area sounds, and stay on after a reload", () => {
+  test.each([
+    ["desktop", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"],
+    ["mobile", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36"],
+  ])("on %s the sound toggles load checked with no saved choice, and a reload keeps a saved off and a saved on", (_, userAgent) => {
+    // jsdom runs no phone browser, so the user agent the SDK reads stands in for one.
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
+    Settings._isMobileResult = null;
     localStorage.setItem(SAVED_SETTINGS, JSON.stringify({ version: 1, values: { use3dView: false } }));
-    const first = loadPage("/?seed=1");
-    const loaded = [first.checked("sound"), first.checked("area_sound")];
-    first.click("area_sound");
-    first.click("sound");
-    const saved = JSON.parse(localStorage.getItem(SAVED_SETTINGS) ?? "{}").values;
-    first.close();
+    const toggles = (page: ReturnType<typeof loadPage>) => [page.checked("sound"), page.checked("area_sound")];
+    const saved = () => {
+      const { playsAudio, playsAreaAudio } = JSON.parse(localStorage.getItem(SAVED_SETTINGS) ?? "{}").values;
+      return [playsAudio, playsAreaAudio];
+    };
+    const reloadOverStaleSettings = (stale: boolean) => {
+      Settings.playsAudio = stale;
+      Settings.playsAreaAudio = stale;
+      return loadPage("/?seed=1");
+    };
 
-    Settings.playsAudio = false;
-    Settings.playsAreaAudio = false;
-    const reloaded = loadPage("/?seed=1");
-    const afterReload = [reloaded.checked("sound"), reloaded.checked("area_sound")];
-    reloaded.close();
+    const fresh = loadPage("/?seed=1");
+    const loaded = toggles(fresh);
+    fresh.click("sound");
+    fresh.click("area_sound");
+    const savedOff = saved();
+    fresh.close();
 
-    expect({ loaded, saved: [saved.playsAudio, saved.playsAreaAudio], afterReload }).toEqual({ loaded: [false, false], saved: [true, true], afterReload: [true, true] });
+    const off = reloadOverStaleSettings(true);
+    const keptOff = toggles(off);
+    off.click("sound");
+    off.click("area_sound");
+    const savedOn = saved();
+    off.close();
+
+    const on = reloadOverStaleSettings(false);
+    const keptOn = toggles(on);
+    on.close();
+
+    expect({ loaded, savedOff, keptOff, savedOn, keptOn }).toEqual({
+      loaded: [true, true],
+      savedOff: [false, false],
+      keptOff: [false, false],
+      savedOn: [true, true],
+      keptOn: [true, true],
+    });
   });
 });

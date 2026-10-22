@@ -143,6 +143,7 @@ function landedHit(event: FightEvent): Readonly<{ source: PlayerHitSource; recei
     case "special-told":
     case "special-sounded":
     case "rift-spawned":
+    case "rift-hit":
     case "rift-destroyed":
     case "death-prevented":
     case "run-ended":
@@ -386,7 +387,7 @@ export class Ocellus extends Mob {
       drawsAtBossStep: this.target.combatDraws,
     };
     this.healSplats = this.healSplats.filter((splat) => splat.lastShown >= moment.tick);
-    const judged = this.judgeLandingHits(moment);
+    const judged = [...this.judgeLandingHits(moment), ...this.riftHitsLanded(moment.tick)];
     super.queueStep();
     const logged = [...judged, ...phaseEvents(last, moment.phase, moment.tick)];
     if (this.currentStats.hitpoint <= 0) {
@@ -411,6 +412,15 @@ export class Ocellus extends Mob {
         if (outcome !== "passed") projectile.damage = 0;
         return { kind: "player-hit-judged", at: moment.tick, style, outcome, requested };
       });
+  }
+
+  /** The SDK steps newer mobs first, so a rift's hits for this tick have landed before the boss steps. */
+  private riftHitsLanded(at: Tick): FightEvent[] {
+    return this.rifts.flatMap((rift) =>
+      rift.mob.incomingProjectiles
+        .filter((projectile) => projectile.remainingDelay === 0)
+        .map((projectile): FightEvent => ({ kind: "rift-hit", at, rift: rift.id, style: incomingStyle(projectile.attackStyle), damage: projectile.damage })),
+    );
   }
 
   private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): HitJudgement {

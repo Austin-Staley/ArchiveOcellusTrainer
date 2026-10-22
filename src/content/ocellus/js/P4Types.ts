@@ -139,6 +139,7 @@ export type FightEvent =
   | (Readonly<{ kind: "special-hit"; receipt: HitReceipt }> & SpecialAttack)
   | Readonly<{ kind: "special-sounded"; at: Tick; ordinal: Ordinal; cue: TransitionCue }>
   | Readonly<{ kind: "rift-spawned"; at: Tick; rift: RiftId; tile: Tile }>
+  | Readonly<{ kind: "rift-hit"; at: Tick; rift: RiftId; style: IncomingStyle; damage: number }>
   | Readonly<{ kind: "rift-destroyed"; at: Tick; rift: RiftId; tile: Tile }>
   | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "death-prevented"; at: Tick; source: PlayerHitSource; clearedOrbCredit: number }>

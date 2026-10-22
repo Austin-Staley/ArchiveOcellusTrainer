@@ -81,6 +81,24 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.dispose();
   });
 
+  test.each([
+    { attack: "the ranged setup's Twisted Bow", seed: 2, setup: "ranged", wield: null, special: false, landed: [[72, 44]], destroyedAt: [73] },
+    { attack: "the melee setup's Twisted Bow", seed: 2, setup: "melee", wield: 20997, special: false, landed: [[72, 44]], destroyedAt: [73] },
+    { attack: "the ranged setup's Ralos", seed: 2, setup: "ranged", wield: 28922, special: false, landed: [[72, 18], [72, 18], [78, 8], [78, 8]], destroyedAt: [79] },
+    { attack: "the melee setup's Ralos", seed: 2, setup: "melee", wield: 28922, special: false, landed: [[72, 15], [72, 15], [78, 14], [78, 14]], destroyedAt: [79] },
+    { attack: "a Division special, which rolls", seed: 3, setup: "ranged", wield: 28922, special: true, landed: [[72, 15], [72, 5], [78, 18], [78, 18]], destroyedAt: [79] },
+    { attack: "a scythe swing, which rolls", seed: 4, setup: "melee", wield: null, special: false, landed: [[72, 4], [77, 25]], destroyedAt: [] },
+  ] as const)("a standard ranged attack always lands its max hit on a Void Rift: $attack", ({ seed, setup, wield, special, landed, destroyedAt }) => {
+    const drill = startDrill({ seed, selection: { focus: "rifts", setup } });
+    drill.tickTo(68);
+    if (wield !== null) drill.clickInventory(wield);
+    drill.player().useSpecialAttack = special;
+    drill.player().setAggro(northEastRift(drill));
+    drill.tickTo(79);
+    expect([drill.events("rift-hit").map((e) => [e.at, e.damage]), drill.events("rift-destroyed").map((e) => e.at)]).toEqual([landed, destroyedAt]);
+    drill.dispose();
+  });
+
   test("Soul Split heals the boss two ticks after each unprotected transition hit, by the damage that hit applied", () => {
     const drill = startDrill({ selection: TRANSITIONS });
     drill.tickTo(68);

@@ -31,7 +31,7 @@ FOCUS_DRILL="transition-attacks"
 FOCUS_LAST_TICK=40
 FOCUS_BEATS='["boss-landing-starts","boss-shouts","soul-split-heal","special-hit","special-sound","special-tell"]'
 LOADOUT_QUERY="?seed=1&setup=ranged"
-LOADOUT_RANGED_WORN='{"weapon":20997,"offhand":null,"helmet":11664,"chest":13072,"legs":13073,"gloves":8842,"cape":28951,"necklace":33639,"feet":31097,"ring":28310,"ammo":11212}'
+LOADOUT_RANGED_WORN='{"weapon":20997,"offhand":null,"helmet":27235,"chest":27238,"legs":27241,"gloves":26235,"cape":28951,"necklace":33639,"feet":31097,"ring":28310,"ammo":11212}'
 LOADOUT_MELEE_WORN='{"weapon":22325,"offhand":null,"helmet":24419,"chest":24420,"legs":24421,"gloves":22981,"cape":21295,"necklace":29801,"feet":31097,"ring":25485,"ammo":11212}'
 LOADOUT_INVENTORY_TAB_X=1164
 LOADOUT_INVENTORY_TAB_Y=745
@@ -48,7 +48,7 @@ RISEN_BOSS_CLICK_DOWN_PX=-160
 LOADOUT_DIVISION_DRAIN=37
 LOADOUT_EQUIPMENT_TAB_X=1197
 LOADOUT_EQUIPMENT_TAB_Y=745
-LOADOUT_TRAINER_ICONS='{"8842":"30x26","11664":"30x28","13072":"30x22","13073":"18x30","24419":"27x30","24420":"32x24","24421":"16x31","28922":"31x28"}'
+LOADOUT_TRAINER_ICONS='{"24419":"27x30","24420":"32x24","24421":"16x31","28922":"31x28"}'
 SUPPLY_QUERY="?seed=1&setup=ranged"
 SUPPLY_INVENTORY='[28922,22325,24419,24420,24421,22981,21295,29801,25485,12695,22461,6685,3024,12695,22461,6685,3024,6685,6685,6685,3024,6685,6685,6685,3024,6685,6685,3024]'
 SUPPLY_NAMED_SLOT=0

@@ -8,18 +8,20 @@ import {
   DragonArrows,
   FerociousGloves,
   InfernalCape,
+  MasoriBodyF,
+  MasoriChapsF,
+  MasoriMaskF,
   SaradominBrew,
   SuperCombatPotion,
   SuperRestore,
   UltorRing,
   VenatorRing,
+  ZaryteVambraces,
 } from "osrs-sdk";
 import type { Item, Player, UnitEquipment } from "osrs-sdk";
 import type { GearKeys, GearSlot, ResolvedChoices, Setup, SupplyKey } from "./OcellusTimings";
 import { GEAR_SLOTS, OCELLUS_P4 } from "./OcellusTimings";
 import {
-  EliteVoidRobe,
-  EliteVoidTop,
   InquisitorsGreatHelm,
   InquisitorsHauberk,
   InquisitorsPlateskirt,
@@ -27,8 +29,6 @@ import {
   OcellusScythe,
   OcellusTwistedBow,
   TonalzticsOfRalos,
-  VoidKnightGloves,
-  VoidRangerHelm,
 } from "./gear/OcellusGear";
 
 // The SDK's slot classes share one shape, so a weapon or a chest would type-check as a helmet. Each brand fits one slot only.
@@ -48,10 +48,10 @@ type SlotItem<S extends GearSlot> = NonNullable<UnitEquipment[S]>;
 
 const ITEMS: { readonly [S in GearSlot]: { readonly [K in GearKeys[S]]: () => SlotItem<S> } } = {
   weapon: { twistedBow: () => new OcellusTwistedBow(), scytheOfVitur: () => new OcellusScythe(), tonalzticsOfRalos: () => new TonalzticsOfRalos() },
-  helmet: { voidRangerHelm: () => new VoidRangerHelm(), inquisitorsGreatHelm: () => new InquisitorsGreatHelm() },
-  chest: { eliteVoidTop: () => new EliteVoidTop(), inquisitorsHauberk: () => new InquisitorsHauberk() },
-  legs: { eliteVoidRobe: () => new EliteVoidRobe(), inquisitorsPlateskirt: () => new InquisitorsPlateskirt() },
-  gloves: { voidKnightGloves: () => new VoidKnightGloves(), ferociousGloves: () => new FerociousGloves() },
+  helmet: { masoriMaskF: () => new MasoriMaskF(), inquisitorsGreatHelm: () => new InquisitorsGreatHelm() },
+  chest: { masoriBodyF: () => new MasoriBodyF(), inquisitorsHauberk: () => new InquisitorsHauberk() },
+  legs: { masoriChapsF: () => new MasoriChapsF(), inquisitorsPlateskirt: () => new InquisitorsPlateskirt() },
+  gloves: { zaryteVambraces: () => new ZaryteVambraces(), ferociousGloves: () => new FerociousGloves() },
   cape: { dizanasQuiver: () => new DizanasQuiver(), infernalCape: () => new InfernalCape() },
   necklace: { necklaceOfRupture: () => new OcellusNecklaceOfRupture(), amuletOfRancour: () => new AmuletOfRancour() },
   feet: { avernicTreadsMax: () => new AvernicTreadsMax() },

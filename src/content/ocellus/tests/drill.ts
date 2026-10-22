@@ -33,7 +33,6 @@ export function startDrill(options: DrillOptions = {}) {
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   // The SDK counts GET READY down only in its browser loop, never in tickWorld.
   if (!options.keepGetReady) region.world.getReadyTimer = 0;
-  // jsdom never lays out the canvas, so the SDK never sizes a tile.
   Settings._tileSize = 1;
 
   const rows = (): readonly TickRow[] => region.fightLog().rows;

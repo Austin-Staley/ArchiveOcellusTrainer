@@ -4,7 +4,4 @@ module.exports = {
   roots: ["<rootDir>/src"],
   testEnvironment: "jsdom",
   setupFiles: ["./test/setupFiles.ts"],
-  moduleNameMapper: {
-    "\\.(png|gif|ogg|glb)$": "<rootDir>/test/__mocks__/assetMock.js",
-  },
 };

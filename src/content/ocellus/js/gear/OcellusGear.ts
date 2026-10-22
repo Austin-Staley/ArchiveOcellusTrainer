@@ -123,7 +123,6 @@ function rangedBonuses(weapon: Weapon, bonuses: AttackBonuses): AttackBonuses {
 const PRAYER_FACTORS = gear.rangedStrengthPrayers.value;
 const strengthensRanged = (prayer: string): prayer is keyof typeof PRAYER_FACTORS => Object.prototype.hasOwnProperty.call(PRAYER_FACTORS, prayer);
 
-/** The wiki's maximum ranged hit; the SDK's own formula rounds after the gear multiplier, where the wiki rounds before it. */
 function rangedMaxHit(from: Unit, bonuses: AttackBonuses, weaponFactor: number): number {
   const prayer = bonuses.effectivePrayers?.range?.name;
   const prayerFactor = prayer !== undefined && strengthensRanged(prayer) ? PRAYER_FACTORS[prayer] : 1;
@@ -146,7 +145,6 @@ export class OcellusTwistedBow extends TwistedBow {
   }
 }
 
-// The SDK's only set effect is Justiciar's, so Inquisitor's crush bonus is read from the worn pieces.
 function inquisitorFactor(equipment: UnitEquipment): number {
   const perMille = gear.inquisitorCrushPerMille.value;
   const worn =

@@ -7,7 +7,7 @@ function recordRolls(boss: Mob): Roll[] {
   const rolls: Roll[] = [];
   const seen = new Set<AttackBonuses>();
   const modifiers = boss.incomingAttackRollModifiers.bind(boss);
-  jest.spyOn(boss, "incomingAttackRollModifiers").mockImplementation((attack) => {
+  vi.spyOn(boss, "incomingAttackRollModifiers").mockImplementation((attack) => {
     if (!seen.has(attack.bonuses)) {
       seen.add(attack.bonuses);
       rolls.push({ defence: boss.currentStats.defence, hitChance: attack.weapon._hitChance(attack.attacker, boss, attack.bonuses) });

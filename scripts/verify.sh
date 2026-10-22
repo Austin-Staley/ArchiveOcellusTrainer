@@ -237,10 +237,10 @@ stage_types() {
 }
 
 stage_test() {
-  npm test -- --runInBand --json --outputFile="$VERIFY_DIR/jest.json" >"$VERIFY_DIR/test.log" 2>&1 || return 1
+  npm test -- --reporter=default --reporter=json --outputFile.json="$VERIFY_DIR/vitest.json" >"$VERIFY_DIR/test.log" 2>&1 || return 1
   local total
-  total="$(json numPassedTests <"$VERIFY_DIR/jest.json")"
-  log "jest passed ${total} tests"
+  total="$(json numPassedTests <"$VERIFY_DIR/vitest.json")"
+  log "vitest passed ${total} tests"
   [[ "$total" -gt 0 ]]
 }
 

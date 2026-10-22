@@ -58,7 +58,6 @@ type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; h
 /** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
 const HEAL_SPLAT_TICKS = span(1);
 
-/** The SDK rolls every ranged attack against one ranged defence bonus, so each class the trainer's ammunition rolls against must share one value. */
 function sdkRangedDefence(): number {
   const ranged = OCELLUS_P4.boss.rangedDefence.value;
   const [first, ...rest] = Object.values(OCELLUS_P4.gear.ammunition.value).map((ammunition) => ranged[ammunition]);
@@ -68,7 +67,6 @@ function sdkRangedDefence(): number {
 
 const DEFENCE_BONUSES = { ...OCELLUS_P4.boss.defenceBonuses.value, range: sdkRangedDefence() };
 
-/** Drains write currentStats.defence directly, so the floor lives in the setter. */
 function withDefenceFloor(stats: UnitStats, lowest: number): UnitStats {
   let defence = stats.defence;
   return {

@@ -25,7 +25,7 @@ CYCLE_LAST_HIDDEN_TICK=3
 CYCLE_RING_TICK=39
 CYCLE_LAST_TICK=70
 CYCLE_STAGE_ENTRIES='[[0,"lead-in"],[8,"inner-void"],[30,"after-inner"],[39,"outer-void"],[59,"after-outer"],[68,"inner-void"]]'
-CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[39,"deflect-range"],[61,"soul-split"],[68,"deflect-melee"]]'
+CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[38,null],[39,"deflect-range"],[61,"soul-split"],[67,null],[68,"deflect-melee"]]'
 CYCLE_SPECIAL_HITS='[[37,"vortex"],[65,"spike-disk"]]'
 FOCUS_DRILL="transition-attacks"
 FOCUS_LAST_TICK=40
@@ -123,6 +123,7 @@ SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp"
 ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[13,{"x":3,"y":2},49]],"matured":[[24,{"x":3,"y":2}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
 RIFT_QUERY="?seed=1&focus=rifts"
 OVERHEAD_SHOT_TICKS="5 31 35 45"
+OVERHEAD_GAP_DRAWS='{"37":["440-11"],"38":[],"39":["440-16"],"66":["440-11"],"67":[],"68":["440-15"]}'
 ICON_BOX='{"minX":-40,"maxX":40,"minY":-290,"maxY":-190}'
 RIFT_CLICK_TICK=68
 NORTH_EAST_RIFT_CLICK_LEFT_PX=325
@@ -360,6 +361,33 @@ record_audio_starts() {
       starts.push({ tick: t, phase: t === null ? null : Math.round((performance.now() - seen[t]) / 6) / 100, samples: this.buffer?.length ?? null, rate: this.buffer?.sampleRate ?? null, state: this.context.state });
       return start.apply(this, args);
     };
+  })()' >/dev/null
+}
+
+record_overhead_draws() {
+  ab eval '(() => {
+    const draws = {};
+    window.__overheadDraws = draws;
+    const tick = () => {
+      const run = window.__archiveOcellusProbe?.snapshot().fight?.run;
+      return run?.kind === "running" ? run.tick : null;
+    };
+    const at = (t) => (draws[t] ??= { frames: 0, sprites: [] });
+    for (const context of [CanvasRenderingContext2D, OffscreenCanvasRenderingContext2D]) {
+      const drawImage = context.prototype.drawImage;
+      context.prototype.drawImage = function (image, ...rest) {
+        const sprite = /\/sprites\/(\d+-\d+)\.png$/.exec(image?.src ?? "")?.[1];
+        const t = sprite === undefined ? null : tick();
+        if (t !== null && !at(t).sprites.includes(sprite)) at(t).sprites.push(sprite);
+        return drawImage.call(this, image, ...rest);
+      };
+    }
+    const frame = () => {
+      const t = tick();
+      if (t !== null) at(t).frames++;
+      requestAnimationFrame(frame);
+    };
+    frame();
   })()' >/dev/null
 }
 
@@ -715,6 +743,7 @@ drive_overheads_rifts() {
   ab wait --fn "new URLSearchParams(location.search).has('setup')" --timeout 30000 >/dev/null || { log "Restart did not reload the rifts drill"; return 1; }
   fight_tick_at_least 0 120000 || { log "the rifts drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
+  record_overhead_draws || { log "the overhead draw probe was not installed"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }
   for shot in $OVERHEAD_SHOT_TICKS; do
     shot_after_tick "$shot" 0 "overhead-${shot}.png" || { log "overhead screenshot at P4 tick ${shot} failed"; return 1; }
@@ -729,6 +758,7 @@ drive_overheads_rifts() {
   fight_tick_at_least $((RIFT_BURST_TICK + 1)) 30000 || { log "the rifts drill never stepped past the burst at P4 tick ${RIFT_BURST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/rifts.json"
   ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/rift-audio.json" || { log "audio capture failed"; return 1; }
+  ab --json eval "window.__overheadDraws" | json data.result >"$VERIFY_DIR/overhead-draws.json" || { log "overhead draw capture failed"; return 1; }
   ab console >"$VERIFY_DIR/rift-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/rift-page-errors.json" || { log "page error capture failed"; return 1; }
   save_sound_settings false || { log "the sound settings were not restored"; return 1; }
@@ -764,7 +794,7 @@ drive() {
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
-    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
+    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
     deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
@@ -774,7 +804,7 @@ drive() {
       innerMarks, lateMark, explosionPixel, explosionExpected, soundSamples, explosionSounds, centreX, centreY, tellBox, specialExpected,
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
       supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat,
-      riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow] = process.argv.slice(1);
+      riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -787,7 +817,7 @@ drive() {
     const [carried, itemMenu, itemMenuClosed, brewClick, brewHp, suppliesErrors] = ["supplies-inventory.json", "item-menu.json", "item-menu-closed.json", "brew-click.json", "brew-hp.json", "supplies-page-errors.json"].map(read);
     const icons = read("icons.json");
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
-    const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json"].map(read);
+    const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors, overheadDraws] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json", "overhead-draws.json"].map(read);
     const [spawnTile, targetTile, edgeOrderTile, edgeStopTile, nearSquare] = [spawn, target, edgeOrder, edgeStop, square].map((tile) => JSON.parse(tile));
     const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const inSquare = (t) => t.x >= nearSquare.minX && t.x <= nearSquare.maxX && t.y >= nearSquare.minY && t.y <= nearSquare.maxY;
@@ -998,6 +1028,7 @@ drive() {
       overheads: {
         box: iconArea,
         shots: overheadShots.split(" ").map(Number).map((t) => ({ tick: t, logged: [overheadAt(riftLog.rows, t), overheadAt(riftLog.rows, t + 1)], ...iconIn(`overhead-${t}.png`) })),
+        gapDraws: Object.keys(JSON.parse(gapDraws)).map((t) => ({ tick: Number(t), logged: overheadAt(riftLog.rows, t) ?? null, frames: overheadDraws[t]?.frames ?? 0, sprites: [...(overheadDraws[t]?.sprites ?? [])].sort() })),
         meleeJudged: kindOf(deflectLog.rows, "player-hit-judged").filter((e) => e.style === "melee").map((e) => {
           const hp = rowAt(deflectLog.rows, e.at)?.bossHp;
           return { at: e.at, overhead: overheadAt(deflectLog.rows, e.at), outcome: e.outcome, taken: hp ? hp.atBossStep - hp.atPostTick : null };
@@ -1027,7 +1058,7 @@ drive() {
     const { dodges, late: lateStep, under, shards: shardSpots, sounds } = observed.explosions;
     const [left, standing] = [shardSpots["explosion-left.png"], shardSpots["explosion-standing.png"]];
     const special = observed.special;
-    const { shots: iconShots, meleeJudged } = observed.overheads;
+    const { shots: iconShots, gapDraws: drawnAroundGaps, meleeJudged } = observed.overheads;
     const { soulSplit, rifts } = observed;
     const readyAt = Math.max(orb.arrivedAt ?? Infinity, orb.matured[0]?.[0] ?? Infinity);
     const checks = {
@@ -1093,6 +1124,8 @@ drive() {
       hoverTextOnCanvas: readsInFull(observed.hoverText["brew-heal.png"]) &&
         (readsInFull(observed.hoverText["keybinds.png"]) || (observed.hoverText["keybinds.png"].action === null && observed.hoverText["keybinds.png"].name === null)),
       overheadIconsDrawn: iconShots.every((shot) => shot.logged[0] !== undefined && shot.logged[0] === shot.logged[1] && shot.icon === shot.logged[0]),
+      overheadDroppedBeforeEachVoid: drawnAroundGaps.every(({ tick, frames, sprites }) => frames > 0 && sameJson(sprites, JSON.stringify(JSON.parse(gapDraws)[tick]))) &&
+        drawnAroundGaps.filter(({ sprites }) => sprites.length === 0).every(({ logged }) => logged === null),
       deflectBlocksMeleeUntilSoulSplit: meleeJudged.filter((e) => e.outcome === "blocked").length >= 2 && meleeJudged.filter((e) => e.outcome === "passed").length >= 2 &&
         meleeJudged.every((e) => e.outcome === (e.overhead === "deflect-melee" ? "blocked" : "passed") && (e.outcome === "passed" || e.taken === 0)) &&
         meleeJudged.reduce((sum, e) => sum + (e.outcome === "passed" ? e.taken : 0), 0) > 0,
@@ -1119,7 +1152,7 @@ drive() {
     "$SUPPLY_INVENTORY" "$SUPPLY_NAMED_MENU" "$SUPPLY_HP_AFTER_BREW" "$KEYBIND_DEFAULT_KEY" "$KEYBIND_NEW_KEY" \
     "$LOADOUT_TRAINER_ICONS" "$((LOADOUT_SLOT_Y + SUPPLY_BREW_SLOT / 4 * LOADOUT_SLOT_DY))" "$SUPPLY_HOVER_NAME_PIXEL" \
     "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" \
-    "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" >"$VERIFY_DIR/observed.json"
+    "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" "$OVERHEAD_GAP_DRAWS" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

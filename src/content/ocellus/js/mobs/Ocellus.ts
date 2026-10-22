@@ -95,7 +95,7 @@ class P4Hit extends Projectile {
 function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   const events: FightEvent[] = [];
   if (last?.stage !== now.stage) events.push({ kind: "stage-entered", at, stage: now.stage });
-  if (now.overhead !== null && last?.overhead !== now.overhead) events.push({ kind: "overhead-switched", at, overhead: now.overhead });
+  if ((last?.overhead ?? null) !== now.overhead) events.push({ kind: "overhead-switched", at, overhead: now.overhead });
   if (last?.boss !== now.boss) events.push({ kind: "boss-state-changed", at, state: now.boss });
   return events;
 }

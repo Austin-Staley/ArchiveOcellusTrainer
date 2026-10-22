@@ -66,9 +66,9 @@ export function after(start: Tick, offset: TickSpan): Tick {
 export type Phase =
   | Readonly<{ stage: "lead-in"; boss: "hidden" | "present-invulnerable"; overhead: null }>
   | Readonly<{ stage: "inner-void"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" }>
-  | Readonly<{ stage: "after-inner"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" | "soul-split" }>
+  | Readonly<{ stage: "after-inner"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" | "soul-split" | null }>
   | Readonly<{ stage: "outer-void"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-range" }>
-  | Readonly<{ stage: "after-outer"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-range" | "soul-split" }>;
+  | Readonly<{ stage: "after-outer"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-range" | "soul-split" | null }>;
 export type Stage = Phase["stage"];
 export type VoidKind = "inner-void" | "outer-void";
 export type TransitionKind = "after-inner" | "after-outer";
@@ -116,7 +116,7 @@ export type HitJudgement = "passed" | "invulnerable" | "blocked";
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>
-  | Readonly<{ kind: "overhead-switched"; at: Tick; overhead: BossOverhead }>
+  | Readonly<{ kind: "overhead-switched"; at: Tick; overhead: BossOverhead | null }>
   | Readonly<{ kind: "boss-state-changed"; at: Tick; state: BossState }>
   | Readonly<{ kind: "boss-shouted"; at: Tick; text: string }>
   | Readonly<{ kind: "boss-landing-started"; at: Tick }>

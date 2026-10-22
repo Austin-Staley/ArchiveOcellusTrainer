@@ -12,8 +12,8 @@ describe("U1 cycle skeleton", () => {
       [68, "inner-void"], [90, "after-inner"], [99, "outer-void"], [119, "after-outer"], [128, "inner-void"],
     ]);
     expect(drill.events("overhead-switched").map((e) => [e.at, e.overhead])).toEqual([
-      [8, "deflect-melee"], [33, "soul-split"], [39, "deflect-range"], [61, "soul-split"],
-      [68, "deflect-melee"], [93, "soul-split"], [99, "deflect-range"], [121, "soul-split"], [128, "deflect-melee"],
+      [8, "deflect-melee"], [33, "soul-split"], [38, null], [39, "deflect-range"], [61, "soul-split"], [67, null],
+      [68, "deflect-melee"], [93, "soul-split"], [98, null], [99, "deflect-range"], [121, "soul-split"], [127, null], [128, "deflect-melee"],
     ]);
     expect(drill.events("boss-state-changed").map((e) => [e.at, e.state])).toEqual([
       [0, "hidden"], [4, "present-invulnerable"], [8, "present-damageable"],

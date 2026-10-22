@@ -87,10 +87,11 @@ type CycleRecipe = readonly [
   TransitionRecipe<"after-outer">,
 ];
 
-type OverheadByStage = Readonly<{
+type OverheadRecipe = Readonly<{
   "inner-void": Selected<"deflect-melee">;
   "outer-void": Selected<"deflect-range">;
   transition: Selected<"soul-split">;
+  offBeforeVoid: Selected<TickSpan>;
 }>;
 
 type LifeforceRecipe = Readonly<{ tellAfterOnset: Selected<TickSpan>; hitAfterOnset: Selected<TickSpan> }>;
@@ -280,10 +281,11 @@ const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
 
 const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
 
-const OVERHEADS: OverheadByStage = {
+const OVERHEADS: OverheadRecipe = {
   "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it", ...DEFLECT_MELEE_SEEN, STRATEGIES),
   "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed", ...DEFLECT_RANGE_SEEN, STRATEGIES),
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
+  offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
 
 export type DeflectRule = Readonly<{ kind: "block" }> | Readonly<{ kind: "none" }>;

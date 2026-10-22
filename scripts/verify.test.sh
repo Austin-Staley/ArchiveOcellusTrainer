@@ -6,7 +6,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|SUPPLY_[A-Z_]+|KEYBIND_[A-Z_]+|RIFT_[A-Z_]+|OVERHEAD_[A-Z_]+|ICON_BOX|NORTH_EAST_RIFT_[A-Z_]+|CHAT_POLL_[A-Z_]+|RISEN_BOSS_[A-Z_]+|DEFLECT_[A-Z_]+|SOUL_SPLIT_[A-Z_]+|KILL_CHAT|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive_overheads_rifts drive release_browser stage_browser; do
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts record_overhead_draws step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot drive_loadouts right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive_overheads_rifts drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -112,7 +112,7 @@ fixture_logs() {
   command node -e '
     const [dir, innerVoid, focus, fault] = process.argv.slice(1);
     const stages = { 0: "lead-in", [innerVoid]: "inner-void", 30: "after-inner", 39: "outer-void", 59: "after-outer", 68: "inner-void" };
-    const overheads = { 8: "deflect-melee", 33: "soul-split", 39: "deflect-range", 61: "soul-split", 68: "deflect-melee" };
+    const overheads = { 8: "deflect-melee", 33: "soul-split", ...(fault === "no-overhead-gaps" ? {} : { 38: null, 67: null }), 39: "deflect-range", 61: "soul-split", 68: "deflect-melee" };
     const specials = { 37: "vortex", 65: "spike-disk" };
     const at = (x, y) => ({ tile: { x, y } });
     const walks = { 3: { x: 8, y: 3 }, 5: fault === "edge-on-floor" ? { x: 8, y: 1 } : { x: 8, y: 0 }, 40: { x: 7, y: 3 } };
@@ -126,7 +126,7 @@ fixture_logs() {
       inputs: walks[t] ? [{ kind: "walk-ordered", destination: walks[t] }] : [],
       events: [
         ...(stages[t] ? [{ kind: "stage-entered", at: t, stage: stages[t] }] : []),
-        ...(overheads[t] ? [{ kind: "overhead-switched", at: t, overhead: overheads[t] }] : []),
+        ...(t in overheads ? [{ kind: "overhead-switched", at: t, overhead: overheads[t] }] : []),
       ],
     }));
     const startOn = (t) => (t <= 47 ? at(8, 1) : t === 48 ? at(7, 2) : at(7, 3));
@@ -267,7 +267,7 @@ fixture_logs() {
       ...landingAt(89 + landingStart), heard(92.1, 66150), heard(92.44, 22050), heard(96.53, 19845), heard(97.1, 33075), heard(97.11, 26460),
     ].sort((a, b) => a.tick + a.phase - (b.tick + b.phase));
     fs.writeFileSync(`${dir}/special-audio.json`, JSON.stringify({ data: { result: transitionAudio } }));
-    const overheadOf = (t) => (t < 8 ? null : t < 33 ? "deflect-melee" : t < 39 ? "soul-split" : t < 61 ? "deflect-range" : t < 68 ? "soul-split" : "deflect-melee");
+    const overheadOf = (t) => (t < 8 || t === 38 || t === 67 ? null : t < 33 ? "deflect-melee" : t < 39 ? "soul-split" : t < 61 ? "deflect-range" : t < 68 ? "soul-split" : "deflect-melee");
     const burst = (rift, tile, beforeHp) => ({ kind: "rift-burst", at: 78, rift, tile, receipt: { requested: 14, applied: 14, beforeHp, afterHp: beforeHp - 14, prayer: null } });
     const [northWest, northEast] = [{ x: 2, y: 2 }, { x: 11, y: fault === "rift-misplaced" ? 3 : 2 }];
     const riftEvents = {
@@ -299,6 +299,12 @@ fixture_logs() {
     ].sort((a, b) => a.tick + a.phase - (b.tick + b.phase));
     fs.writeFileSync(`${dir}/rift-audio.json`, JSON.stringify({ data: { result: riftAudio } }));
     write("deflect-log.json", "rifts", deflectRows);
+    const spriteOf = { "deflect-melee": "440-15", "deflect-range": "440-16", "soul-split": "440-11" };
+    const draws = Object.fromEntries(Array.from({ length: 80 }, (_, t) => {
+      const kept = fault === "overhead-kept" && t === 38 ? "soul-split" : overheadOf(t);
+      return [t, { frames: fault === "gap-unseen" && t === 38 ? 0 : 36, sprites: kept === null ? [] : [spriteOf[kept]] }];
+    }));
+    fs.writeFileSync(`${dir}/overhead-draws.json`, JSON.stringify({ data: { result: draws } }));
   ' "$T" "$inner_void_tick" "$focus" "$fault"
 }
 
@@ -539,6 +545,7 @@ fake_browser() {
         [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":3,"y":2}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
+      "--json eval window.__overheadDraws") cat "$T/overhead-draws.json" ;;
       "--json eval window.__cueAudio") if [[ -e "$T/rifts" ]]; then cat "$T/rift-audio.json"; elif [[ -e "$T/special-late" ]]; then cat "$T/special-audio.json"; else cat "$T/explosion-audio.json"; fi ;;
       "--json eval window.__archiveOcellusProbe.snapshot().fight.player.inventory") supply_probe inventory ;;
       "--json eval window.__archiveOcellusProbe.snapshot().menu") supply_probe menu ;;
@@ -937,6 +944,27 @@ overhead_icon_not_drawn_fails() {
   grep -q '"overheadIconsDrawn": false' "$T/drive.log" || { echo "the overhead icon check did not name the failure"; cat "$T/drive.log"; return 1; }
 }
 
+overhead_track_without_gaps_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' no-overhead-gaps
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the fight log kept an overhead on 38 and 67"; return 1; fi
+  [[ "$(failed_checks)" == overheadsOnSchedule ]] || { echo "expected only overheadsOnSchedule to fail, got: $(failed_checks)"; return 1; }
+}
+
+overhead_kept_before_void_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' overhead-kept
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although Soul Split was drawn on the tick before the outer void"; return 1; fi
+  [[ "$(failed_checks)" == overheadDroppedBeforeEachVoid ]] || { echo "expected only overheadDroppedBeforeEachVoid to fail, got: $(failed_checks)"; return 1; }
+}
+
+unseen_gap_tick_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' gap-unseen
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although no frame was drawn on the tick before the outer void"; return 1; fi
+  [[ "$(failed_checks)" == overheadDroppedBeforeEachVoid ]] || { echo "expected only overheadDroppedBeforeEachVoid to fail, got: $(failed_checks)"; return 1; }
+}
+
 deflect_off_fails() {
   setup
   fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' deflect-off
@@ -1065,6 +1093,9 @@ for t in \
   unloaded_icon_fails \
   clipped_hover_text_fails \
   overhead_icon_not_drawn_fails \
+  overhead_track_without_gaps_fails \
+  overhead_kept_before_void_fails \
+  unseen_gap_tick_fails \
   deflect_off_fails \
   protected_hit_heals_fails \
   misplaced_rift_fails \

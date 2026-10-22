@@ -394,7 +394,6 @@ record_audio_starts() {
     const tick = () => {
       const run = window.__archiveOcellusProbe?.snapshot().fight?.run;
       const t = run?.kind === "running" ? run.tick : run?.kind === "ended" ? run.at : null;
-      // A long frame shows a tick late, so a tick starts no later than one tick after the last.
       if (t !== null && seen[t] === undefined) seen[t] = Math.min(performance.now(), (seen[t - 1] ?? Infinity) + 600);
       return t;
     };
@@ -938,7 +937,6 @@ audio_resumed() {
   ab wait --fn "(window.__audioContexts ?? []).length > 0 && window.__audioContexts.every((context) => context.state === 'running')" --timeout 5000 >/dev/null
 }
 
-# Headless Chrome starts an AudioContext running. Desktop Chrome starts one suspended until a user gesture, so this session suspends each new context as that autoplay policy does.
 drive_cues() {
   local BROWSER_SESSION="${BROWSER_SESSION}-autoplay"
   echo "$AUTOPLAY_POLICY_JS" >"$VERIFY_DIR/autoplay-policy.js"

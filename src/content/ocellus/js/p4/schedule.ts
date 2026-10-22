@@ -165,7 +165,7 @@ export class Schedule {
     };
     const phaseAt = (offset: number) => (c: Cycle): Phase => {
       if (offset < afterInnerStart) {
-        return { stage: "inner-void", cycle: c, boss: "present-damageable", overhead: overheads["inner-void"].value };
+        return { stage: "inner-void", cycle: c, boss: choices.hoverMeleeReach.option.value, overhead: overheads["inner-void"].value };
       }
       if (offset < outerStart) {
         return { stage: "after-inner", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterInner, offset - afterInnerStart, overheads["inner-void"].value) };

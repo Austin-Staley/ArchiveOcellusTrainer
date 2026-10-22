@@ -15,7 +15,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     { target: "the size-1 north-east rift once", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 71, hits: [35], hpAfter: 9 },
     { target: "the size-1 north-east rift once more on its next swing", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 76, hits: [9], hpAfter: 0 },
-    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", setup: "melee", deflect: "none" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
+    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", setup: "melee", deflect: "none", hoverMeleeReach: "reachable" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
   ] as const)("one scythe swing hits $target", ({ seed, selection, aggroAt, pick, swingAt, hits, hpAfter }) => {
     const drill = startDrill({ seed, selection });
     drill.tickTo(aggroAt);
@@ -53,6 +53,29 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.tickTo(landsAt);
     const { atBossStep, atPostTick } = drill.row(landsAt).bossHp;
     expect([drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]), atBossStep - atPostTick]).toEqual([[[landsAt, style, outcome, 20]], taken]);
+    drill.dispose();
+  });
+
+  test.each([
+    { weapon: "a scythe", selection: { focus: "rifts", setup: "melee" }, standsOn: { x: 5, y: 3 }, judged: [[31, "melee", "blocked"], [31, "melee", "blocked"], [31, "melee", "blocked"]] },
+    {
+      weapon: "a scythe under hoverMeleeReach=reachable",
+      selection: { focus: "rifts", setup: "melee", hoverMeleeReach: "reachable" },
+      standsOn: { x: 5, y: 3 },
+      judged: [
+        [14, "melee", "blocked"], [14, "melee", "blocked"], [14, "melee", "blocked"],
+        [19, "melee", "blocked"], [19, "melee", "blocked"], [19, "melee", "blocked"],
+        [24, "melee", "blocked"], [24, "melee", "blocked"], [24, "melee", "blocked"],
+        [29, "melee", "blocked"], [29, "melee", "blocked"], [29, "melee", "blocked"],
+      ],
+    },
+    { weapon: "a bow", selection: { focus: "rifts" }, standsOn: { x: 5, y: 1 }, judged: [[16, "ranged", "passed"], [21, "ranged", "passed"], [26, "ranged", "passed"], [31, "ranged", "passed"]] },
+  ] as const)("melee cannot reach the boss while he hovers, from P4 tick 8 to 29, and ranged can: $weapon on him from tick 12", ({ selection, standsOn, judged }) => {
+    const drill = startDrill({ selection });
+    drill.tickTo(12);
+    drill.player().setAggro(drill.boss());
+    drill.tickTo(31);
+    expect([drill.row(29).playerAtPostTick.tile, drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome])]).toEqual([standsOn, judged]);
     drill.dispose();
   });
 

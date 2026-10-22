@@ -132,7 +132,11 @@ RIFT_BURST_TICK=78
 CHAT_POLL_WAIT_MS=600
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
 DEFLECT_CLICK_TICK=12
-DEFLECT_BLOCKED_SHOT_TICK=19
+DEFLECT_HOVER_SHOT_TICK=20
+DEFLECT_HOVER_TILE='{"x":5,"y":3}'
+DEFLECT_HOVER_TICKS='[14,29]'
+DEFLECT_FIRST_MELEE_TICK=31
+DEFLECT_BLOCKED_SHOT_TICK=31
 DEFLECT_LAST_TICK=46
 SOUL_SPLIT_HEAL_TICK=39
 RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[78,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
@@ -766,6 +770,7 @@ drive_overheads_rifts() {
   ab open "${URL}${DEFLECT_QUERY}" >/dev/null || return 1
   canvas_centre || { log "canvas box unreadable"; return 1; }
   click_after_tick "$DEFLECT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the risen boss was not clicked"; return 1; }
+  shot_after_tick "$DEFLECT_HOVER_SHOT_TICK" 0 hover-out-of-reach.png || { log "hovering boss screenshot failed"; return 1; }
   shot_after_tick "$DEFLECT_BLOCKED_SHOT_TICK" 0 deflect-blocked.png || { log "deflected attack screenshot failed"; return 1; }
   fight_tick_at_least "$DEFLECT_LAST_TICK" 60000 || { log "the deflect drill never stepped to P4 tick ${DEFLECT_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/deflect.json"
@@ -795,7 +800,7 @@ drive() {
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
     $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
-    deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json; do
+    hover-out-of-reach.png deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
 
@@ -804,7 +809,7 @@ drive() {
       innerMarks, lateMark, explosionPixel, explosionExpected, soundSamples, explosionSounds, centreX, centreY, tellBox, specialExpected,
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
       supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat,
-      riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws] = process.argv.slice(1);
+      riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws, hoverTile, hoverTicks, firstMeleeTick] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1029,6 +1034,10 @@ drive() {
         box: iconArea,
         shots: overheadShots.split(" ").map(Number).map((t) => ({ tick: t, logged: [overheadAt(riftLog.rows, t), overheadAt(riftLog.rows, t + 1)], ...iconIn(`overhead-${t}.png`) })),
         gapDraws: Object.keys(JSON.parse(gapDraws)).map((t) => ({ tick: Number(t), logged: overheadAt(riftLog.rows, t) ?? null, frames: overheadDraws[t]?.frames ?? 0, sprites: [...(overheadDraws[t]?.sprites ?? [])].sort() })),
+        hover: {
+          standsOn: [...new Set(between(deflectLog.rows, ...JSON.parse(hoverTicks)).map((row) => JSON.stringify(row.playerAtPostTick.tile)))].map((tile) => JSON.parse(tile)),
+          bossHp: [rowAt(deflectLog.rows, JSON.parse(hoverTicks)[0])?.bossHp.atBossStep, rowAt(deflectLog.rows, Number(firstMeleeTick) - 1)?.bossHp.atPostTick],
+        },
         meleeJudged: kindOf(deflectLog.rows, "player-hit-judged").filter((e) => e.style === "melee").map((e) => {
           const hp = rowAt(deflectLog.rows, e.at)?.bossHp;
           return { at: e.at, overhead: overheadAt(deflectLog.rows, e.at), outcome: e.outcome, taken: hp ? hp.atBossStep - hp.atPostTick : null };
@@ -1058,7 +1067,7 @@ drive() {
     const { dodges, late: lateStep, under, shards: shardSpots, sounds } = observed.explosions;
     const [left, standing] = [shardSpots["explosion-left.png"], shardSpots["explosion-standing.png"]];
     const special = observed.special;
-    const { shots: iconShots, gapDraws: drawnAroundGaps, meleeJudged } = observed.overheads;
+    const { shots: iconShots, gapDraws: drawnAroundGaps, hover, meleeJudged } = observed.overheads;
     const { soulSplit, rifts } = observed;
     const readyAt = Math.max(orb.arrivedAt ?? Infinity, orb.matured[0]?.[0] ?? Infinity);
     const checks = {
@@ -1126,6 +1135,8 @@ drive() {
       overheadIconsDrawn: iconShots.every((shot) => shot.logged[0] !== undefined && shot.logged[0] === shot.logged[1] && shot.icon === shot.logged[0]),
       overheadDroppedBeforeEachVoid: drawnAroundGaps.every(({ tick, frames, sprites }) => frames > 0 && sameJson(sprites, JSON.stringify(JSON.parse(gapDraws)[tick]))) &&
         drawnAroundGaps.filter(({ sprites }) => sprites.length === 0).every(({ logged }) => logged === null),
+      meleeCannotReachHoveringBoss: sameJson(hover.standsOn, `[${hoverTile}]`) && hover.bossHp[0] !== undefined && hover.bossHp[0] === hover.bossHp[1] &&
+        meleeJudged.length > 0 && meleeJudged[0].at === Number(firstMeleeTick) && meleeJudged.every((e) => e.at >= Number(firstMeleeTick)),
       deflectBlocksMeleeUntilSoulSplit: meleeJudged.filter((e) => e.outcome === "blocked").length >= 2 && meleeJudged.filter((e) => e.outcome === "passed").length >= 2 &&
         meleeJudged.every((e) => e.outcome === (e.overhead === "deflect-melee" ? "blocked" : "passed") && (e.outcome === "passed" || e.taken === 0)) &&
         meleeJudged.reduce((sum, e) => sum + (e.outcome === "passed" ? e.taken : 0), 0) > 0,
@@ -1152,7 +1163,8 @@ drive() {
     "$SUPPLY_INVENTORY" "$SUPPLY_NAMED_MENU" "$SUPPLY_HP_AFTER_BREW" "$KEYBIND_DEFAULT_KEY" "$KEYBIND_NEW_KEY" \
     "$LOADOUT_TRAINER_ICONS" "$((LOADOUT_SLOT_Y + SUPPLY_BREW_SLOT / 4 * LOADOUT_SLOT_DY))" "$SUPPLY_HOVER_NAME_PIXEL" \
     "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" \
-    "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" "$OVERHEAD_GAP_DRAWS" >"$VERIFY_DIR/observed.json"
+    "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" "$OVERHEAD_GAP_DRAWS" \
+    "$DEFLECT_HOVER_TILE" "$DEFLECT_HOVER_TICKS" "$DEFLECT_FIRST_MELEE_TICK" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

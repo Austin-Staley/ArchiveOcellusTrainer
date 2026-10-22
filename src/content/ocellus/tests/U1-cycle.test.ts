@@ -16,7 +16,8 @@ describe("U1 cycle skeleton", () => {
       [68, "deflect-melee"], [93, "soul-split"], [98, null], [99, "deflect-range"], [121, "soul-split"], [127, null], [128, "deflect-melee"],
     ]);
     expect(drill.events("boss-state-changed").map((e) => [e.at, e.state])).toEqual([
-      [0, "hidden"], [4, "present-invulnerable"], [8, "present-damageable"],
+      [0, "hidden"], [4, "present-invulnerable"], [8, "present-out-of-melee-reach"], [30, "present-damageable"],
+      [68, "present-out-of-melee-reach"], [90, "present-damageable"], [128, "present-out-of-melee-reach"],
     ]);
     expect(drill.events("boss-shouted").map((e) => [e.at, e.text])).toEqual([[5, "End..."]]);
     drill.dispose();
@@ -119,11 +120,11 @@ describe("U1 cycle skeleton", () => {
   test.each([
     {
       at: 8,
-      phase: { stage: "inner-void", cycle: 1, boss: "present-damageable", overhead: "deflect-melee" },
+      phase: { stage: "inner-void", cycle: 1, boss: "present-out-of-melee-reach", overhead: "deflect-melee" },
       entered: [
         { kind: "stage-entered", at: 8, stage: "inner-void" },
         { kind: "overhead-switched", at: 8, overhead: "deflect-melee" },
-        { kind: "boss-state-changed", at: 8, state: "present-damageable" },
+        { kind: "boss-state-changed", at: 8, state: "present-out-of-melee-reach" },
       ],
     },
     {

@@ -63,9 +63,11 @@ export function after(start: Tick, offset: TickSpan): Tick {
   return tick(start + offset);
 }
 
+export type HoveringBoss = "present-out-of-melee-reach" | "present-damageable";
+
 export type Phase =
   | Readonly<{ stage: "lead-in"; boss: "hidden" | "present-invulnerable"; overhead: null }>
-  | Readonly<{ stage: "inner-void"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" }>
+  | Readonly<{ stage: "inner-void"; cycle: Cycle; boss: HoveringBoss; overhead: "deflect-melee" }>
   | Readonly<{ stage: "after-inner"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-melee" | "soul-split" | null }>
   | Readonly<{ stage: "outer-void"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-range" }>
   | Readonly<{ stage: "after-outer"; cycle: Cycle; boss: "present-damageable"; overhead: "deflect-range" | "soul-split" | null }>;

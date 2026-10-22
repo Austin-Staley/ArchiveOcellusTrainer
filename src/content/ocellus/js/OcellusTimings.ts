@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { BossOverhead, Cycle, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tile } from "./P4Types";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
@@ -657,6 +657,10 @@ export const OCELLUS_P4 = {
       "block-at-launch": selected<DeflectRule>({ kind: "block" }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8)", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
       none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
     }),
+    hoverMeleeReach: choice("unreachable", {
+      unreachable: selected<HoveringBoss>("present-out-of-melee-reach", "inferred", "unscaled", "melee cannot reach the boss while he hovers, from S+0 to S+21: all 28 of Kirby's attacks in 6 hovers are ranged, every player stands off the 5x5 while he hovers, and the owner believes melee cannot reach him in the air; whether the void ring or his height stops it is not filmed", vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189"), owner("melee reach while airborne")),
+      reachable: selected<HoveringBoss>("present-damageable", "assumption", "unscaled", "melee reaches the hovering boss as it reaches the landed one; no capture shows a melee attack while he hovers", vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189")),
+    }),
     orbPickupRadius: choice("on-tile", {
       "on-tile": selected(0, "footage-repeated", "team-5", "the streamer stands on the orb tile a tick before each heal (C9)", vod("V2", "k67, k95")),
       adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", vod("V1", "G51, G135, G175")),
@@ -723,6 +727,7 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     riftFirstCycle: pick("riftFirstCycle"),
     innerVoidFloor: pick("innerVoidFloor"),
     deflect: pick("deflect"),
+    hoverMeleeReach: pick("hoverMeleeReach"),
     orbPickupRadius: pick("orbPickupRadius"),
     outerOrbTile: pick("outerOrbTile"),
     focus: pick("focus"),

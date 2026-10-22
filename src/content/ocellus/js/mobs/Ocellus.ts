@@ -5,6 +5,7 @@ import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
 import type {
   Beat,
+  BossState,
   Cycle,
   ExplosionOutcome,
   FightEvent,
@@ -100,6 +101,21 @@ function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   return events;
 }
 
+function damageable(state: BossState): boolean {
+  switch (state) {
+    case "hidden":
+    case "present-invulnerable":
+      return false;
+    case "present-out-of-melee-reach":
+    case "present-damageable":
+      return true;
+    default: {
+      const unhandled: never = state;
+      return unhandled;
+    }
+  }
+}
+
 function specialAttack<V extends Special>(at: Tick, ordinal: Ordinal, variant: V): SpecialAttack<V> {
   return { at, ordinal, variant, style: OCELLUS_P4.special.styles[variant].value };
 }
@@ -154,6 +170,10 @@ export class Ocellus extends Mob {
 
   override canBeAttacked(): boolean {
     return this.phase().boss !== "hidden";
+  }
+
+  outOfMeleeReach(): boolean {
+    return this.phase().boss === "present-out-of-melee-reach";
   }
 
   override get idlePoseId(): number {
@@ -328,7 +348,7 @@ export class Ocellus extends Mob {
   }
 
   private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): HitJudgement {
-    if (moment.phase.boss !== "present-damageable") return "invulnerable";
+    if (!damageable(moment.phase.boss)) return "invulnerable";
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":

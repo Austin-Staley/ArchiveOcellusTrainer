@@ -276,15 +276,16 @@ fixture_logs() {
       78: fault === "burst-missing" ? [] : fault === "rift-survives" ? [burst("rift-67-0", northWest, 99), burst("rift-67-1", northEast, 85)] : [burst("rift-67-0", northWest, 99)],
     };
     const riftRows = Array.from({ length: 80 }, (_, t) => ({ tick: t, phase: { overhead: overheadOf(t) }, events: riftEvents[t] ?? [] }));
-    const swings = [14, 19, 24, 29, 34, 39, 44];
+    const swings = fault === "hover-reached" ? [14, 19, 24, 29, 34, 39, 44] : [31, 36, 41, 46];
     const deflectRows = Array.from({ length: 47 }, (_, t) => {
       const outcome = swings.includes(t) ? (overheadOf(t) === "deflect-melee" && fault !== "deflect-off" ? "blocked" : "passed") : null;
       const hp = 1355 - 20 * swings.filter((s) => s < t && (overheadOf(s) !== "deflect-melee" || fault === "deflect-off")).length;
       return {
         tick: t,
         phase: { overhead: overheadOf(t) },
+        playerAtPostTick: t <= 12 || fault === "hover-out-of-range" ? at(5, 1) : at(5, 3),
         bossHp: { atBossStep: hp, atPostTick: outcome === "passed" ? hp - 20 : hp },
-        events: outcome ? [{ kind: "player-hit-judged", at: t, style: "melee", outcome, requested: 20 }] : [],
+        events: outcome ? [0, 1, 2].map(() => ({ kind: "player-hit-judged", at: t, style: "melee", outcome, requested: 20 })) : [],
       };
     });
     write("rift-log.json", "rifts", riftRows);
@@ -965,6 +966,20 @@ unseen_gap_tick_fails() {
   [[ "$(failed_checks)" == overheadDroppedBeforeEachVoid ]] || { echo "expected only overheadDroppedBeforeEachVoid to fail, got: $(failed_checks)"; return 1; }
 }
 
+hovering_boss_hit_by_melee_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' hover-reached
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although scythe hits landed on the hovering boss"; return 1; fi
+  [[ "$(failed_checks)" == meleeCannotReachHoveringBoss ]] || { echo "expected only meleeCannotReachHoveringBoss to fail, got: $(failed_checks)"; return 1; }
+}
+
+hover_never_in_melee_range_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' hover-out-of-range
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the player never stood next to the hovering boss"; return 1; fi
+  [[ "$(failed_checks)" == meleeCannotReachHoveringBoss ]] || { echo "expected only meleeCannotReachHoveringBoss to fail, got: $(failed_checks)"; return 1; }
+}
+
 deflect_off_fails() {
   setup
   fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' deflect-off
@@ -1096,6 +1111,8 @@ for t in \
   overhead_track_without_gaps_fails \
   overhead_kept_before_void_fails \
   unseen_gap_tick_fails \
+  hovering_boss_hit_by_melee_fails \
+  hover_never_in_melee_range_fails \
   deflect_off_fails \
   protected_hit_heals_fails \
   misplaced_rift_fails \

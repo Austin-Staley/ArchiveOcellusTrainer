@@ -79,7 +79,7 @@ export type BossOverhead = NonNullable<Phase["overhead"]>;
 
 export type Style = "melee" | "ranged" | "magic";
 export type Special = "vortex" | "spike-disk" | "black-disk";
-export type Mechanic = "void-floor" | "lifeforce-orb" | "explosions" | "transition-attacks" | "rifts";
+export type Mechanic = "void-floor" | "floor-holes" | "lifeforce-orb" | "explosions" | "transition-attacks" | "rifts";
 
 export type Beat =
   | Readonly<{ kind: "boss-shouts"; text: string; lasts: TickSpan }>

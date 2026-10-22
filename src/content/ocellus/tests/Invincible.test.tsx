@@ -73,6 +73,46 @@ describe("Invincible", () => {
     drill.dispose();
   });
 
+  test("a prevented death clears the stolen HP, so the orb collected after it returns nothing", () => {
+    const drill = startDrill();
+    drill.region.invincible = true;
+    drill.walkTo({ x: 5, y: 5 });
+    drill.tickTo(19);
+    drill.walkTo({ x: 4, y: 8 });
+    drill.tickTo(25);
+    const observed = {
+      spawned: drill.events("orb-spawned").map((e) => [e.at, e.tile, e.credit]),
+      prevented: drill.events("death-prevented"),
+      returned: drill.events("orb-returned").map((e) => [e.at, e.receipt]),
+      hpAfterReturn: drill.row(25).playerAtPostTick.hp,
+    };
+    drill.dispose();
+    expect(observed).toEqual({
+      spawned: [[12, { x: 4, y: 8 }, 38]],
+      prevented: [
+        { kind: "death-prevented", at: 15, source: "floor-hit", clearedOrbCredit: 38 },
+        { kind: "death-prevented", at: 24, source: "explosion-resolved", clearedOrbCredit: 0 },
+      ],
+      returned: [[25, { requested: 0, applied: 0, beforeHp: 99, afterHp: 99 }]],
+      hpAfterReturn: 99,
+    });
+  });
+
+  test("with no death prevented, the orb returns the stolen HP the same with invincible on or off", () => {
+    const orbReturn = (invincible: boolean) => {
+      const drill = startDrill({ selection: { focus: "lifeforce-orb" } });
+      drill.region.invincible = invincible;
+      drill.tickTo(12);
+      drill.walkTo({ x: 9, y: 4 });
+      drill.tickTo(25);
+      const observed = { returned: drill.events("orb-returned").map((e) => [e.at, e.receipt]), hp: drill.row(25).playerAtPostTick.hp };
+      drill.dispose();
+      return observed;
+    };
+    const returned = { returned: [[25, { requested: 49, applied: 49, beforeHp: 50, afterHp: 99 }]], hp: 99 };
+    expect({ off: orbReturn(false), on: orbReturn(true) }).toEqual({ off: returned, on: returned });
+  });
+
   test("the Invincible box starts unchecked, a link with invincible=on starts it checked, and Restart carries what the box shows", () => {
     localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } }));
     const navigation = captureNavigation();

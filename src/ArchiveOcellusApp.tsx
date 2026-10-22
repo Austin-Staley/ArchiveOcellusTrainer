@@ -5,7 +5,7 @@ import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } fr
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { DrillConfig } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P4, parseDrillRequest } from "./content/ocellus/js/OcellusTimings";
-import type { FightLog, FightSnapshot } from "./content/ocellus/js/P4Types";
+import type { FightLog, FightSnapshot, RunState } from "./content/ocellus/js/P4Types";
 import { keepHoverTextOnCanvas } from "./hoverText";
 
 keepHoverTextOnCanvas();
@@ -181,6 +181,67 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
   );
 }
 
+const SECONDS_TENTHS_PER_TICK = 6;
+
+function gameTime(ticks: number): string {
+  const tenths = ticks * SECONDS_TENTHS_PER_TICK;
+  const minutes = Math.floor(tenths / 600);
+  const seconds = ((tenths % 600) / 10).toFixed(1).padStart(4, "0");
+  return `${minutes}:${seconds}`;
+}
+
+type RunResult = Extract<RunState, { kind: "ended" }> & Readonly<{ invincible: boolean }>;
+
+function RunResultText({ result }: Readonly<{ result: RunResult }>) {
+  switch (result.reason) {
+    case "kill":
+      return (
+        <>
+          <h2 id="run_result_title">Ocellus defeated</h2>
+          <p id="run_result_time">P4 time: {result.at} ticks ({gameTime(result.at)})</p>
+          {result.invincible && <p id="run_result_note">Invincible was on.</p>}
+        </>
+      );
+    case "death":
+      return (
+        <>
+          <h2 id="run_result_title">You died</h2>
+          <p id="run_result_time">on P4 tick {result.at}</p>
+        </>
+      );
+    default: {
+      const unhandled: never = result.reason;
+      return unhandled;
+    }
+  }
+}
+
+const RESULT_POLL_MS = 300;
+
+function RunResultPanel({ config, region }: Readonly<{ config: DrillConfig; region: OcellusRegion }>) {
+  const [result, setResult] = useState<RunResult | null>(null);
+  useEffect(() => {
+    if (result) return;
+    const poll = window.setInterval(() => {
+      const run = region.snapshot()?.run;
+      if (run?.kind !== "ended") return;
+      const preventedDeath = region.fightLog().rows.some((row) => row.events.some((event) => event.kind === "death-prevented"));
+      setResult({ ...run, invincible: region.invincible || preventedDeath });
+    }, RESULT_POLL_MS);
+    return () => window.clearInterval(poll);
+  }, [region, result]);
+
+  if (!result) return null;
+  const again = (seed: string | null) => startRun({ setup: config.choices.setup.key, focus: config.choices.focus.key, seed, invincible: region.invincible });
+  return (
+    <section id="run_result" role="dialog" aria-labelledby="run_result_title">
+      <RunResultText result={result} />
+      <button id="result_restart" type="button" onClick={() => again(null)}>Restart</button>
+      <button id="result_retry" type="button" onClick={() => again(String(config.seed))}>Retry seed</button>
+    </section>
+  );
+}
+
 const CHAT_LINES_SHOWN = 5;
 const CHAT_POLL_MS = 300;
 
@@ -211,6 +272,7 @@ export function ArchiveOcellusApp() {
         <TrainerLoadingSplash state={loading} />
         <GameChat region={region} />
         <DrillControls config={config} region={region} />
+        <RunResultPanel config={config} region={region} />
         <p id="credit_line">{CREDIT_LINE}</p>
       </GameOverlay>
     </TrainerApp>

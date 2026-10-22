@@ -1,4 +1,4 @@
-import { loadPage } from "./page";
+import { captureNavigation, loadPage } from "./page";
 
 function drawRandomSeeds(values: readonly number[]) {
   const queue = [...values];
@@ -11,13 +11,6 @@ function drawRandomSeeds(values: readonly number[]) {
       },
     },
   });
-}
-
-function captureNavigation() {
-  const real = window.location;
-  const assigned: string[] = [];
-  Object.defineProperty(window, "location", { configurable: true, value: { get href() { return real.href; }, assign: (url: string) => void assigned.push(url) } });
-  return { assigned, restore: () => Object.defineProperty(window, "location", { configurable: true, value: real }) };
 }
 
 const runSeed = () => window.__archiveOcellusProbe?.log().header.seed ?? null;

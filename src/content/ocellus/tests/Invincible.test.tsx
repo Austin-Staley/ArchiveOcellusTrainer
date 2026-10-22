@@ -1,4 +1,5 @@
 import { startDrill } from "./drill";
+import { captureNavigation, loadPage } from "./page";
 
 const VOID_FLOOR = { focus: "void-floor" } as const;
 
@@ -70,5 +71,27 @@ describe("Invincible", () => {
       50,
     ]);
     drill.dispose();
+  });
+
+  test("the Invincible box starts unchecked, a link with invincible=on starts it checked, and Restart carries what the box shows", () => {
+    localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } }));
+    const navigation = captureNavigation();
+    const plain = loadPage("/?seed=7");
+    const checkedOnLoad = [plain.checked("invincible")];
+    plain.click("invincible");
+    plain.type("seed", "7");
+    plain.click("restart");
+    plain.close();
+    const linked = loadPage(navigation.assigned[0]);
+    checkedOnLoad.push(linked.checked("invincible"));
+    linked.click("invincible");
+    linked.type("seed", "7");
+    linked.click("restart");
+    linked.close();
+    navigation.restore();
+    expect({ checkedOnLoad, navigation: navigation.assigned }).toEqual({
+      checkedOnLoad: [false, true],
+      navigation: ["http://localhost/?seed=7&setup=ranged&focus=full-fight&invincible=on", "http://localhost/?seed=7&setup=ranged&focus=full-fight"],
+    });
   });
 });

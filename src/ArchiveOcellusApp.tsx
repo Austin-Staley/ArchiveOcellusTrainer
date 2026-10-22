@@ -70,8 +70,9 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion
 function createTrainer() {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
   Settings.readFromStorage();
-  const { config, rejected } = parseDrillRequest(new URL(window.location.href), () => crypto.getRandomValues(new Uint32Array(1))[0]);
+  const { config, invincible, rejected } = parseDrillRequest(new URL(window.location.href), () => crypto.getRandomValues(new Uint32Array(1))[0]);
   const region = new OcellusRegion(config);
+  region.invincible = invincible;
   const trainer = new TrainerInstance(region);
   if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, region, rejected);
   return { trainer, region, config };
@@ -81,7 +82,7 @@ const SETUP_KEYS = Object.keys(OCELLUS_P4.choices.setup.options);
 const FOCUS_KEYS = Object.keys(OCELLUS_P4.choices.focus.options);
 const label = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, " ");
 
-function DrillControls({ config }: Readonly<{ config: DrillConfig }>) {
+function DrillControls({ config, region }: Readonly<{ config: DrillConfig; region: OcellusRegion }>) {
   const [setup, setSetup] = useState<string>(config.choices.setup.key);
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const { playsAudio, playsAreaAudio } = useSettingsSnapshot();
@@ -91,6 +92,8 @@ function DrillControls({ config }: Readonly<{ config: DrillConfig }>) {
     url.searchParams.set("focus", focus);
     if (typedSeed?.trim()) url.searchParams.set("seed", typedSeed.trim());
     else url.searchParams.delete("seed");
+    if (region.invincible) url.searchParams.set("invincible", "on");
+    else url.searchParams.delete("invincible");
     window.location.assign(url.href);
   };
 
@@ -118,6 +121,9 @@ function DrillControls({ config }: Readonly<{ config: DrillConfig }>) {
       </label>
       <label>
         Area sounds <input id="area_sound" type="checkbox" checked={playsAreaAudio} onChange={(event) => Settings.set({ playsAreaAudio: event.target.checked })} />
+      </label>
+      <label>
+        Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
       </label>
     </form>
   );
@@ -152,7 +158,7 @@ export function ArchiveOcellusApp() {
       <GameOverlay>
         <TrainerLoadingSplash state={loading} />
         <GameChat region={region} />
-        <DrillControls config={config} />
+        <DrillControls config={config} region={region} />
         <p id="credit_line">{CREDIT_LINE}</p>
       </GameOverlay>
     </TrainerApp>

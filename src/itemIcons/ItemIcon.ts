@@ -1,7 +1,11 @@
 /*
- * Ported from RuneLite's cache item sprite renderer (net.runelite.cache.item and
- * net.runelite.cache.models at commit 12f56ce214f6e05f2463bbba9d4a0d2516df742b).
+ * Ported from RuneLite's cache item sprite renderer (net.runelite.cache.item,
+ * net.runelite.cache.models and net.runelite.cache.definitions.ModelDefinition
+ * at commit 12f56ce214f6e05f2463bbba9d4a0d2516df742b). ModelDefinition,
+ * VertexNormal and FaceNormal have no file header; RuneLite's root licence
+ * covers them and is copied verbatim in RUNELITE-LICENSE beside this file.
  *
+ * Copyright (c) 2017, Adam <Adam@sigterm.info>
  * Copyright (c) 2018, Adam <Adam@sigterm.info>
  * Copyright (c) 2020 Abex
  * All rights reserved.

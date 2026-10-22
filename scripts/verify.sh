@@ -171,6 +171,11 @@ RIFT_CLICK_TICK=68
 NORTH_EAST_RIFT_CLICK_LEFT_PX=325
 NORTH_EAST_RIFT_CLICK_UP_PX=52
 RIFT_BURST_TICK=90
+RIFT_CHARGED_SHOT_TICK=89
+RIFT_TIMER_BOX='{"minX":156,"maxX":185,"minY":-85,"maxY":-81}'
+RIFT_TIMER_MAX_EARLY_SHARE=10
+RIFT_TIMER_MIN_FULL_SHARE=85
+RIFT_ONE_HIT='[[72,"rift-67-1","ranged",44]]'
 CHAT_POLL_WAIT_MS=600
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
 DEFLECT_CLICK_TICK=12
@@ -180,6 +185,16 @@ DEFLECT_HOVER_TICKS='[14,29]'
 DEFLECT_FIRST_MELEE_TICK=31
 DEFLECT_BLOCKED_SHOT_TICK=31
 DEFLECT_LAST_TICK=46
+REFLECT_QUERY="?seed=4&focus=rifts"
+REFLECT_CLICK_TICK=38
+REFLECT_BOSS_CLICK_UP_PX=100
+REFLECT_NONE_SHOT_TICK=42
+REFLECT_HIT_SHOT_TICK=47
+REFLECT_LAST_TICK=53
+REFLECT_EXPECTED='{"judged":[[42,"ranged","blocked",8],[47,"ranged","blocked",44],[52,"ranged","blocked",62]],"reflected":[[47,"ranged",4],[52,"ranged",6]],"hpAfter":89}'
+REFLECT_SPLAT_BOX='{"minX":-14,"maxX":14,"minY":-52,"maxY":-24}'
+REFLECT_MIN_SPLAT_SHARE=5
+REFLECT_MAX_CLEAR_SHARE=1
 SOUL_SPLIT_HEAL_TICK=39
 RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[90,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
 SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1355,"afterHp":1404}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1404,"afterHp":1451}]]'
@@ -944,6 +959,7 @@ drive_overheads_rifts() {
   ab wait "$CHAT_POLL_WAIT_MS" >/dev/null
   ab screenshot "$VERIFY_DIR/rift-destroyed.png" >/dev/null || { log "rift kill screenshot failed"; return 1; }
   ab --json get text "#game_chat" >"$VERIFY_DIR/rift-chat.json" || { log "chat text capture failed"; return 1; }
+  shot_after_tick "$RIFT_CHARGED_SHOT_TICK" 0 rift-charged.png || { log "charged rift screenshot failed"; return 1; }
   shot_after_tick "$RIFT_BURST_TICK" 0 rift-burst.png || { log "rift burst screenshot failed"; return 1; }
   fight_tick_at_least $((RIFT_BURST_TICK + 1)) 30000 || { log "the rifts drill never stepped past the burst at P4 tick ${RIFT_BURST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/rifts.json"
@@ -962,6 +978,16 @@ drive_overheads_rifts() {
   probe "log()" >"$VERIFY_DIR/deflect.json"
   ab console >"$VERIFY_DIR/deflect-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/deflect-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  ab open "${URL}${REFLECT_QUERY}" >/dev/null || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$REFLECT_CLICK_TICK" 0 "-$REFLECT_BOSS_CLICK_UP_PX" || { log "the landed boss was not clicked"; return 1; }
+  shot_after_tick "$REFLECT_NONE_SHOT_TICK" 0 reflect-none.png || { log "unreflected hit screenshot failed"; return 1; }
+  shot_after_tick "$REFLECT_HIT_SHOT_TICK" 0 reflect-hit.png || { log "reflected hit screenshot failed"; return 1; }
+  fight_tick_at_least "$REFLECT_LAST_TICK" 60000 || { log "the reflect drill never stepped to P4 tick ${REFLECT_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/reflect.json"
+  ab console >"$VERIFY_DIR/reflect-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/reflect-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
 invincible_toggle() {
@@ -1097,6 +1123,7 @@ drive() {
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
     $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
     hover-out-of-reach.png deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json \
+    rift-charged.png reflect-none.png reflect-hit.png reflect.json reflect-console.log reflect-page-errors.json \
     seed-fresh.png seed.json seed.png seed-console.log seed-page-errors.json \
     holes-drawn.png holes-flood.png hole-click.json hole-hit.png holes.json holes-console.log holes-page-errors.json \
     walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
@@ -1117,7 +1144,8 @@ drive() {
       riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws, hoverTile, hoverTicks, firstMeleeTick,
       walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, cornerHole, cornerNub,
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
-      cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected] = process.argv.slice(1);
+      cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
+      riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1138,6 +1166,7 @@ drive() {
     const floorGlaives = floorLog.rows.flatMap((row) => row.events.filter((event) => event.kind === "player-hit-judged")).slice(0, 4);
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
     const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors, overheadDraws] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json", "overhead-draws.json"].map(read);
+    const [reflectLog, reflectErrors] = ["reflect.json", "reflect-page-errors.json"].map(read);
     const [cueLog, cueToggleAudio, cueAudio, cueToggleErrors, cueErrors, cueSaved, cueChatBefore, cueChatAfter] =
       ["cues.json", "cue-toggle-audio.json", "cue-audio.json", "cue-toggle-page-errors.json", "cue-page-errors.json", "cue-sound-saved.json", "cue-chat-before.json", "cue-chat.json"].map(read);
     const [recordingFrom, toggledAt, freshClickedAt, freshAudio, freshErrors, savedOff] =
@@ -1279,6 +1308,8 @@ drive() {
       kill: destroyedAt === null ? [] : riftTimed([[destroyedAt + killOffset, killId]]),
       burst: riftTimed(JSON.parse(riftBurstSounds)),
     };
+    const timerShare = (file) => pixelShare(file, (r, g, b) => r >= 180 && g >= 140 && b <= 90 && r - b >= 120, fromCentre(riftTimerBox));
+    const splatShare = (file) => pixelShare(file, (r, g, b) => r >= 120 && g <= 40 && b <= 40, fromCentre(reflectSplatBox));
     const holeTiles = JSON.parse(holeLayout).tiles;
     const onHole = (tile) => holeTiles.some((hole) => same(tile, hole));
     const darkAround = (file, [, dx, dy]) => {
@@ -1416,6 +1447,8 @@ drive() {
         spawned: kindOf(riftLog.rows, "rift-spawned").map((e) => [e.at, e.rift, e.tile]),
         destroyed: kindOf(riftLog.rows, "rift-destroyed").map((e) => [e.at, e.rift]),
         bursts: kindOf(riftLog.rows, "rift-burst").map((e) => [e.at, e.rift, e.receipt]),
+        hits: kindOf(riftLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
+        timerShares: { beforeSpawn: timerShare("overhead-45.png"), spawned: timerShare("rift-spawned.png"), charged: timerShare("rift-charged.png") },
         chat: riftChat.data?.text ?? null,
         sounds: {
           spawn: riftHeard(JSON.parse(riftSpawnSounds).map(([, id]) => id)),
@@ -1423,6 +1456,12 @@ drive() {
           burst: riftHeard(JSON.parse(riftBurstSounds).map(([, id]) => id)),
           contexts: [...new Set(riftAudio.map((s) => s.state))],
         },
+      },
+      reflect: {
+        judged: kindOf(reflectLog.rows, "player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]),
+        reflected: kindOf(reflectLog.rows, "deflect-reflected").map((e) => [e.at, e.style, e.receipt.applied]),
+        hpAfter: rowAt(reflectLog.rows, JSON.parse(reflectExpected).judged.at(-1)[0])?.playerAtPostTick.hp ?? null,
+        splatShares: { unreflected: splatShare("reflect-none.png"), reflected: splatShare("reflect-hit.png") },
       },
       cues: {
         toggles,
@@ -1548,6 +1587,11 @@ drive() {
       riftKilledByClick: rifts.destroyed.length === 1 && rifts.destroyed[0][1] === expectedRifts.destroyed && rifts.destroyed[0][0] <= Number(burstTick),
       killChatShown: rifts.chat === killChat,
       standingRiftBursts: sameJson(rifts.bursts, JSON.stringify(expectedRifts.bursts)),
+      riftKilledInOneRangedHit: sameJson(rifts.hits, riftOneHit),
+      riftTimerBarFills: rifts.timerShares.beforeSpawn === 0 && rifts.timerShares.spawned > 0 && rifts.timerShares.spawned <= Number(riftTimerMaxEarly) && rifts.timerShares.charged >= Number(riftTimerMinFull),
+      deflectReflectsATenth: sameJson({ judged: observed.reflect.judged, reflected: observed.reflect.reflected, hpAfter: observed.reflect.hpAfter }, reflectExpected) &&
+        observed.reflect.judged.every(([at, style, outcome, requested]) => observed.reflect.reflected.filter((r) => r[0] === at).length === (outcome === "blocked" && Math.floor(requested / 10) > 0 ? 1 : 0)),
+      reflectHitsplatOnPlayer: observed.reflect.splatShares.reflected >= Number(reflectMinSplat) && observed.reflect.splatShares.unreflected <= Number(reflectMaxClear),
       riftSpawnSoundsOnFrame: onSchedule(rifts.sounds.spawn, riftExpectedSounds.spawn) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
       riftKillSoundOnFrame: riftExpectedSounds.kill.length === 1 && onSchedule(rifts.sounds.kill, riftExpectedSounds.kill) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
       riftBurstSoundsOnFrames: onSchedule(rifts.sounds.burst, riftExpectedSounds.burst) && sameJson(rifts.sounds.contexts, JSON.stringify(["running"])),
@@ -1588,7 +1632,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1607,7 +1651,8 @@ drive() {
     "$DEFLECT_HOVER_TILE" "$DEFLECT_HOVER_TICKS" "$DEFLECT_FIRST_MELEE_TICK" \
     "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
-    "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
+    "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

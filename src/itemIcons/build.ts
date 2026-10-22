@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import config from "../../osrs-assets.config";
 import { ARCHIVE_OCELLUS_ASSETS, ITEM_ICON_DIR, itemIconFile } from "../assets";
-import { hsl, priority, renderItemIcon } from "./ItemIcon";
+import { TRANSPARENT, hsl, priority, renderItemIcon } from "./ItemIcon";
 import type { Face, IconItem, IconModel, Shading, Sprite } from "./ItemIcon";
 
 const ROOT = resolve(__dirname, "../..");
@@ -143,9 +143,9 @@ const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 function png({ width, height, pixels }: Sprite): Buffer {
   const rows = Buffer.alloc(height * (1 + width * 4));
-  pixels.forEach((rgb, i) => {
+  pixels.forEach((pixel, i) => {
     const at = Math.trunc(i / width) * (1 + width * 4) + 1 + (i % width) * 4;
-    if (rgb !== 0) rows.set([rgb >> 16, (rgb >> 8) & 255, rgb & 255, 255], at);
+    if (pixel !== TRANSPARENT) rows.set([pixel >> 16, (pixel >> 8) & 255, pixel & 255, 255], at);
   });
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);

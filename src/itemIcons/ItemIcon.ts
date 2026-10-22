@@ -35,8 +35,11 @@ const PRIORITIES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 
 export type Hsl = Brand<"Hsl">;
 export type Priority = (typeof PRIORITIES)[number];
+type Rgb = Brand<"Rgb">;
+type Pixel = Rgb | typeof TRANSPARENT;
 
 const isHsl = (n: Unbranded): n is Unbranded & Hsl => Number.isInteger(n) && n >= 0 && n <= 0xffff;
+const isRgb = (n: Unbranded): n is Unbranded & Rgb => Number.isInteger(n) && n > TRANSPARENT && n <= 0xffffff;
 
 export function hsl(n: Unbranded): Hsl {
   if (!isHsl(n)) throw new RangeError(`not a packed HSL colour: ${n}`);
@@ -46,6 +49,10 @@ export function priority(n: Unbranded): Priority {
   const known = PRIORITIES.find((p) => p === n);
   if (known === undefined) throw new RangeError(`not a face priority: ${n}`);
   return known;
+}
+function rgb(n: Unbranded): Rgb {
+  if (!isRgb(n)) throw new RangeError(`not an opaque 0xRRGGBB colour: ${n}`);
+  return n;
 }
 
 export type Vertex = Readonly<{ x: number; y: number; z: number }>;
@@ -65,13 +72,14 @@ export type IconItem = Readonly<{
   ambient: number;
   contrast: number;
 }>;
-export type Sprite = Readonly<{ width: number; height: number; pixels: Uint32Array }>;
+export type Sprite = Readonly<{ width: number; height: number; pixels: readonly Pixel[] }>;
 
 const WIDTH = 36;
 const HEIGHT = 32;
 const CENTRE = 16;
 const ZOOM = 512;
-const OUTLINE = 1;
+export const TRANSPARENT = 0;
+const OUTLINE = rgb(0x000001);
 const LIGHT: Vertex = { x: -50, y: -10, z: -50 };
 const BRIGHTNESS = 0.6;
 
@@ -86,7 +94,7 @@ export function renderItemIcon(item: IconItem, model: IconModel): Sprite {
     z: Math.trunc((item.resize.z * z) / 128),
   }));
   const faces = model.faces.map((face) => ({ ...face, colour: item.recolours.reduce((colour, { from, to }) => (colour === from ? to : colour), face.colour) }));
-  const pixels = new Uint32Array(WIDTH * HEIGHT);
+  const pixels = new Array<Pixel>(WIDTH * HEIGHT).fill(TRANSPARENT);
   const lit = light(vertices, faces, item.ambient + 64, item.contrast + 768);
   const screen = project(vertices, item);
   for (const { corners: [a, b, c], paint } of drawOrder(lit, screen)) fillTriangle(pixels, [screen.points[a], screen.points[b], screen.points[c]], paint);
@@ -94,7 +102,7 @@ export function renderItemIcon(item: IconItem, model: IconModel): Sprite {
 }
 
 type Triple<T> = readonly [T, T, T];
-type Paint = Readonly<{ kind: "gouraud"; colours: Triple<Hsl> }> | Readonly<{ kind: "flat"; rgb: number }>;
+type Paint = Readonly<{ kind: "gouraud"; colours: Triple<Hsl> }> | Readonly<{ kind: "flat"; rgb: Rgb }>;
 type LitFace = Readonly<{ corners: readonly [number, number, number]; priority: Priority; paint: Paint }>;
 type Normal = { x: number; y: number; z: number; faces: number };
 
@@ -228,7 +236,7 @@ function longEdgeOnLeft(top: number, middleIsNext: boolean, topY: number, middle
   return !(top === 0 ? (topY !== middleY && short < long) || (topY === middleY && lower > long) : short < long);
 }
 
-function fillTriangle(pixels: Uint32Array, corners: Triple<Point>, paint: Paint): void {
+function fillTriangle(pixels: Pixel[], corners: Triple<Point>, paint: Paint): void {
   const [p0, p1, p2] = corners;
   let colourDx = 0;
   let colourDy = 0;
@@ -277,35 +285,34 @@ function fillTriangle(pixels: Uint32Array, corners: Triple<Point>, paint: Paint)
   for (; y < bottomY; y++, long += longSlope, lower += lowerSlope, colour += colourDy) span(y, long, lower);
 }
 
-function outline(pixels: Uint32Array): Uint32Array {
+function outline(pixels: readonly Pixel[]): Pixel[] {
   return pixels.map((pixel, i) => {
-    if (pixel !== 0) return pixel;
+    if (pixel !== TRANSPARENT) return pixel;
     const [x, y] = [i % WIDTH, Math.trunc(i / WIDTH)];
-    const touches = (x > 0 && pixels[i - 1] !== 0) || (y > 0 && pixels[i - WIDTH] !== 0) || (x < WIDTH - 1 && pixels[i + 1] !== 0) || (y < HEIGHT - 1 && pixels[i + WIDTH] !== 0);
-    return touches ? OUTLINE : 0;
+    const touches = (x > 0 && pixels[i - 1] !== TRANSPARENT) || (y > 0 && pixels[i - WIDTH] !== TRANSPARENT) || (x < WIDTH - 1 && pixels[i + 1] !== TRANSPARENT) || (y < HEIGHT - 1 && pixels[i + WIDTH] !== TRANSPARENT);
+    return touches ? OUTLINE : TRANSPARENT;
   });
 }
 
-function crop(pixels: Uint32Array): Sprite {
-  const drawn = Array.from(pixels.keys()).filter((i) => pixels[i] !== 0);
+function crop(pixels: readonly Pixel[]): Sprite {
+  const drawn = Array.from(pixels.keys()).filter((i) => pixels[i] !== TRANSPARENT);
   if (drawn.length === 0) throw new Error("the model drew no pixels");
   const xs = drawn.map((i) => i % WIDTH);
   const ys = drawn.map((i) => Math.trunc(i / WIDTH));
   const [left, top] = [Math.min(...xs), Math.min(...ys)];
   const [width, height] = [Math.max(...xs) - left + 1, Math.max(...ys) - top + 1];
-  const cropped = new Uint32Array(width * height);
-  for (let y = 0; y < height; y++) cropped.set(pixels.subarray((top + y) * WIDTH + left, (top + y) * WIDTH + left + width), y * width);
-  return { width, height, pixels: cropped };
+  const rows = Array.from({ length: height }, (_, y) => pixels.slice((top + y) * WIDTH + left, (top + y) * WIDTH + left + width));
+  return { width, height, pixels: rows.flat() };
 }
 
-let cachedPalette: Uint32Array | null = null;
+let cachedPalette: readonly Rgb[] | null = null;
 
-function palette(): Uint32Array {
-  cachedPalette ??= Uint32Array.from({ length: 65536 }, (_, packed) => hslToRgb(hsl(packed)));
+function palette(): readonly Rgb[] {
+  cachedPalette ??= Array.from({ length: 65536 }, (_, packed) => hslToRgb(hsl(packed)));
   return cachedPalette;
 }
 
-function hslToRgb(colour: Hsl): number {
+function hslToRgb(colour: Hsl): Rgb {
   const hue = ((colour >> 10) & 63) / 64 + 0.5 / 64;
   const saturation = ((colour >> 7) & 7) / 8 + 0.5 / 8;
   const luminance = (colour & 127) / 128;
@@ -321,6 +328,6 @@ function hslToRgb(colour: Hsl): number {
     [chroma, 0, x],
   ][Math.trunc(hue * 6)].map((add) => Math.trunc((base + add) * 256));
   const bright = (channel: number) => Math.trunc(Math.pow(channel / 256, BRIGHTNESS) * 256);
-  const rgb = (bright(r) << 16) | (bright(g) << 8) | bright(b);
-  return rgb === 0 ? 1 : rgb;
+  const value = (bright(r) << 16) | (bright(g) << 8) | bright(b);
+  return value === TRANSPARENT ? OUTLINE : rgb(value);
 }

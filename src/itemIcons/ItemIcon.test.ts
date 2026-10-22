@@ -31,7 +31,7 @@ function square(left: number, right: number, half: number, z: number, colour: Hs
 function picture(sprite: Sprite, legend: Readonly<Record<string, number>>): string[] {
   const letters = new Map(Object.entries(legend).map(([letter, rgb]) => [rgb, letter]));
   return Array.from({ length: sprite.height }, (_, y) =>
-    Array.from(sprite.pixels.subarray(y * sprite.width, (y + 1) * sprite.width), (pixel) => (pixel === 0 ? "." : letters.get(pixel) ?? "?")).join(""),
+    sprite.pixels.slice(y * sprite.width, (y + 1) * sprite.width).map((pixel) => (pixel === 0 ? "." : letters.get(pixel) ?? "?")).join(""),
   );
 }
 
@@ -82,7 +82,7 @@ test("the item's recolour applies before smooth faces are shaded pixel by pixel"
   };
   const sprite = renderItemIcon({ ...FRONT_ON, recolours: [{ from: RED, to: GREEN }] }, pyramid);
   expect([sprite.width, sprite.height]).toEqual([12, 12]);
-  expect(Array.from(sprite.pixels.subarray(12, 24))).toEqual([
+  expect(sprite.pixels.slice(12, 24)).toEqual([
     0x000001, 0x1df626, 0x1df126, 0x1dec24, 0x1ae524, 0x1ae022, 0x1ada22, 0x1ad320, 0x18cd20, 0x18c820, 0x18c21d, 0x000001,
   ]);
 });

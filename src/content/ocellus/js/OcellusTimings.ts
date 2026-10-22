@@ -43,6 +43,9 @@ const cache = (record: string): Source => ({ kind: "cache", build: 2746, record 
 const owner = (topic: string): Source => ({ kind: "owner", date: "2026-10-21", topic });
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
+const DEFLECT_MELEE_SEEN = [vod("V1", "G53, G55 to G57, G109, G115 to G117, G153, G154, G175 to G177"), vod("V2", "k48, k60, k70 to k72, k131, k132, k168, k170, k250 to k252")] as const;
+const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133, G184 to G186, G189 to G193"), vod("V2", "k79 to k93, k143 to k153, k199, k200, k214 to k217, k259 to k273 but k266")] as const;
+const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15378404);
 const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
@@ -178,8 +181,8 @@ type PresentationRecipe = Readonly<{
   overheadIconBelowHpBar: Selected<number>;
 }>;
 
-const headIcon = (frame: number, note: string, seen: Source): Selected<SpriteFrame> =>
-  selected({ archive: 440, frame }, "inferred", "unscaled", note, cache(`sprite 440 headicons_prayer frame ${frame}`), seen);
+const headIcon = (frame: number, note: string, seen: readonly Source[]): Selected<SpriteFrame> =>
+  selected({ archive: 440, frame }, "footage-repeated", "unscaled", note, cache(`sprite 440 headicons_prayer frame ${frame}`), ...seen);
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
 export type ItemStats = Readonly<{
@@ -278,8 +281,8 @@ const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
 const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
 
 const OVERHEADS: OverheadByStage = {
-  "inner-void": selected("deflect-melee", "footage-once", "team-5", "icon at S+12 and S+23; raised at the rise per the wiki order, the switch tick was not in frame (Q9)", vod("V2", "k60, k71"), STRATEGIES),
-  "outer-void": selected("deflect-range", "footage-once", "team-5", "icon with the flood from S+31", vod("V2", "k79, k80, k90"), STRATEGIES),
+  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it", ...DEFLECT_MELEE_SEEN, STRATEGIES),
+  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed", ...DEFLECT_RANGE_SEEN, STRATEGIES),
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
 };
 
@@ -512,9 +515,9 @@ const PRESENTATION: PresentationRecipe = {
     vod("V2", "k72 to k78, k100 to k106, k132 to k137"),
   ),
   overheadIcons: {
-    "deflect-melee": headIcon(15, "a sword over a purple badge with blue arrows; matches the boss's icon by eye", vod("V2", "k60, k71")),
-    "deflect-range": headIcon(16, "an arrow over the same badge; matches the boss's icon by eye", vod("V2", "k80, k90")),
-    "soul-split": headIcon(11, "a white star with red arrows over a purple badge; matches the boss's icon by eye", vod("V2", "k73 to k77")),
+    "deflect-melee": headIcon(15, "a sword over a purple badge with blue arrows; 25 of the 168 icon detections in both clips match this frame, each closer to it than to the arrowless Dampen frames 12 and 13", DEFLECT_MELEE_SEEN),
+    "deflect-range": headIcon(16, "an arrow over the same badge; 96 of the 168 icon detections in both clips match this frame, each closer to it than to the arrowless Dampen frames 12 and 13", DEFLECT_RANGE_SEEN),
+    "soul-split": headIcon(11, "a white star with red arrows over a purple badge; 47 of the 168 icon detections in both clips match this frame", SOUL_SPLIT_SEEN),
   },
   overheadIconBelowHpBar: selected(7, "inferred", "unscaled", "the boss's HP bar sits above its curse icon, not over it as the SDK draws player overheads; 7 px clears the bar at the SDK's overhead scale", vod("V2", "k60, k71, k73, k80, k90")),
 };

@@ -334,7 +334,7 @@ export class Ocellus extends Mob {
       case "none":
         return "passed";
       case "block": {
-        const { overhead } = rule.sample === "impact" ? moment.phase : this.schedule.at(launchedAt).phase;
+        const { overhead } = this.schedule.at(launchedAt).phase;
         return overhead !== null && OCELLUS_P4.deflects[overhead].value === style ? "blocked" : "passed";
       }
       default: {

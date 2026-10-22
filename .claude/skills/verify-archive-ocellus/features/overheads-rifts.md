@@ -5,7 +5,7 @@ Ocellus wears a curse overhead, drawn under his HP bar with the cache's head ico
 ## Sub-features
 
 - `overhead-icon` draws sprite 440 frame 15 (Deflect Melee), 16 (Deflect Range) or 11 (Soul Split) under the boss's HP bar while the phase has that overhead. The lead-in has none.
-- `deflect` logs `player-hit-judged` for each player hit on the boss with outcome `blocked`, `passed` or `invulnerable`. A blocked hit lands as 0. The `deflect` choice selects `block-at-impact` (default), `block-at-launch` or `none`.
+- `deflect` logs `player-hit-judged` for each player hit on the boss with outcome `blocked`, `passed` or `invulnerable`. A hit is judged by the overhead up on the tick it was launched, so a ranged hit launched before Deflect Range rises lands in full. A blocked hit lands as 0. The `deflect` choice selects `block-at-launch` (default) or `none`.
 - `soul-split-heal` logs `boss-healed` with cause `soul-split` and the attack's ordinal 2 ticks after an unprotected transition hit, by the damage that hit applied. A protected hit heals nothing. The heal splat stays for 2 ticks.
 - `rift-spawn` logs `rift-spawned` for two NPC 16678 rifts, at (-2, -4) and (7, -4) from the boss anchor (4, 6), which is (2, 2) and (11, 2) on the measured platform. They spawn at 67 by default or at 127 with `riftFirstCycle=cycle-3`, and play spawn sequence 14896 with its sound.
 - `rift-destroyed` logs each rift whose HP was 0 at the end of tick 77, at the next boss step. The rift plays despawn sequence 14897, and the kill line goes to the chat.

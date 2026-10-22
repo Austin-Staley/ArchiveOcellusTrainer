@@ -286,7 +286,7 @@ const OVERHEADS: OverheadByStage = {
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
 };
 
-export type DeflectRule = Readonly<{ kind: "block"; sample: "impact" | "launch" }> | Readonly<{ kind: "none" }>;
+export type DeflectRule = Readonly<{ kind: "block" }> | Readonly<{ kind: "none" }>;
 
 const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
   "deflect-melee": selected("melee", "inferred", "unscaled", "named for the style it turns away; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
@@ -651,9 +651,8 @@ export const OCELLUS_P4 = {
       "cycle-3": selected<Cycle>(cycle(3), "footage-once", "team-4", "none in view before cycle 2, two before cycle 3", vod("V1", "G90-G95, G152")),
     }),
     innerVoidFloor: INNER_VOID_FLOOR,
-    deflect: choice("block-at-impact", {
-      "block-at-impact": selected<DeflectRule>({ kind: "block", sample: "impact" }, "assumption", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it lands; nothing gives a reflection amount (Q8)", STRATEGIES),
-      "block-at-launch": selected<DeflectRule>({ kind: "block", sample: "launch" }, "assumption", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched (Q8)", STRATEGIES),
+    deflect: choice("block-at-launch", {
+      "block-at-launch": selected<DeflectRule>({ kind: "block" }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8)", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
       none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
     }),
     orbPickupRadius: choice("on-tile", {

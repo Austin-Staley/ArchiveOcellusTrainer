@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
@@ -108,49 +108,75 @@ const SETUP_KEYS = Object.keys(OCELLUS_P4.choices.setup.options);
 const FOCUS_KEYS = Object.keys(OCELLUS_P4.choices.focus.options);
 const label = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, " ");
 
+type RunRequest = Readonly<{ setup: string; focus: string; seed: string | null; invincible: boolean }>;
+
+function startRun({ setup, focus, seed, invincible }: RunRequest) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("setup", setup);
+  url.searchParams.set("focus", focus);
+  if (seed !== null) url.searchParams.set("seed", seed);
+  else url.searchParams.delete("seed");
+  if (invincible) url.searchParams.set("invincible", "on");
+  else url.searchParams.delete("invincible");
+  window.location.assign(url.href);
+}
+
 function DrillControls({ config, region }: Readonly<{ config: DrillConfig; region: OcellusRegion }>) {
   const [setup, setSetup] = useState<string>(config.choices.setup.key);
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
   const { playsAudio, playsAreaAudio } = useSettingsSnapshot();
-  const restart = (focus: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("setup", setup);
-    url.searchParams.set("focus", focus);
-    if (typedSeed?.trim()) url.searchParams.set("seed", typedSeed.trim());
-    else url.searchParams.delete("seed");
-    if (region.invincible) url.searchParams.set("invincible", "on");
-    else url.searchParams.delete("invincible");
-    window.location.assign(url.href);
-  };
+  const restart = (focus: string) => startRun({ setup, focus, seed: typedSeed?.trim() || null, invincible: region.invincible });
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    const closeOutside = (event: Event) => {
+      if (event.target instanceof Node && !form.current?.contains(event.target)) setMenuOpen(false);
+    };
+    // Capture, because the seed box and the SDK canvas stop their events from bubbling.
+    document.addEventListener("keydown", closeOnEscape, true);
+    document.addEventListener("pointerdown", closeOutside, true);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape, true);
+      document.removeEventListener("pointerdown", closeOutside, true);
+    };
+  }, [menuOpen]);
 
   return (
-    <form id="drill_controls" onSubmit={(event) => { event.preventDefault(); restart(config.choices.focus.key); }}>
-      <label>
-        Setup{" "}
-        <select id="setup" value={setup} onChange={(event) => setSetup(event.target.value)}>
-          {SETUP_KEYS.map((key) => <option key={key} value={key}>{label(key)}</option>)}
-        </select>
-      </label>
-      <label>
-        Focus{" "}
-        <select id="focus" value={config.choices.focus.key} onChange={(event) => restart(event.target.value)}>
-          {FOCUS_KEYS.map((key) => <option key={key} value={key}>{label(key)}</option>)}
-        </select>
-      </label>
-      <label>
-        Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(config.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
-      </label>
+    <form id="drill_controls" ref={form} onSubmit={(event) => { event.preventDefault(); restart(config.choices.focus.key); }}>
+      <div id="settings_menu" hidden={!menuOpen}>
+        <label>
+          Setup{" "}
+          <select id="setup" value={setup} onChange={(event) => setSetup(event.target.value)}>
+            {SETUP_KEYS.map((key) => <option key={key} value={key}>{label(key)}</option>)}
+          </select>
+        </label>
+        <label>
+          Focus{" "}
+          <select id="focus" value={config.choices.focus.key} onChange={(event) => restart(event.target.value)}>
+            {FOCUS_KEYS.map((key) => <option key={key} value={key}>{label(key)}</option>)}
+          </select>
+        </label>
+        <label>
+          Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(config.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
+        </label>
+        <button id="keybinds" type="button" onClick={() => ControlPanelController.controller.setActiveControl("SETTINGS")}>Keybinds</button>
+        <label>
+          Sound effects <input id="sound" type="checkbox" checked={playsAudio} onChange={(event) => Settings.set({ playsAudio: event.target.checked })} />
+        </label>
+        <label>
+          Area sounds <input id="area_sound" type="checkbox" checked={playsAreaAudio} onChange={(event) => Settings.set({ playsAreaAudio: event.target.checked })} />
+        </label>
+        <label>
+          Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+      </div>
+      <button id="settings" type="button" aria-expanded={menuOpen} aria-controls="settings_menu" onClick={() => setMenuOpen((open) => !open)}>⚙ Settings</button>
       <button id="restart" type="submit">Restart</button>
-      <button id="keybinds" type="button" onClick={() => ControlPanelController.controller.setActiveControl("SETTINGS")}>Keybinds</button>
-      <label>
-        Sound effects <input id="sound" type="checkbox" checked={playsAudio} onChange={(event) => Settings.set({ playsAudio: event.target.checked })} />
-      </label>
-      <label>
-        Area sounds <input id="area_sound" type="checkbox" checked={playsAreaAudio} onChange={(event) => Settings.set({ playsAreaAudio: event.target.checked })} />
-      </label>
-      <label>
-        Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
-      </label>
     </form>
   );
 }

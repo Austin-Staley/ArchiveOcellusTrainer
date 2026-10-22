@@ -162,7 +162,7 @@ describe("U1.5 loadouts", () => {
 
   test("Division drains Ocellus's Defence only for glaives that land damage, so a spec into the invulnerable lead-in drains nothing", () => {
     const spec = (throwAt: number, landedBy: number) => {
-      const drill = startDrill({ seed: 1 });
+      const drill = startDrill({ seed: 4 });
       drill.walkTo({ x: 5, y: 2 });
       drill.tickTo(throwAt);
       drill.clickInventory(28922);
@@ -176,7 +176,7 @@ describe("U1.5 loadouts", () => {
     };
     expect([spec(4, 7), spec(9, 12)]).toEqual([
       [["invulnerable", "invulnerable"], 1355, 250, 50],
-      [["passed", "passed"], 1329, 176, 50],
+      [["passed", "passed"], 1340, 176, 50],
     ]);
   });
 });

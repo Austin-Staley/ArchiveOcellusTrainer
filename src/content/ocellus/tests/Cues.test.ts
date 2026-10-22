@@ -1,8 +1,10 @@
-import { SoundCache } from "osrs-sdk";
+import { Settings, SoundCache } from "osrs-sdk";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
+import { loadPage } from "./page";
 
 const LIFEFORCE_CHAT = "Ocellus manipulates your lifeforce!";
+const SAVED_SETTINGS = "osrs-sdk:settings";
 
 function cuesThrough(lastTick: number, selection: DrillSelection) {
   const drill = startDrill({ selection });
@@ -35,5 +37,23 @@ describe("timing cues", () => {
       [[11, LIFEFORCE_CHAT], [42, LIFEFORCE_CHAT]],
       [],
     ]);
+  });
+
+  test("the sound toggles load unchecked, turn on the SDK's sound effects and area sounds, and stay on after a reload", () => {
+    localStorage.setItem(SAVED_SETTINGS, JSON.stringify({ version: 1, values: { use3dView: false } }));
+    const first = loadPage("/?seed=1");
+    const loaded = [first.checked("sound"), first.checked("area_sound")];
+    first.click("area_sound");
+    first.click("sound");
+    const saved = JSON.parse(localStorage.getItem(SAVED_SETTINGS) ?? "{}").values;
+    first.close();
+
+    Settings.playsAudio = false;
+    Settings.playsAreaAudio = false;
+    const reloaded = loadPage("/?seed=1");
+    const afterReload = [reloaded.checked("sound"), reloaded.checked("area_sound")];
+    reloaded.close();
+
+    expect({ loaded, saved: [saved.playsAudio, saved.playsAreaAudio], afterReload }).toEqual({ loaded: [false, false], saved: [true, true], afterReload: [true, true] });
   });
 });

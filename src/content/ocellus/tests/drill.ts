@@ -1,4 +1,4 @@
-import { Projectile, Settings, TrainerInstance } from "osrs-sdk";
+import { Projectile, Settings, TrainerInstance, Viewport } from "osrs-sdk";
 import type { Mob, Player, Unit } from "osrs-sdk";
 import { paintedFills } from "../../../../test/paintedTiles";
 import { OcellusRegion } from "../js/OcellusRegion";
@@ -33,7 +33,7 @@ export function startDrill(options: DrillOptions = {}) {
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   // The SDK counts GET READY down only in its browser loop, never in tickWorld.
   if (!options.keepGetReady) region.world.getReadyTimer = 0;
-  Settings._tileSize = 1;
+  Viewport.viewport.resize(800, 600);
 
   const rows = (): readonly TickRow[] => region.fightLog().rows;
   const player = (): Player => region.players[0];

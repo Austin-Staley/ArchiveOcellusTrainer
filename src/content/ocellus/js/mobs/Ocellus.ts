@@ -16,6 +16,7 @@ import type {
   InputObservation,
   Ordinal,
   Phase,
+  PlayerHitSource,
   PlayerObservation,
   RiftId,
   RunEnd,
@@ -114,6 +115,44 @@ class P4Hit extends Projectile {
   }
 }
 
+function landedHit(event: FightEvent): Readonly<{ source: PlayerHitSource; receipt: HitReceipt }> | null {
+  switch (event.kind) {
+    case "floor-hit":
+    case "hole-hit":
+    case "lifeforce-drained":
+    case "special-hit":
+    case "rift-burst":
+      return { source: event.kind, receipt: event.receipt };
+    case "explosion-resolved":
+      return event.outcome.kind === "hit" ? { source: event.kind, receipt: event.outcome.receipt } : null;
+    case "stage-entered":
+    case "overhead-switched":
+    case "boss-state-changed":
+    case "boss-shouted":
+    case "boss-landing-started":
+    case "player-hit-judged":
+    case "lifeforce-told":
+    case "orb-spawned":
+    case "orb-matured":
+    case "orb-returned":
+    case "orb-expired":
+    case "boss-healed":
+    case "explosion-series-started":
+    case "explosion-marked":
+    case "special-told":
+    case "special-sounded":
+    case "rift-spawned":
+    case "rift-destroyed":
+    case "death-prevented":
+    case "run-ended":
+      return null;
+    default: {
+      const unhandled: never = event;
+      return unhandled;
+    }
+  }
+}
+
 function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   const events: FightEvent[] = [];
   if (last?.stage !== now.stage) events.push({ kind: "stage-entered", at, stage: now.stage });
@@ -151,7 +190,7 @@ export class Ocellus extends Mob {
   private rifts: readonly Rift[] = [];
   private healSplats: readonly Readonly<{ amount: number; lastShown: Tick }>[] = [];
 
-  constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer) {
+  constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer, private readonly invincible: () => boolean) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
     this.schedule = Schedule.compile(config.seed, config.choices);
     this.holes = TileMask.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value : []);
@@ -586,6 +625,11 @@ export class Ocellus extends Mob {
       this.target.currentStats.hitpoint = afterHp;
       this.recordEvent({ kind: "orb-returned", at, void: orb.void, tile: orb.tile, receipt: { requested: orb.credit, applied: orb.credit, beforeHp, afterHp } });
     }
+    if (!this.invincible()) return;
+    const lethal = run.draft.events.map(landedHit).find((hit) => hit !== null && hit.receipt.beforeHp > 0 && hit.receipt.afterHp === 0);
+    if (!lethal) return;
+    this.target.currentStats.hitpoint = this.target.stats.hitpoint;
+    this.recordEvent({ kind: "death-prevented", at, source: lethal.source });
   }
 
   private recordEvent(event: FightEvent): void {

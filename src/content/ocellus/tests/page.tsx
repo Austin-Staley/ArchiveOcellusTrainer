@@ -40,3 +40,10 @@ export function loadPage(url: string) {
     },
   };
 }
+
+export function captureNavigation() {
+  const real = window.location;
+  const assigned: string[] = [];
+  Object.defineProperty(window, "location", { configurable: true, value: { get href() { return real.href; }, assign: (url: string) => void assigned.push(url) } });
+  return { assigned, restore: () => Object.defineProperty(window, "location", { configurable: true, value: real }) };
+}

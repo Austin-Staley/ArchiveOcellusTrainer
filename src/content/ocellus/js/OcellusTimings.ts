@@ -787,7 +787,7 @@ export type ResolvedChoices = { readonly [K in ChoiceName]: ResolvedChoice<K> };
 
 type DrillRequest = Readonly<{ seed: Seed; selection?: DrillSelection }>;
 export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices }>;
-type ParsedDrill = Readonly<{ config: DrillConfig; rejected: readonly string[] }>;
+type ParsedDrill = Readonly<{ config: DrillConfig; invincible: boolean; rejected: readonly string[] }>;
 
 function hasKey<O extends object>(record: O, key: string): key is keyof O & string {
   return Object.prototype.hasOwnProperty.call(record, key);
@@ -845,12 +845,14 @@ export function resolveDrill(request: DrillRequest): DrillConfig {
 export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {
   const rejected: string[] = [];
   for (const [key, value] of url.searchParams) {
-    if (key !== "seed" && !isChoiceName(key)) rejected.push(`${key}=${value}`);
+    if (key !== "seed" && key !== "invincible" && !isChoiceName(key)) rejected.push(`${key}=${value}`);
   }
+  const invincible = url.searchParams.get("invincible");
+  if (invincible !== null && invincible !== "on") rejected.push(`invincible=${invincible}`);
   const raw = url.searchParams.get("seed");
   const parsed = raw !== null && /^\d{1,10}$/.test(raw) && Number(raw) <= 0xffffffff ? Number(raw) : null;
   const runSeed = seed(parsed ?? freshSeed());
   const choices = resolveChoices((name) => url.searchParams.get(name) ?? undefined, rejected, runSeed);
   if (raw !== null && parsed === null) rejected.push(`seed=${raw}`);
-  return { config: { seed: runSeed, choices }, rejected };
+  return { config: { seed: runSeed, choices }, invincible: invincible === "on", rejected };
 }

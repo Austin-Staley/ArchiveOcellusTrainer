@@ -4,7 +4,7 @@ import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
 import { dress } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
-import type { FightEvent, FightLog, FightSnapshot, SoundId, Tile, TickRow, VoidKind } from "./P4Types";
+import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, SoundId, Tile, TickRow, VoidKind } from "./P4Types";
 import { BossLook, ExplosionViews, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
 import { Ocellus } from "./mobs/Ocellus";
@@ -30,6 +30,15 @@ type Views = Readonly<{
 }>;
 
 const { sounds, soundPlayback } = OCELLUS_P4.presentation;
+
+const LETHAL_HIT: Readonly<Record<PlayerHitSource, string>> = {
+  "floor-hit": "the void floor",
+  "hole-hit": "a floor hole",
+  "lifeforce-drained": "the lifeforce steal",
+  "explosion-resolved": "an explosion",
+  "special-hit": "a transition attack",
+  "rift-burst": "a void rift burst",
+};
 
 function playCue(id: SoundId, at: Tile, delayMs = 0): void {
   const { volume, range, retain } = soundPlayback.value;
@@ -91,6 +100,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "rift-burst":
       views.player.riftBurst();
       return;
+    case "death-prevented":
+      views.chat.push(`Invincible: ${LETHAL_HIT[event.source]} would have killed you on tick ${event.at}.`);
+      return;
     case "overhead-switched":
     case "boss-state-changed":
     case "player-hit-judged":
@@ -111,6 +123,7 @@ function present(event: FightEvent, views: Views, player: Tile): void {
 
 export class OcellusRegion extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  invincible = false;
 
   constructor(private readonly config: DrillConfig) {
     super();
@@ -145,7 +158,7 @@ export class OcellusRegion extends Region {
       (input) => ocellus.recordInput(input),
       () => ocellus.settlePlayerHits(),
     );
-    const ocellus: Ocellus = new Ocellus(this, this.config, player);
+    const ocellus: Ocellus = new Ocellus(this, this.config, player, () => this.invincible);
     dress(player, this.config.choices.setup);
     Object.values(sounds).forEach((sound) => SoundCache.preload(cacheSound(sound.value)));
     const views: Views = {

@@ -168,12 +168,11 @@ fixture_logs() {
     const orbAt = (x, y, hp) => ({ tile: { x, y }, hp });
     const orbEvents = {
       11: [{ kind: "lifeforce-told", at: 11, void: "inner-void" }],
-      12: [{ kind: "lifeforce-drained", at: 12, void: "inner-void", receipt: { applied: 49, afterHp: 50 } }],
-      13: [{ kind: "orb-spawned", at: 13, void: "inner-void", tile: { x: 3, y: 2 }, credit: 49 }],
-      24: [{ kind: "orb-matured", at: 24, void: "inner-void", tile: { x: 3, y: 2 } }],
+      12: [{ kind: "lifeforce-drained", at: 12, void: "inner-void", receipt: { applied: 49, afterHp: 50 } }, { kind: "orb-spawned", at: 12, void: "inner-void", tile: { x: 9, y: 4 }, credit: 49 }],
+      24: [{ kind: "orb-matured", at: 24, void: "inner-void", tile: { x: 9, y: 4 } }],
       [orbReturn]: [{ kind: "orb-returned", at: orbReturn, void: "inner-void", receipt: { afterHp: 99, applied: 49, beforeHp: 50, requested: 49 } }],
     };
-    const orb = Array.from({ length: 31 }, (_, t) => ({ tick: t, playerAtPostTick: t < 27 ? orbAt(5, 1, 99) : orbAt(3, 2, t < orbReturn ? 50 : 99), events: orbEvents[t] ?? [] }));
+    const orb = Array.from({ length: 31 }, (_, t) => ({ tick: t, playerAtPostTick: t < 27 ? orbAt(5, 1, 99) : orbAt(9, 4, t < orbReturn ? 50 : 99), events: orbEvents[t] ?? [] }));
     const skipEvents = {
       30: [{ kind: "orb-expired", at: 30, void: "inner-void" }],
       61: [{ kind: "orb-expired", at: 61, void: "outer-void" }],
@@ -650,7 +649,7 @@ fake_browser() {
         [[ "$n" -lt 3 ]] || { tile="$FINAL_TILE"; tick=12; fight="$PRESENT_FIGHT"; }
         [[ "$n" -ne 4 ]] || { tile="$EDGE_TILE"; tick=13; }
         [[ "$n" -ne 5 ]] || { tile="$EDGE_TILE"; tick="$EDGE_HELD_TICK"; }
-        [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":3,"y":2}'
+        [[ "$(cat "$T/restarts" 2>/dev/null || echo 0)" -lt 3 ]] || tile='{"x":9,"y":4}'
         printf '{"data":{"result":{"ticking":true,"tick":%s,"player":%s,"destination":%s,"fight":%s}}}\n' "$tick" "$tile" "$tile" "$fight"
         ;;
       "--json eval window.__overheadDraws") cat "$T/overhead-draws.json" ;;

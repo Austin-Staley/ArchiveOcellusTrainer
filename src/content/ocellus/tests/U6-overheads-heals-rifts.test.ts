@@ -121,7 +121,6 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.tickTo(68);
     const northEast = northEastRift(drill);
     const sequences: number[] = [];
-    // Stands in for the 3D renderer, which jsdom cannot run.
     northEast.setAnimationListener({ animationChanged: (id) => Promise.resolve(void sequences.push(id)), modelChanged: () => undefined });
     drill.tickTo(killLandsAt - 1);
     drill.hit(drill.player(), northEast, 44);

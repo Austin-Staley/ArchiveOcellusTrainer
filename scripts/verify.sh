@@ -208,8 +208,7 @@ stage_assets() {
     npm run item-icons -- "${flags[@]}" >>"$VERIFY_DIR/assets.log" 2>&1
     return
   fi
-  npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 &&
-    node scripts/extract-sprites.mjs "${flags[@]}" >>"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
+  npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
 }
 
 port_listener() {

@@ -9,7 +9,7 @@ Every item in the inventory menu shows its name, for example `Equip Tonalztics o
 - `brew-heal` raises Hitpoints by 15% of the maximum plus 2 on the tick after the click.
 - `keybinds-reachable` opens the settings tab from the `Keybinds` button.
 - `keybinds-saved` keeps a bound key across a reload, and the old key no longer opens the tab.
-- `seed-field-keys` keeps a bound key typed into the seed field in the field. Jest owns this check, because agent-browser cannot type a bound key into a focused field reliably.
+- `seed-field-keys` keeps a bound key typed into the seed field in the field. Vitest owns this check, because agent-browser cannot type a bound key into a focused field reliably.
 
 ## How to get to it (user POV)
 

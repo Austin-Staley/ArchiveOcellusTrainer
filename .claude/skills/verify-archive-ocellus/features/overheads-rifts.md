@@ -41,7 +41,7 @@ Preconditions:
 - osrs-sdk draws player overheads where the boss's HP banner covers them. The boss's icon sits under his HP bar, as the footage shows.
 - A rift joins the world on the tick after the boss spawns it, because osrs-sdk adds new mobs at the next tick. The click waits for 68.
 - The osrs-sdk scythe sends all three hits to a 1x1 target. The trainer's scythe hits a target once for each tile of its width, up to three, so a swing hits a rift once and the boss three times.
-- The deflect page wears the melee setup, so only Jest proves Deflect Range blocking.
+- The deflect page wears the melee setup, so only Vitest proves Deflect Range blocking.
 - The footage shows a white wisp travelling to the boss before the Soul Split heal. No cache spotanim matches it, so the trainer does not draw it.
 - osrs-sdk has no chatbox. The kill line goes to `#game_chat`, a page element over the canvas.
 - The full-fight page also logs rifts at 67. Its checks stop at 70 and do not read them.

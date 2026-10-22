@@ -6,7 +6,7 @@ The player enters phase 4 wearing one of two setups. The ranged setup is the Mas
 
 - `setup-worn` enters wearing the setup the URL or the `Setup` selector names, `ranged` by default.
 - `setup-switches` lists Ralos in slot 0 and the other setup's eight differing pieces in slots 1 to 8; clicking all eight wears the other setup.
-- `set-effects` gives Inquisitor's armour its crush bonus on Jab. The ranged setup has no set effect. Jest owns the attack-roll and max-hit literals, because the browser cannot force a max roll.
+- `set-effects` gives Inquisitor's armour its crush bonus on Jab. The ranged setup has no set effect. Vitest owns the attack-roll and max-hit literals, because the browser cannot force a max roll.
 - `division` spends 50 special energy and, as the glaives land, drains the boss's Defence by 37 for each glaive that deals damage.
 - `setup-selector` restarts the drill in the selected setup from the `Setup` selector and the Restart button.
 

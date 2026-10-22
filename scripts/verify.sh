@@ -515,7 +515,12 @@ drive_cycle() {
   ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+keep_seed() {
+  ab fill "#seed" "$(ab --json get value "#seed" | json data.value)" >/dev/null || { log "the seed box did not take the run's own seed"; return 1; }
+}
+
 choose_focus() {
+  keep_seed || return 1
   ab select "#focus" "$1" >/dev/null || { log "focus control did not accept $1"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).get('focus') === '$1'" --timeout 30000 >/dev/null || { log "choosing $1 did not load focus=$1 without Restart"; return 1; }
 }
@@ -597,7 +602,7 @@ drive_loadouts() {
   ab console >"$VERIFY_DIR/loadout-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/loadout-page-errors.json" || { log "page error capture failed"; return 1; }
 
-  ab select "#setup" melee >/dev/null && ab click "#restart" >/dev/null || { log "setup control did not accept melee"; return 1; }
+  keep_seed && ab select "#setup" melee >/dev/null && ab click "#restart" >/dev/null || { log "setup control did not accept melee"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).get('setup') === 'melee'" --timeout 30000 >/dev/null || { log "restart did not load setup=melee"; return 1; }
   fight_tick_at_least 1 120000 || { log "the reloaded melee drill never stepped to P4 tick 1"; return 1; }
   probe "snapshot().fight" >"$VERIFY_DIR/loadout-selector.json"
@@ -823,7 +828,7 @@ drive_transition_attack() {
   ab --json errors | json data.errors >"$VERIFY_DIR/special-page-errors.json" || { log "page error capture failed"; return 1; }
 
   save_sound_settings true || { log "the sound settings were not saved"; return 1; }
-  ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
+  keep_seed && ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).has('setup')" --timeout 30000 >/dev/null || { log "Restart did not reload the transition drill"; return 1; }
   fight_tick_at_least 0 120000 || { log "the late-prayer drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
@@ -846,7 +851,7 @@ drive_overheads_rifts() {
   ab open "${URL}${RIFT_QUERY}" >/dev/null || return 1
   fight_tick_at_least 0 120000 || { log "the rifts drill never loaded"; return 1; }
   save_sound_settings true || { log "the sound settings were not saved"; return 1; }
-  ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
+  keep_seed && ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).has('setup')" --timeout 30000 >/dev/null || { log "Restart did not reload the rifts drill"; return 1; }
   fight_tick_at_least 0 120000 || { log "the rifts drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }

@@ -17,7 +17,7 @@ npm run assets -- --cache-dir <openrs2 cache dir> --reader-path <osrscachereader
 npm start                       # http://127.0.0.1:8002
 ```
 
-`npm run assets` extracts models from OpenRS2 cache 2746 into `public/osrs-assets/`, which is never committed. It then draws an inventory icon for each of the trainer's own items from the item's model in the same cache, the way the game client draws it, into `public/osrs-assets/item-icons/`. `npm run item-icons` with the same two options redraws only the icons. The icon renderer in `src/itemIcons/` is ported from RuneLite's cache tool under its BSD 2-clause licence.
+`npm run assets` extracts models from OpenRS2 cache 2746 into `public/osrs-assets/`, which is never committed. It then draws an inventory icon for each of the trainer's own items from the item's model in the same cache, the way the game client draws it, into `public/osrs-assets/item-icons/`, and writes the boss's overhead icons from the cache's sprite index into `public/osrs-assets/sprites/`. `npm run item-icons` with the same two options redraws only the icons. The icon renderer in `src/itemIcons/` is ported from RuneLite's cache tool under its BSD 2-clause licence.
 
 ## Deploy
 

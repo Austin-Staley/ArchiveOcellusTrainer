@@ -90,6 +90,7 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "boss-shouted":
     case "player-hit-judged":
     case "floor-hit":
+    case "hole-hit":
     case "lifeforce-drained":
     case "boss-healed":
     case "special-hit":

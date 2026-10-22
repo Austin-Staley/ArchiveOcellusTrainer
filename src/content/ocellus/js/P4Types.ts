@@ -124,6 +124,7 @@ export type FightEvent =
   | Readonly<{ kind: "boss-landing-started"; at: Tick }>
   | Readonly<{ kind: "player-hit-judged"; at: Tick; style: IncomingStyle; outcome: HitJudgement; requested: number }>
   | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile; receipt: HitReceipt }>
+  | Readonly<{ kind: "hole-hit"; at: Tick; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "lifeforce-told"; at: Tick; void: VoidKind }>
   | Readonly<{ kind: "lifeforce-drained"; at: Tick; void: VoidKind; receipt: HitReceipt }>
   | Readonly<{ kind: "orb-spawned"; at: Tick; void: VoidKind; tile: Tile; credit: number }>

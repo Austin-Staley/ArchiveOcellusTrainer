@@ -125,7 +125,7 @@ function parseModel(itemId: number, value: unknown): IconModel {
   const [as, bs, cs] = ["faceVertexIndices1", "faceVertexIndices2", "faceVertexIndices3"].map((key) => integers(owner(key), field(value, key), faceCount));
   const colours = integers(owner("faceColors"), field(value, "faceColors"), faceCount).map(hsl);
   const types = perFace(owner("faceRenderTypes"), field(value, "faceRenderTypes"), faceCount);
-  const priorities = (perFace(owner("faceRenderPriorities"), field(value, "faceRenderPriorities"), faceCount) ?? new Array<number>(faceCount).fill(0)).map(priority);
+  const priorities = (perFace(owner("faceRenderPriorities"), field(value, "faceRenderPriorities"), faceCount) ?? new Array<number>(faceCount).fill(count("priority"))).map(priority);
   if (perFace(owner("faceAlphas"), field(value, "faceAlphas"), faceCount)?.some((alpha) => alpha !== 0)) throw new Error(`${owner("faceAlphas")}: transparent faces are not drawn by this renderer`);
   if (perFace(owner("faceTextures"), field(value, "faceTextures"), faceCount)?.some((texture) => texture !== -1)) throw new Error(`${owner("faceTextures")}: textured faces are not drawn by this renderer`);
 

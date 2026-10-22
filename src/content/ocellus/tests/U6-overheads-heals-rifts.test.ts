@@ -1,3 +1,5 @@
+import type { Fill } from "../../../../test/paintedTiles";
+import { paintedFills } from "../../../../test/paintedTiles";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 
@@ -9,6 +11,37 @@ function northEastRift(drill: Drill) {
   const rift = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
   if (!rift) throw new Error("no rift on (11, 2)");
   return rift;
+}
+
+type DeflectAttack = Readonly<{
+  attack: string;
+  selection: DrillSelection;
+  seed: number;
+  wield: number | null;
+  special: boolean;
+  from: number;
+  to: number;
+  judged: readonly unknown[];
+  reflected: readonly unknown[];
+  playerHp: number;
+  bossLost: number;
+}>;
+
+function attackIntoDeflect({ selection, seed, wield, special, from, to, judged, reflected, playerHp, bossLost }: DeflectAttack) {
+  const drill = startDrill({ seed, selection });
+  drill.tickTo(from - 1);
+  if (wield !== null) drill.clickInventory(wield);
+  drill.player().useSpecialAttack = special;
+  drill.player().setAggro(drill.boss());
+  drill.tickTo(to);
+  const lost = drill.rows().filter((row) => row.tick >= from).reduce((sum, row) => sum + row.bossHp.atBossStep - row.bossHp.atPostTick, 0);
+  expect({
+    judged: drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]),
+    reflected: drill.events("deflect-reflected").map((e) => [e.at, e.style, e.receipt]),
+    playerHp: drill.row(to).playerAtPostTick.hp,
+    bossLost: lost,
+  }).toEqual({ judged, reflected, playerHp, bossLost });
+  drill.dispose();
 }
 
 describe("U6 boss overheads, heals and rifts", () => {
@@ -57,6 +90,66 @@ describe("U6 boss overheads, heals and rifts", () => {
   });
 
   test.each([
+    {
+      attack: "Twisted Bow shots into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 4, wield: null, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
+      reflected: [[47, "ranged", { requested: 4, applied: 4, beforeHp: 99, afterHp: 95, prayer: null }], [52, "ranged", { requested: 6, applied: 6, beforeHp: 95, afterHp: 89, prayer: null }]],
+      playerHp: 89,
+      bossLost: 0,
+    },
+    {
+      attack: "Ralos throws into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 5, wield: 28922, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 0], [42, "ranged", "blocked", 0], [48, "ranged", "blocked", 13], [48, "ranged", "blocked", 2]],
+      reflected: [[48, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+    {
+      attack: "a Division into Deflect Range",
+      selection: { focus: "rifts" },
+      seed: 4, wield: 28922, special: true, from: 39, to: 46,
+      judged: [[42, "ranged", "blocked", 2], [42, "ranged", "blocked", 13]],
+      reflected: [[42, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+    {
+      attack: "a scythe swing into Deflect Melee",
+      selection: { focus: "rifts", setup: "melee" },
+      seed: 4, wield: null, special: false, from: 29, to: 33,
+      judged: [[31, "melee", "blocked", 4], [31, "melee", "blocked", 12], [31, "melee", "blocked", 8]],
+      reflected: [[31, "melee", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
+      playerHp: 98,
+      bossLost: 0,
+    },
+  ] as const)("Deflect blocks a hit of its style and reflects 10% of it, rounded down, onto the player: $attack", attackIntoDeflect);
+
+  test.each([
+    {
+      attack: "Twisted Bow shots into Deflect Melee and Soul Split, which do not turn them away",
+      selection: { focus: "rifts" },
+      seed: 4, wield: null, special: false, from: 30, to: 38,
+      judged: [[33, "ranged", "passed", 8], [38, "ranged", "passed", 44]],
+      reflected: [],
+      playerHp: 99,
+      bossLost: 52,
+    },
+    {
+      attack: "Twisted Bow shots into Deflect Range under deflect=block-at-launch",
+      selection: { focus: "rifts", deflect: "block-at-launch" },
+      seed: 4, wield: null, special: false, from: 39, to: 52,
+      judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
+      reflected: [],
+      playerHp: 99,
+      bossLost: 0,
+    },
+  ] as const)("guard, nothing reflected: $attack", attackIntoDeflect);
+
+  test.each([
     { weapon: "a scythe", selection: { focus: "rifts", setup: "melee" }, standsOn: { x: 5, y: 3 }, judged: [[31, "melee", "blocked"], [31, "melee", "blocked"], [31, "melee", "blocked"]] },
     {
       weapon: "a scythe under hoverMeleeReach=reachable",
@@ -76,6 +169,24 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.player().setAggro(drill.boss());
     drill.tickTo(31);
     expect([drill.row(29).playerAtPostTick.tile, drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome])]).toEqual([standsOn, judged]);
+    drill.dispose();
+  });
+
+  test.each([
+    { attack: "the ranged setup's Twisted Bow", seed: 2, setup: "ranged", wield: null, special: false, landed: [[72, 44]], destroyedAt: [73] },
+    { attack: "the melee setup's Twisted Bow", seed: 2, setup: "melee", wield: 20997, special: false, landed: [[72, 44]], destroyedAt: [73] },
+    { attack: "the ranged setup's Ralos", seed: 2, setup: "ranged", wield: 28922, special: false, landed: [[72, 18], [72, 18], [78, 8], [78, 8]], destroyedAt: [79] },
+    { attack: "the melee setup's Ralos", seed: 2, setup: "melee", wield: 28922, special: false, landed: [[72, 15], [72, 15], [78, 14], [78, 14]], destroyedAt: [79] },
+    { attack: "a Division special, which rolls", seed: 3, setup: "ranged", wield: 28922, special: true, landed: [[72, 15], [72, 5], [78, 18], [78, 18]], destroyedAt: [79] },
+    { attack: "a scythe swing, which rolls", seed: 4, setup: "melee", wield: null, special: false, landed: [[72, 4], [77, 25]], destroyedAt: [] },
+  ] as const)("a standard ranged attack always lands its max hit on a Void Rift: $attack", ({ seed, setup, wield, special, landed, destroyedAt }) => {
+    const drill = startDrill({ seed, selection: { focus: "rifts", setup } });
+    drill.tickTo(68);
+    if (wield !== null) drill.clickInventory(wield);
+    drill.player().useSpecialAttack = special;
+    drill.player().setAggro(northEastRift(drill));
+    drill.tickTo(79);
+    expect([drill.events("rift-hit").map((e) => [e.at, e.damage]), drill.events("rift-destroyed").map((e) => e.at)]).toEqual([landed, destroyedAt]);
     drill.dispose();
   });
 
@@ -120,23 +231,23 @@ describe("U6 boss overheads, heals and rifts", () => {
 
   test.each([
     {
-      killLandsAt: 77,
-      destroyed: [[78, "rift-67-1"]],
-      bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
+      killLandsAt: 89,
+      destroyed: [[90, "rift-67-1"]],
+      bursts: [[90, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
       chat: ["Destroying the void rift empowers you!"],
       northEastRiftSequences: [14896, 14897],
     },
     {
-      killLandsAt: 78,
+      killLandsAt: 90,
       destroyed: [],
       bursts: [
-        [78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
-        [78, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
+        [90, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
+        [90, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
       ],
       chat: [],
       northEastRiftSequences: [14896, 14898],
     },
-  ])("a rift dead by the end of 77 despawns and is destroyed at 78, and a standing one detonates and bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat, northEastRiftSequences }) => {
+  ])("a rift dead by the end of 89 despawns and is destroyed at 90, and a standing one detonates and bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat, northEastRiftSequences }) => {
     const drill = startDrill({ selection: { focus: "rifts" } });
     drill.tickTo(68);
     const northEast = northEastRift(drill);
@@ -144,12 +255,33 @@ describe("U6 boss overheads, heals and rifts", () => {
     northEast.setAnimationListener({ animationChanged: (id) => Promise.resolve(void sequences.push(id)), modelChanged: () => undefined });
     drill.tickTo(killLandsAt - 1);
     drill.hit(drill.player(), northEast, 44);
-    drill.tickTo(79);
+    drill.tickTo(91);
     expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat(), sequences]).toEqual([
       destroyed,
       bursts,
       chat,
       northEastRiftSequences,
+    ]);
+    drill.dispose();
+  });
+
+  test("under each rift's HP bar a yellow timer bar of the same size fills from the left as the rift charges, full on the burst tick", () => {
+    const drill = startDrill({ selection: { focus: "rifts" } });
+    const drawn: Record<number, readonly Fill[]> = {};
+    for (const t of [67, 69, 78, 89, 90]) {
+      drill.tickTo(t);
+      const northWest = [...drill.region.mobs, ...drill.region.newMobs].find((mob) => mob.location.x === 2 && mob.location.y === 2);
+      drawn[t] = northWest ? paintedFills((context) => northWest.drawHPBar(context, 1, 0)) : [];
+    }
+    const bars = (yellow: number): readonly Fill[] => [
+      { style: "red", x: -15, y: 0, width: 30, height: 5 },
+      { style: "lime", x: -15, y: 0, width: 30, height: 5 },
+      { style: "#1e1e0c", x: -15, y: 5, width: 30, height: 5 },
+      { style: "#e0c020", x: -15, y: 5, width: yellow, height: 5 },
+    ];
+    expect([drawn, drill.events("rift-burst").map((e) => [e.at, e.rift])]).toEqual([
+      { 67: bars(0), 69: bars(60 / 23), 78: bars(330 / 23), 89: bars(660 / 23), 90: bars(30) },
+      [[90, "rift-67-0"], [90, "rift-67-1"]],
     ]);
     drill.dispose();
   });

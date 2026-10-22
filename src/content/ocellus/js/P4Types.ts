@@ -114,7 +114,7 @@ export type HealCause = Readonly<{ kind: "unclaimed-orb" }> | Readonly<{ kind: "
 export type ExplosionOutcome = Readonly<{ kind: "hit"; receipt: HitReceipt }> | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
 export type HitJudgement = "passed" | "invulnerable" | "blocked";
-export type PlayerHitSource = "floor-hit" | "hole-hit" | "lifeforce-drained" | "explosion-resolved" | "special-hit" | "rift-burst";
+export type PlayerHitSource = "deflect-reflected" | "floor-hit" | "hole-hit" | "lifeforce-drained" | "explosion-resolved" | "special-hit" | "rift-burst";
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>
@@ -123,6 +123,7 @@ export type FightEvent =
   | Readonly<{ kind: "boss-shouted"; at: Tick; text: string }>
   | Readonly<{ kind: "boss-landing-started"; at: Tick }>
   | Readonly<{ kind: "player-hit-judged"; at: Tick; style: IncomingStyle; outcome: HitJudgement; requested: number }>
+  | Readonly<{ kind: "deflect-reflected"; at: Tick; style: Style; receipt: HitReceipt }>
   | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "hole-hit"; at: Tick; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "lifeforce-told"; at: Tick; void: VoidKind }>
@@ -139,6 +140,7 @@ export type FightEvent =
   | (Readonly<{ kind: "special-hit"; receipt: HitReceipt }> & SpecialAttack)
   | Readonly<{ kind: "special-sounded"; at: Tick; ordinal: Ordinal; cue: TransitionCue }>
   | Readonly<{ kind: "rift-spawned"; at: Tick; rift: RiftId; tile: Tile }>
+  | Readonly<{ kind: "rift-hit"; at: Tick; rift: RiftId; style: IncomingStyle; damage: number }>
   | Readonly<{ kind: "rift-destroyed"; at: Tick; rift: RiftId; tile: Tile }>
   | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile; receipt: HitReceipt }>
   | Readonly<{ kind: "death-prevented"; at: Tick; source: PlayerHitSource; clearedOrbCredit: number }>

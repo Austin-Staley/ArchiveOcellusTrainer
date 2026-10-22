@@ -113,6 +113,56 @@ describe("Invincible", () => {
     expect({ off: orbReturn(false), on: orbReturn(true) }).toEqual({ off: returned, on: returned });
   });
 
+  test.each([
+    {
+      lethal: "two reflections land on one tick and the second is lethal",
+      seed: 20, at: 255,
+      blocked: [["melee", "blocked", 17], ["melee", "blocked", 16], ["melee", "blocked", 0]],
+      hits: [["deflect-reflected", 1, 1, 2, 1], ["deflect-reflected", 1, 1, 1, 0]],
+      source: "deflect-reflected",
+      chat: "Invincible: a deflected hit's reflection would have killed you on tick 255.",
+    },
+    {
+      lethal: "a lethal reflection lands before two rift bursts",
+      seed: 13, at: 270,
+      blocked: [["melee", "blocked", 24], ["melee", "blocked", 0], ["melee", "blocked", 2]],
+      hits: [["deflect-reflected", 2, 1, 1, 0], ["rift-burst", 14, 0, 0, 0], ["rift-burst", 14, 0, 0, 0]],
+      source: "deflect-reflected",
+      chat: "Invincible: a deflected hit's reflection would have killed you on tick 270.",
+    },
+    {
+      lethal: "a reflection leaves 3 HP and the rift burst after it is lethal",
+      seed: 2, at: 270,
+      blocked: [["melee", "blocked", 1], ["melee", "blocked", 10], ["melee", "blocked", 0]],
+      hits: [["deflect-reflected", 1, 1, 4, 3], ["rift-burst", 14, 3, 3, 0], ["rift-burst", 14, 0, 0, 0]],
+      source: "rift-burst",
+      chat: "Invincible: a void rift burst would have killed you on tick 270.",
+    },
+  ] as const)("scythe swings into Deflect Melee, $lethal: off, the run dies on those receipts; on, one death is prevented, naming the first lethal hit", ({ seed, at, blocked, hits, source, chat }) => {
+    const scytheTheBoss = (invincible: boolean) => {
+      const drill = startDrill({ seed, selection: { focus: "rifts", setup: "melee", hoverMeleeReach: "reachable" } });
+      drill.region.invincible = invincible;
+      drill.tickTo(13);
+      drill.player().setAggro(drill.boss());
+      drill.tickTo(at);
+      const observed = {
+        blocked: drill.events("player-hit-judged").filter((e) => e.at === at).map((e) => [e.style, e.outcome, e.requested]),
+        hits: drill.row(at).events.flatMap((e) => (e.kind === "deflect-reflected" || e.kind === "rift-burst" ? [[e.kind, e.receipt.requested, e.receipt.applied, e.receipt.beforeHp, e.receipt.afterHp]] : [])),
+        prevented: drill.events("death-prevented"),
+        hp: drill.row(at).playerAtPostTick.hp,
+        ended: drill.events("run-ended").map((e) => [e.at, e.reason]),
+        dying: drill.player().isDying(),
+        chat: drill.region.chat(),
+      };
+      drill.dispose();
+      return observed;
+    };
+    expect({ off: scytheTheBoss(false), on: scytheTheBoss(true) }).toEqual({
+      off: { blocked, hits, prevented: [], hp: 0, ended: [[at, "death"]], dying: true, chat: [] },
+      on: { blocked, hits, prevented: [{ kind: "death-prevented", at, source, clearedOrbCredit: 0 }], hp: 99, ended: [], dying: false, chat: [chat] },
+    });
+  });
+
   test("the Invincible box starts unchecked, a link with invincible=on starts it checked, and Restart carries what the box shows", () => {
     localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } }));
     const navigation = captureNavigation();

@@ -1,16 +1,24 @@
-import { CacheRenderModel, CacheRenderReferences, Mob } from "osrs-sdk";
-import type { Model, Region, UnitBonuses } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderReferences, Mob, RangedWeapon } from "osrs-sdk";
+import type { IncomingAttackRoll, IncomingAttackRollModifiers, Model, Region, UnitBonuses } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Tile } from "../P4Types";
+import type { TickSpan, Tile } from "../P4Types";
+import { span } from "../P4Types";
 
 const RIFT = OCELLUS_P4.rifts;
+/** Unit.drawHPBar draws the HP bar 5 px tall. */
+const HP_BAR_HEIGHT = 5;
 
 export class VoidRift extends Mob {
   private detonated = false;
+  private charged: TickSpan = span(0);
 
   constructor(region: Region, at: Tile) {
     super(region, { x: at.x, y: at.y });
     this.playAnimation(RIFT.poses.spawn.value);
+  }
+
+  charge(charged: TickSpan): void {
+    this.charged = charged;
   }
 
   /** Unit's constructor calls setStats before subclass fields exist, so the stats come from module data. */
@@ -49,6 +57,22 @@ export class VoidRift extends Mob {
 
   override get deathAnimationId(): number | null {
     return this.detonated ? null : RIFT.poses.despawn.value;
+  }
+
+  override drawHPBar(context: OffscreenCanvasRenderingContext2D, scale: number, verticalOffset = -(this.size / 2) * scale): void {
+    super.drawHPBar(context, scale, verticalOffset);
+    const { background, fill } = RIFT.timerBar.value;
+    const width = this.healthBarWidth;
+    const top = verticalOffset + HP_BAR_HEIGHT;
+    context.fillStyle = background;
+    context.fillRect(-width / 2, top, width, HP_BAR_HEIGHT);
+    context.fillStyle = fill;
+    context.fillRect(-width / 2, top, (this.charged / RIFT.chargeAfterSpawn.value) * width, HP_BAR_HEIGHT);
+  }
+
+  override incomingAttackRollModifiers(attack: IncomingAttackRoll): IncomingAttackRollModifiers {
+    const standardRanged = attack.weapon instanceof RangedWeapon && attack.bonuses.isSpecialAttack !== true;
+    return standardRanged ? { ...RIFT.standardRangedRoll.value } : super.incomingAttackRollModifiers(attack);
   }
 
   override movementStep(): void {}

@@ -3,7 +3,7 @@ import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Specia
 import { cycle, seed, soundId, span, tick, tile } from "./P4Types";
 import { roll } from "./p4/roll";
 
-type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "inferred" | "assumption";
+type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "owner-estimated" | "inferred" | "assumption";
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
 
 const VODS = {
@@ -12,11 +12,13 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
+type OwnerDate = "2026-10-21" | "2026-10-22";
+
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
   | Readonly<{ kind: "wiki"; page: string; oldid: number | null }>
   | Readonly<{ kind: "cache"; build: 2746; record: string }>
-  | Readonly<{ kind: "owner"; date: "2026-10-21"; topic: string }>;
+  | Readonly<{ kind: "owner"; date: OwnerDate; topic: string }>;
 
 type Evidence = Readonly<{
   status: "unverified";
@@ -41,7 +43,7 @@ function choice<O extends Options>(defaultKey: keyof O & string, options: O): Ch
 const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at });
 const wiki = (page: string, oldid: number | null): Source => ({ kind: "wiki", page, oldid });
 const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
-const owner = (topic: string): Source => ({ kind: "owner", date: "2026-10-21", topic });
+const owner = (topic: string, date: OwnerDate = "2026-10-21"): Source => ({ kind: "owner", date, topic });
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
 const DEFLECT_MELEE_SEEN = [vod("V1", "G53, G55 to G57, G109, G115 to G117, G153, G154, G175 to G177"), vod("V2", "k48, k60, k70 to k72, k131, k132, k168, k170, k250 to k252")] as const;
@@ -49,6 +51,8 @@ const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133
 const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379038);
+const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
+const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
 const HOTFIX_NEWS = wiki("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1", null);
 const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
@@ -130,6 +134,7 @@ type RiftPose = "idle" | "spawn" | "despawn" | "detonate";
 type RiftRecipe = Readonly<{
   spawnBeforeOnset: Selected<TickSpan>;
   chargeAfterSpawn: Selected<TickSpan>;
+  timerBar: Selected<Readonly<{ background: string; fill: string }>>;
   npcId: Selected<number>;
   name: Selected<string>;
   combatLevel: Selected<number>;
@@ -138,6 +143,7 @@ type RiftRecipe = Readonly<{
   defenceBonuses: Selected<Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>>;
   offsetsFromBoss: Selected<readonly [RiftOffset, ...RiftOffset[]]>;
   burstDamage: Selected<DamageRange>;
+  standardRangedRoll: Selected<Readonly<{ guaranteedHit: boolean; maxDamage: boolean }>>;
   killChat: Selected<string>;
   poses: Readonly<Record<RiftPose, Selected<number>>>;
   burstFlare: Selected<number>;
@@ -294,7 +300,7 @@ const OVERHEADS: OverheadRecipe = {
   offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
 
-export type DeflectRule = Readonly<{ kind: "block" }> | Readonly<{ kind: "none" }>;
+export type DeflectRule = Readonly<{ kind: "block"; reflectPercent: number }> | Readonly<{ kind: "none" }>;
 
 const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
   "deflect-melee": selected("melee", "inferred", "unscaled", "named for the style it turns away; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
@@ -344,7 +350,22 @@ const BOSS_HEALS: BossHealRecipe = {
 
 const RIFTS: RiftRecipe = {
   spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", vod("V1", "G152"), vod("V2", "k107, k167, k227")),
-  chargeAfterSpawn: selected(span(11), "inferred", "team-5", "unexplained 14 on the streamer 11 ticks after rifts appear", vod("V2", "k107 to k118, k167 to k178")),
+  chargeAfterSpawn: selected(
+    span(23),
+    "owner-estimated",
+    "unscaled",
+    "the owner reports that rifts last much longer than 6.6 s (11 ticks), that none of the footage they found shows one bursting, and that they watched two killed within about 10 s with about 4 s still on the timer: about 14 s, 23 ticks of 0.6 s (inferred); both clips show a rift standing after spawn + 11, V1 at G164 and V2 from k177 to k196",
+    owner("rift charge timer", "2026-10-22"),
+    vod("V1", "G152 to G168"),
+    vod("V2", "k167 to k196"),
+  ),
+  timerBar: selected(
+    { background: "#1e1e0c", fill: "#e0c020" },
+    "footage-once",
+    "unscaled",
+    "the owner's in-game picture, read by the lead: under each rift's green HP bar and touching it, a bar of the same width and height, dark olive background, yellow fill from the left, about a tenth full on both rifts; that the fill tracks the charge and is full on the burst tick is inferred from that one frame",
+    owner("rift timer bar picture", "2026-10-22"),
+  ),
   npcId: selected(16678, "spec-confirmed", "unscaled", "tfa_ocellus_p3_bombportal_basic, Void Rift", cache("npc 16678"), vod("V2", "k193")),
   name: selected("Void Rift", "spec-confirmed", "unscaled", "hover text Attack Void Rift (level-138)", cache("npc 16678 name"), vod("V2", "k193")),
   combatLevel: selected(138, "spec-confirmed", "unscaled", "cache level matches the hover text", cache("npc 16678 combat level"), vod("V2", "k193")),
@@ -359,7 +380,15 @@ const RIFTS: RiftRecipe = {
     vod("V1", "G152-G164"),
     vod("V2", "k167-k173"),
   ),
-  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared; a rift's charge is the leading candidate", vod("V2", "k118, k178")),
+  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared, with a rift still standing; taken as the burst's damage, though the burst now lands 23 ticks after spawn (inferred)", vod("V2", "k118, k178")),
+  standardRangedRoll: selected(
+    { guaranteedHit: true, maxDamage: true },
+    "spec-single",
+    "unscaled",
+    "the wiki: \"Ocellus will spawn void crystals that the player will always max hit with standard range attacks\"; the owner saw them almost always one-shot; standard read as every ranged attack but a special attack, and melee, magic and special attacks roll as on any target (inferred)",
+    BOSS_PAGE,
+    owner("rifts almost always one-shot", "2026-10-22"),
+  ),
   killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", vod("V1", "3:55:21.98"), vod("V2", "k116")),
   poses: {
     idle: pose(14895, "vfx_ocellus_voidflare_default_idle", "spec-confirmed", "rift stand and walk animation"),
@@ -737,8 +766,18 @@ export const OCELLUS_P4 = {
     innerVoidFloor: INNER_VOID_FLOOR,
     floorHoleLayout: FLOOR_HOLE_LAYOUT,
     floorHoleDamage: FLOOR_HOLE_DAMAGE,
-    deflect: choice("block-at-launch", {
-      "block-at-launch": selected<DeflectRule>({ kind: "block" }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8)", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
+    deflect: choice("block-and-reflect", {
+      "block-and-reflect": selected<DeflectRule>(
+        { kind: "block", reflectPercent: 10 },
+        "owner-estimated",
+        "unscaled",
+        "blocked as under block-at-launch, and the player takes 10% of the damage the blocked hit would have dealt, rounded down, as its own hitsplat, and nothing when that is 0; the owner named Nex's Deflect, about 10%; the wiki says Nex's Deflect Melee turns back the damage a melee hit would have dealt but gives no fraction, and the Ocellus pages name the prayers without saying what they do; the rounding is inferred",
+        owner("deflect reflects about 10%, as on Nex", "2026-10-22"),
+        DEFLECT_MELEE_PAGE,
+        BOSS_PAGE,
+        STRATEGIES_RIFTS,
+      ),
+      "block-at-launch": selected<DeflectRule>({ kind: "block", reflectPercent: 0 }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8); nothing comes back to the player", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
       none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
     }),
     hoverMeleeReach: choice("unreachable", {

@@ -10,7 +10,6 @@ import type {
   ExplosionOutcome,
   FightEvent,
   HealCause,
-  HitJudgement,
   HitReceipt,
   IncomingStyle,
   InputObservation,
@@ -23,6 +22,7 @@ import type {
   RunState,
   Special,
   SpecialAttack,
+  Style,
   Tick,
   TickRow,
   Tile,
@@ -55,7 +55,12 @@ type Orb =
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 
-type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number }>;
+type Verdict =
+  | Readonly<{ outcome: "passed" }>
+  | Readonly<{ outcome: "invulnerable" }>
+  | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>;
+
+type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number; spawnedAt: Tick }>;
 
 /** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
 const HEAL_SPLAT_TICKS = span(1);
@@ -118,6 +123,7 @@ class P4Hit extends Projectile {
 
 function landedHit(event: FightEvent): Readonly<{ source: PlayerHitSource; receipt: HitReceipt }> | null {
   switch (event.kind) {
+    case "deflect-reflected":
     case "floor-hit":
     case "hole-hit":
     case "lifeforce-drained":
@@ -143,6 +149,7 @@ function landedHit(event: FightEvent): Readonly<{ source: PlayerHitSource; recei
     case "special-told":
     case "special-sounded":
     case "rift-spawned":
+    case "rift-hit":
     case "rift-destroyed":
     case "death-prevented":
     case "run-ended":
@@ -386,7 +393,7 @@ export class Ocellus extends Mob {
       drawsAtBossStep: this.target.combatDraws,
     };
     this.healSplats = this.healSplats.filter((splat) => splat.lastShown >= moment.tick);
-    const judged = this.judgeLandingHits(moment);
+    const judged = [...this.judgeLandingHits(moment), ...this.riftHitsLanded(moment.tick)];
     super.queueStep();
     const logged = [...judged, ...phaseEvents(last, moment.phase, moment.tick)];
     if (this.currentStats.hitpoint <= 0) {
@@ -394,6 +401,7 @@ export class Ocellus extends Mob {
       return;
     }
     const destroyed = this.destroyFallenRifts(moment.tick);
+    this.rifts.forEach((rift) => rift.mob.charge(span(moment.tick - rift.spawnedAt)));
     const reactions = moment.beats.flatMap((beat) => this.react(beat, moment.tick, draft.playerAtBossStep) ?? []);
     this.strikeHole(moment.tick, draft.playerAtBossStep);
     this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...destroyed, ...reactions] } };
@@ -406,27 +414,44 @@ export class Ocellus extends Mob {
         const requested = projectile.damage;
         const style = incomingStyle(projectile.attackStyle);
         const launchedAt = tick(Math.max(0, moment.tick - projectile.totalDelay));
-        const outcome = this.judge(moment, style, launchedAt);
-        if (outcome !== "passed") projectile.damage = 0;
-        return { kind: "player-hit-judged", at: moment.tick, style, outcome, requested };
+        const verdict = this.judge(moment, style, launchedAt);
+        if (verdict.outcome !== "passed") projectile.damage = 0;
+        if (verdict.outcome === "blocked") this.reflect(verdict, requested, moment.tick);
+        return { kind: "player-hit-judged", at: moment.tick, style, outcome: verdict.outcome, requested };
       });
   }
 
-  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): HitJudgement {
-    if (!damageable(moment.phase.boss)) return "invulnerable";
+  /** The SDK steps newer mobs first, so a rift's hits for this tick have landed before the boss steps. */
+  private riftHitsLanded(at: Tick): FightEvent[] {
+    return this.rifts.flatMap((rift) =>
+      rift.mob.incomingProjectiles
+        .filter((projectile) => projectile.remainingDelay === 0)
+        .map((projectile): FightEvent => ({ kind: "rift-hit", at, rift: rift.id, style: incomingStyle(projectile.attackStyle), damage: projectile.damage })),
+    );
+  }
+
+  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): Verdict {
+    if (!damageable(moment.phase.boss)) return { outcome: "invulnerable" };
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":
-        return "passed";
+        return { outcome: "passed" };
       case "block": {
         const { overhead } = this.schedule.at(launchedAt).phase;
-        return overhead !== null && OCELLUS_P4.deflects[overhead].value === style ? "blocked" : "passed";
+        const deflected = overhead === null ? null : OCELLUS_P4.deflects[overhead].value;
+        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : { outcome: "passed" };
       }
       default: {
         const unhandled: never = rule;
         return unhandled;
       }
     }
+  }
+
+  private reflect({ style, reflectPercent }: Extract<Verdict, { outcome: "blocked" }>, blocked: number, at: Tick): void {
+    const requested = Math.floor((blocked * reflectPercent) / 100);
+    if (requested === 0) return;
+    this.target.addProjectile(new P4Hit(this, this.target, () => requested, (receipt) => this.recordEvent({ kind: "deflect-reflected", at, style, receipt })));
   }
 
   private react(beat: Beat, at: Tick, player: PlayerObservation): FightEvent | readonly FightEvent[] | null {
@@ -518,7 +543,7 @@ export class Ocellus extends Mob {
       const mob = new VoidRift(this.region, place);
       this.region.addMob(mob);
       const id = riftId(at, slot);
-      this.rifts = [...this.rifts, { id, tile: place, forCycle, mob, hpAtPostTick: mob.currentStats.hitpoint }];
+      this.rifts = [...this.rifts, { id, tile: place, forCycle, mob, hpAtPostTick: mob.currentStats.hitpoint, spawnedAt: at }];
       return { kind: "rift-spawned", at, rift: id, tile: place };
     });
   }

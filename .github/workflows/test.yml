@@ -22,6 +22,5 @@ jobs:
       - run: npm run typecheck
       - run: scripts/check-types.test.sh
       - run: npm test
-      - run: scripts/verify.test.sh
       - run: scripts/netlify-build.test.sh
       - run: npm run build

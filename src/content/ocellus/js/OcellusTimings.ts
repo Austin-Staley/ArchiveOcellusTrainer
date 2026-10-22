@@ -95,7 +95,7 @@ type OverheadRecipe = Readonly<{
   offBeforeVoid: Selected<TickSpan>;
 }>;
 
-type LifeforceRecipe = Readonly<{ tellAfterOnset: Selected<TickSpan>; hitAfterOnset: Selected<TickSpan> }>;
+type LifeforceRecipe = Readonly<{ tellAfterOnset: Selected<TickSpan>; hitAfterOnset: Selected<TickSpan>; tellChat: Selected<string> }>;
 type OrbRecipe = Readonly<{ lastHealAfterHit: Selected<TickSpan> }>;
 type ExplosionRecipe = Readonly<{
   firstMarkAfterHit: TickSpan;
@@ -172,7 +172,7 @@ type BossPose =
 
 export type TransitionSound = "meleeTell" | "meleeHit" | "rangedBeforeHit" | "rangedHit" | "magicWindUp";
 export type TransitionCue = Readonly<{ sound: TransitionSound; afterTell: TickSpan; delayMs: number }>;
-type CueSound = "explosionSeriesStart" | "explosionMark" | TransitionSound;
+type CueSound = "endShout" | "flood" | "explosionSeriesStart" | "explosionMark" | TransitionSound;
 type SoundPlayback = Readonly<{ volume: number; range: number; retain: number }>;
 
 export type SpriteFrame = Readonly<{ archive: number; frame: number }>;
@@ -296,6 +296,7 @@ const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
 const LIFEFORCE: LifeforceRecipe = {
   tellAfterOnset: selected(span(3), "footage-repeated", "team-4-and-5", "teal swirl and chat line", vod("V1", "G36, G127"), vod("V2", "k51")),
   hitAfterOnset: selected(span(4), "footage-repeated", "team-4-and-5", "hit 4 ticks after each void forms", vod("V1", "G37, G68, G97, G128, G157, G188"), vod("V2", "k52, k83, k112, k143, k172, k203")),
+  tellChat: selected("Ocellus manipulates your lifeforce!", "footage-repeated", "team-4-and-5", "game chat line on the tell tick, first in the frame that shows the teal swirl", vod("V1", "3:54:02.78, G36"), vod("V2", "5:20:25.87, k51")),
 };
 
 const ORB: OrbRecipe = {
@@ -559,6 +560,8 @@ const PRESENTATION: PresentationRecipe = {
     unleashOut: pose(14861, "phase3_unleash_out", "inferred", "transition attack candidate, 4 ticks"),
   },
   sounds: {
+    endShout: sound(12490, "the \"End...\" shout at t5, three ticks before the first inner void, in both clips; no sequence references it, so the server sends it", vod("V1", "3:53:59.39, t5.0"), vod("V2", "5:20:22.50, t5.0")),
+    flood: sound(12497, "the outer flood at S + 31, five ticks before the floor hurts; heard in 1 V1 and 2 V2 floods, and 4 of 7 floods beat the null; the server sends it", vod("V1", "3:54:55.81, t99.0"), vod("V2", "5:20:42.89, t39.0")),
     explosionSeriesStart: sound(12638, "starts each explosion series, in 5 V1 and 5 V2 voids; no sequence references it, so the server sends it", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
     explosionMark: sound(12537, "one per explosion mark, six per void every 2 ticks from hit + 5, in 3 V1 and 3 V2 cycles", vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
     meleeTell: sound(12572, "the melee transition tell, in all 5 melee attacks and none of the other 7; no sequence references it, so the server sends it", vod("V1", "3:54:32.45, t60.1")),

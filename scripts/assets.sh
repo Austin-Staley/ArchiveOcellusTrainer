@@ -3,3 +3,4 @@ set -euo pipefail
 
 osrs-sdk-assets build "$@"
 npm run --silent item-icons -- "$@"
+node scripts/extract-sprites.mjs "$@"

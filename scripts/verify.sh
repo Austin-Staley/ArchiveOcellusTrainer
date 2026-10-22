@@ -1019,7 +1019,23 @@ drive_cues() {
   echo "$AUTOPLAY_POLICY_JS" >"$VERIFY_DIR/autoplay-policy.js"
   ab --init-script "$VERIFY_DIR/autoplay-policy.js" set viewport 1280 800 >/dev/null || { log "the autoplay session did not start"; return 1; }
   ab open "${URL}${CUE_QUERY}" >/dev/null || return 1
-  fight_tick_at_least 0 120000 || { log "the cue drill never started"; return 1; }
+  fight_tick_at_least 0 120000 || { log "the fresh cue drill never started"; return 1; }
+  record_audio_starts || { log "the audio probe was not installed"; return 1; }
+  audio_contexts >"$VERIFY_DIR/cue-contexts-fresh.json" || { log "audio context capture failed"; return 1; }
+  sound_toggles >"$VERIFY_DIR/cue-toggles-fresh.json" || { log "sound toggle capture failed"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick 0 0 0 || { log "the canvas was not clicked"; return 1; }
+  probe "snapshot().fight.run.tick" >"$VERIFY_DIR/cue-fresh-click.json"
+  audio_resumed || log "the audio context did not resume after the canvas click"
+  audio_contexts >"$VERIFY_DIR/cue-contexts-fresh-clicked.json" || { log "audio context capture failed"; return 1; }
+  fight_tick_at_least "$CUE_TOGGLE_TICK" 30000 || { log "the fresh cue drill never stepped to P4 tick ${CUE_TOGGLE_TICK}"; return 1; }
+  ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/cue-fresh-audio.json" || { log "audio capture failed"; return 1; }
+  ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not unticked"; return 1; }
+  ab --json eval "localStorage.getItem('${SOUND_SETTINGS_KEY}')" | json data.result >"$VERIFY_DIR/cue-sound-off-saved.json" || { log "saved settings capture failed"; return 1; }
+  ab console >"$VERIFY_DIR/cue-fresh-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/cue-fresh-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  keep_seed && restart_run || { log "Restart did not reload the fresh cue drill"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
   probe "snapshot().fight.run.tick" >"$VERIFY_DIR/cue-recording-from.json"
   audio_contexts >"$VERIFY_DIR/cue-contexts-loaded.json" || { log "audio context capture failed"; return 1; }
@@ -1036,9 +1052,7 @@ drive_cues() {
   ab console >"$VERIFY_DIR/cue-toggle-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/cue-toggle-page-errors.json" || { log "page error capture failed"; return 1; }
 
-  keep_seed && ab click "#restart" >/dev/null || { log "Restart was not clicked"; return 1; }
-  ab wait --fn "new URLSearchParams(location.search).has('setup')" --timeout 30000 >/dev/null || { log "Restart did not reload the cue drill"; return 1; }
-  fight_tick_at_least 0 120000 || { log "the reloaded cue drill never started"; return 1; }
+  keep_seed && restart_run || { log "Restart did not reload the cue drill"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
   audio_contexts >"$VERIFY_DIR/cue-contexts-reloaded.json" || { log "audio context capture failed"; return 1; }
   sound_toggles >"$VERIFY_DIR/cue-toggles-reloaded.json" || { log "sound toggle capture failed"; return 1; }
@@ -1089,7 +1103,8 @@ drive() {
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
     invincible-default.json invincible-linked.json invincible.png invincible-chat.json invincible.json invincible-console.log invincible-page-errors.json invincible-restarted.json \
     invincible-orb.png invincible-orb.json invincible-orb-console.log invincible-orb-page-errors.json \
-    autoplay-policy.js cue-recording-from.json cue-contexts-loaded.json cue-toggles-off.json cue-toggle-click.json cue-contexts-toggled.json cue-toggles-on.json cue-sound-saved.json cue-toggle-audio.json cue-toggle-console.log cue-toggle-page-errors.json \
+    autoplay-policy.js cue-contexts-fresh.json cue-toggles-fresh.json cue-fresh-click.json cue-contexts-fresh-clicked.json cue-fresh-audio.json cue-sound-off-saved.json cue-fresh-console.log cue-fresh-page-errors.json \
+    cue-recording-from.json cue-contexts-loaded.json cue-toggles-off.json cue-toggle-click.json cue-contexts-toggled.json cue-toggles-on.json cue-sound-saved.json cue-toggle-audio.json cue-toggle-console.log cue-toggle-page-errors.json \
     cue-contexts-reloaded.json cue-toggles-reloaded.json cue-contexts-clicked.json cue-chat-before.json cue-chat.json cues.json cue-audio.json cue-console.log cue-page-errors.json; do
     [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
   done
@@ -1125,11 +1140,12 @@ drive() {
     const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors, overheadDraws] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json", "overhead-draws.json"].map(read);
     const [cueLog, cueToggleAudio, cueAudio, cueToggleErrors, cueErrors, cueSaved, cueChatBefore, cueChatAfter] =
       ["cues.json", "cue-toggle-audio.json", "cue-audio.json", "cue-toggle-page-errors.json", "cue-page-errors.json", "cue-sound-saved.json", "cue-chat-before.json", "cue-chat.json"].map(read);
-    const [recordingFrom, toggledAt] = ["cue-recording-from.json", "cue-toggle-click.json"].map(read);
+    const [recordingFrom, toggledAt, freshClickedAt, freshAudio, freshErrors, savedOff] =
+      ["cue-recording-from.json", "cue-toggle-click.json", "cue-fresh-click.json", "cue-fresh-audio.json", "cue-fresh-page-errors.json", "cue-sound-off-saved.json"].map(read);
     const [invincibleDefault, invincibleLinked, invincibleChat, invincibleLog, invincibleErrors, invincibleRestarted, invincibleOrbLog, invincibleOrbErrors] =
       ["invincible-default.json", "invincible-linked.json", "invincible-chat.json", "invincible.json", "invincible-page-errors.json", "invincible-restarted.json", "invincible-orb.json", "invincible-orb-page-errors.json"].map(read);
-    const contexts = Object.fromEntries(["loaded", "toggled", "reloaded", "clicked"].map((when) => [when, read(`cue-contexts-${when}.json`)]));
-    const toggles = Object.fromEntries(["off", "on", "reloaded"].map((when) => [when, read(`cue-toggles-${when}.json`)]));
+    const contexts = Object.fromEntries(["fresh", "fresh-clicked", "loaded", "toggled", "reloaded", "clicked"].map((when) => [when, read(`cue-contexts-${when}.json`)]));
+    const toggles = Object.fromEntries(["fresh", "off", "on", "reloaded"].map((when) => [when, read(`cue-toggles-${when}.json`)]));
     const [spawnTile, targetTile, edgeOrderTile, edgeStopTile, nearSquare] = [spawn, target, edgeOrder, edgeStop, square].map((tile) => JSON.parse(tile));
     const same = (a, b) => a?.x === b.x && a?.y === b.y;
     const inSquare = (t) => t.x >= nearSquare.minX && t.x <= nearSquare.maxX && t.y >= nearSquare.minY && t.y <= nearSquare.maxY;
@@ -1277,6 +1293,7 @@ drive() {
       .map((s) => [Math.round((s.tick + s.phase) * 100) / 100, s.samples, s.state]);
     const cueExpected = JSON.parse(cueSounds).map(([at, id]) => [at, cueSamplesOf[id]]);
     const savedSound = cueSaved?.values ?? {};
+    const savedSoundOff = savedOff?.values ?? {};
     const observed = {
       firstWalkOrders: cycle.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination)).slice(0, 2),
       edge: { arrived: [edgeArrived.tick, edgeArrived.player], held: [edge.tick, edge.player] },
@@ -1410,6 +1427,9 @@ drive() {
       cues: {
         toggles,
         saved: { playsAudio: savedSound.playsAudio ?? null, playsAreaAudio: savedSound.playsAreaAudio ?? null },
+        savedOff: { playsAudio: savedSoundOff.playsAudio ?? null, playsAreaAudio: savedSoundOff.playsAreaAudio ?? null },
+        freshClickedAt,
+        freshHeard: cueHeard(freshAudio),
         contexts,
         recordingFrom,
         toggledAt,
@@ -1546,6 +1566,10 @@ drive() {
         return rows.every((row) => row.hits.length === (onHole(row.startedOn) ? 1 : 0) && row.hits.every((hit) => hit.at === row.tick)) && rows.some((row) => !onHole(row.startedOn)) &&
           hits.length >= Number(holeHits) && hits.every((hit) => same(hit.tile, JSON.parse(holeTile)) && hit.requested >= damage.min && hit.requested <= damage.max);
       })(),
+      soundTogglesShownOnWhenFresh: cues.toggles.fresh.sound.visible && cues.toggles.fresh.areaSound.visible && cues.toggles.fresh.sound.checked && cues.toggles.fresh.areaSound.checked,
+      defaultSoundPlaysCueAfterFirstClick: cues.freshClickedAt < 5 && allIn(cues.contexts.fresh, "suspended") && allIn(cues.contexts["fresh-clicked"], "running") &&
+        onSchedule(timedOnly(cues.freshHeard), cueExpected.filter(([at]) => at < toggledAt)) && cues.freshHeard.every(([, , state]) => state === "running"),
+      soundOffChoiceSaved: cues.savedOff.playsAudio === false && cues.savedOff.playsAreaAudio === false,
       soundTogglesShownOff: cues.toggles.off.sound.visible && cues.toggles.off.areaSound.visible && !cues.toggles.off.sound.checked && !cues.toggles.off.areaSound.checked,
       soundTogglesTurnOnCues: recordingFrom < 5 && cues.beforeToggle.length === 0 && cues.toggles.on.sound.checked && cues.toggles.on.areaSound.checked &&
         onSchedule(timedOnly(cues.afterToggle), cueExpected.filter(([at]) => at >= toggledAt)) && cues.afterToggle.every(([, , state]) => state === "running"),
@@ -1564,7 +1588,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);

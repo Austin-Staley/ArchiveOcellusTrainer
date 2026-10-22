@@ -14,7 +14,7 @@ Five ticks after each lifeforce hit, Ocellus marks the tile the player starts th
 
 - Open `http://127.0.0.1:8002/` and stand still after the lifeforce hit at P4 tick 12. Shards appear under the player at 17 and a 16 lands at 18.
 - Click a neighbouring tile on each mark tick, or keep walking, and every mark is left behind.
-- Tick **Area sounds** at the bottom left to hear 12638 and 12537. Both sound checkboxes start off.
+- Listen for 12638 and 12537. **Sound effects** and **Area sounds** at the bottom left start ticked until the player unticks one.
 - Pick `Explosions` in the `Focus` selector and press `Restart` to practise the explosions alone.
 - Add `explosions=wiki-six` or `explosions=v2-seven` to the URL for the other readings of the footage.
 

@@ -4,6 +4,8 @@ A free practice simulator for phase 4 of the Ocellus fight in The Fractured Arch
 
 **Status: early development.** Mechanics come from the community wiki and release-day reports. Timings are unverified and will change.
 
+Play it at https://archive-ocellus-trainer.netlify.app. Add `?invincible=on` to the link to practise without dying, or open **Settings** in the game and tick **Invincible**. Pick a single mechanic to drill from **Focus** in the same menu.
+
 Built on [osrs-sdk](https://github.com/OldSchoolSDK/osrs-sdk), following the layout of [ColosseumTrainer](https://github.com/Supalosa/ColosseumTrainer).
 
 ## Development
@@ -18,29 +20,6 @@ npm start                       # http://127.0.0.1:8002
 ```
 
 `npm run assets` extracts models from OpenRS2 cache 2746 into `public/osrs-assets/`, which is never committed. It then draws an inventory icon for each of the trainer's own items, and for the Masori (f) pieces and Zaryte vambraces, from the item's model in the same cache, the way the game client draws it, into `public/osrs-assets/item-icons/`, and writes the boss's overhead icons from the cache's sprite index into `public/osrs-assets/sprites/`. `npm run item-icons` with the same two options redraws only the icons. The icon renderer in `src/itemIcons/` is ported from RuneLite's cache tool under its BSD 2-clause licence.
-
-## Deploy
-
-`netlify.toml` tells Netlify to run `scripts/netlify-build.sh` on Node 22 and publish `dist`. The script installs the dependencies and the beta SDK, installs the cache reader at a pinned commit, extracts the models and draws the item icons from OpenRS2 cache 2746, and builds the app. The models and icons are published with the app under `dist/osrs-assets/`. The cache and the reader go in Netlify's build cache directory, `/opt/build/cache`. That Netlify restores this directory after a successful build is inferred, not documented. The source is a 2019 answer from Netlify staff on the Netlify support forum. Confirm it in the logs of the first two deploys. The second deploy logs `reusing cache reader` and `Using cached OpenRS2 cache 2746` when the directory was restored.
-
-Production deploys from the `release` branch, because each production deploy costs 15 of the 300 credits that Netlify's free plan gives each month. Merges to `main` do not reach production. To ship a release, fast-forward `release` to a tested `main` commit. The first push creates the branch, so push once before you connect the repository:
-
-```sh
-git push origin <commit>:refs/heads/release
-```
-
-To connect the repository in the Netlify dashboard:
-
-1. Import an existing project from GitHub and pick `Julian-Dasilva/ArchiveOcellusTrainer`.
-2. Leave the base directory empty. Netlify reads the build command, the publish directory and the Node version from `netlify.toml`, so leave those fields as Netlify fills them.
-3. Set the production branch to `release`, then deploy.
-4. In **Project configuration > Developer settings > Continuous deployment > Branches and deploy contexts**, select **Configure**, select **Let me add individual branches**, and add `main`. Netlify builds deploy previews only for pull requests into the production branch or a branch with branch deploys. Deploy previews and branch deploys cost no credits.
-
-No environment variables are needed. `OSRS_CACHE_READER_REPO` and `OSRS_CACHE_READER_COMMIT` override the reader pin. To run the same build locally, set `NETLIFY_CACHE_DIR` to a writable directory:
-
-```sh
-NETLIFY_CACHE_DIR=/tmp/netlify-cache scripts/netlify-build.sh
-```
 
 ## Credit
 

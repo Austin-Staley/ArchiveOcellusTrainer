@@ -36,6 +36,7 @@ Preconditions:
 
 - `agent-browser addinitscript` is not a command in 0.34. Pass `--init-script` when the session starts, and use a session of its own so the other recipes keep Chrome's headless default.
 - The chimes are frame sounds of the orb's spawn spotanim, so they play only while the 3D view draws the orb, and only within 7 tiles of the player. On the toggle page seed 1 puts the inner orb on (9, 4), 7 tiles (Manhattan) from spawn, so its chimes play quietly. On the reloaded page the player stands on (5, 2) at the hit, so the orbs roll to (1, 5) and (7, 3).
+- A 138 ms frame at tick 12, when the hit lands and the inner orb first draws, made the page see tick 12 100 ms late when measured. Timed from that moment 12624 read 12.2. The probe starts a tick no later than 600 ms after the previous one, which puts it at 12.38.
 - 12621, 12622 and 12623 have the same length, so the check tells them apart by tick.
 - 12490 has the same length as the rift spawn sound 12643, and 12497 the same as the melee tell 12572. The check uses the `lifeforce-orb` drill before tick 50, where neither rifts nor transition attacks act.
 - A click on a checkbox counts as the first pointerdown, so the toggle page resumes the context before the canvas page does. The canvas page proves a click on the game resumes it.

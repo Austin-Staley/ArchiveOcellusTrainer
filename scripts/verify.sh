@@ -394,7 +394,8 @@ record_audio_starts() {
     const tick = () => {
       const run = window.__archiveOcellusProbe?.snapshot().fight?.run;
       const t = run?.kind === "running" ? run.tick : run?.kind === "ended" ? run.at : null;
-      if (t !== null && seen[t] === undefined) seen[t] = performance.now();
+      // A long frame shows a tick late, so a tick starts no later than one tick after the last.
+      if (t !== null && seen[t] === undefined) seen[t] = Math.min(performance.now(), (seen[t - 1] ?? Infinity) + 600);
       return t;
     };
     const watch = () => { tick(); requestAnimationFrame(watch); };

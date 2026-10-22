@@ -31,7 +31,7 @@ describe("Invincible", () => {
   test("with invincible on, the floor's lethal hit still lands, HP returns to full and the log and chat name the tick and the source", () => {
     expect(standOnTheFlood(null)).toEqual({
       floorHits: [...HITS_TO_THE_LETHAL_ONE, [55, 9, 9, 99, 90], [56, 9, 9, 90, 81]],
-      prevented: [{ kind: "death-prevented", at: 54, source: "floor-hit" }],
+      prevented: [{ kind: "death-prevented", at: 54, source: "floor-hit", clearedOrbCredit: 0 }],
       hpAfter: [99, 90, 81],
       ended: [],
       chat: ["Invincible: the void floor would have killed you on tick 54."],

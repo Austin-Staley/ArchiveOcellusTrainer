@@ -141,7 +141,7 @@ export type FightEvent =
   | Readonly<{ kind: "rift-spawned"; at: Tick; rift: RiftId; tile: Tile }>
   | Readonly<{ kind: "rift-destroyed"; at: Tick; rift: RiftId; tile: Tile }>
   | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile; receipt: HitReceipt }>
-  | Readonly<{ kind: "death-prevented"; at: Tick; source: PlayerHitSource }>
+  | Readonly<{ kind: "death-prevented"; at: Tick; source: PlayerHitSource; clearedOrbCredit: number }>
   | Readonly<{ kind: "run-ended"; at: Tick; reason: RunEnd }>;
 
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;

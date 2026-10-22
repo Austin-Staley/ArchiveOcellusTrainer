@@ -37,6 +37,6 @@ Preconditions:
 - Keep the player on spawn until the glow frames are taken. The camera follows the player, so a move shifts the orb out of `ORB_BOX` and aims the click at another tile, and a player standing on the orb hides its glow.
 - The inner orb expires at tick 30. The click after the glow frames lands about tick 25 and the run to (9, 4) takes two ticks, which leaves about two ticks to spare.
 - A click takes effect on the next game tick. Read `destination` after waiting, not straight after `mouse up`.
-- HP above 99 needs a heal between the hit and the return. The trainer has no food, so the browser run returns to 99. The SDK regenerates 1 HP at P4 tick 199, which the Jest test `a return can pass max HP` uses to reach 100.
+- HP above 99 needs a heal between the hit and the return. The trainer has no food, so the browser run returns to 99. The SDK regenerates 1 HP at P4 tick 199, which the Vitest test `a return can pass max HP` uses to reach 100.
 - Without `seed=1` the orb lands on another tile and the click constants miss it. The ticks do not change.
 - The tell's swirl (4313) is short. A screenshot on the tick it starts can miss it; about 350 ms later it shows.

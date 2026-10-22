@@ -4,7 +4,7 @@ Ocellus has the wiki's phase 3 defence: Defence level 250, stab 150, slash 100, 
 
 ## Sub-features
 
-- `ranged-defence` rolls every ranged attack against 250 ranged defence. Jest owns the hit-chance literals, because the browser shows only hits and misses.
+- `ranged-defence` rolls every ranged attack against 250 ranged defence. Vitest owns the hit-chance literals, because the browser shows only hits and misses.
 - `defence-floor` stops every Defence drain at 150. The second glaive of a Division rolls against the floored Defence the first glaive's drain will leave.
 
 ## How to get to it (user POV)
@@ -26,5 +26,5 @@ Preconditions:
 ## Gotchas
 
 - Light the orb for the second Division only after the first has spent the bar. A click while the first is still queued turns the special attack off.
-- Both glaives of one Division land on the same tick, so a per-tick read shows 250, 176 and 150. The 213 between them shows only in the Defence the second glaive rolls against, which Jest records.
+- Both glaives of one Division land on the same tick, so a per-tick read shows 250, 176 and 150. The 213 between them shows only in the Defence the second glaive rolls against, which Vitest records.
 - Without a pinned `seed` the glaives may miss. Ranged accuracy against this boss is low, and a missed glaive drains nothing.

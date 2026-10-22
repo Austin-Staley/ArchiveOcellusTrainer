@@ -21,7 +21,7 @@ jobs:
       - run: scripts/install-beta-sdk.sh
       - run: npm run typecheck
       - run: scripts/check-types.test.sh
-      - run: npm test -- --runInBand
+      - run: npm test
       - run: scripts/verify.test.sh
       - run: scripts/netlify-build.test.sh
       - run: npm run build

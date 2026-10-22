@@ -1,6 +1,6 @@
 ---
 name: verify-archive-ocellus
-description: Verify Archive Ocellus Trainer, a browser trainer built on osrs-sdk, by building it, running Jest, extracting cache assets and driving the real app in headless Chrome through the agent-browser CLI. Use before calling any change to the trainer done, and to prove a mapped feature still works.
+description: Verify Archive Ocellus Trainer, a browser trainer built on osrs-sdk, by building it, running Vitest, extracting cache assets and driving the real app in headless Chrome through the agent-browser CLI. Use before calling any change to the trainer done, and to prove a mapped feature still works.
 ---
 
 # Verify Archive Ocellus Trainer
@@ -65,7 +65,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | File | Content |
 | --- | --- |
 | `summary.txt` | One `PASS`/`FAIL` line per stage |
-| `build.log`, `types.log`, `test.log`, `jest.json`, `assets.log` | Stage output; `jest.json` holds the executed test count |
+| `build.log`, `types.log`, `test.log`, `vitest.json`, `assets.log` | Stage output; `vitest.json` holds the executed test count |
 | `server.log`, `server.pid` | Dev server output; PID, start time, port and revision |
 | `warm-up.png` | A blank page; a new browser's first screenshot takes about 10 s, so it is taken before the trainer opens |
 | `hidden.json`, `hidden.png` | Screenshot, then state, after the boss's first P4 step; the check needs P4 tick 3 or earlier with the model hidden |

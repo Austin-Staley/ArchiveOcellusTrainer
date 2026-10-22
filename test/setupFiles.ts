@@ -1,3 +1,5 @@
+/// <reference types="vitest/globals" />
+
 const canvasContext = new Proxy({}, {
   get: (target, property) => property === "measureText" ? () => ({ width: 0 }) : () => undefined,
   set: () => true,

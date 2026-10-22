@@ -9,7 +9,7 @@ const SAVED_SETTINGS = "osrs-sdk:settings";
 function cuesThrough(lastTick: number, selection: DrillSelection) {
   const drill = startDrill({ selection });
   // SoundCache.play is the SDK's audio output. jsdom has no AudioContext, so the spy reads each sound as it reaches that output.
-  const play = jest.spyOn(SoundCache, "play");
+  const play = vi.spyOn(SoundCache, "play");
   const sounds: [number, string][] = [];
   const chat: [number, string][] = [];
   for (let t = 0; t <= lastTick; t++) {

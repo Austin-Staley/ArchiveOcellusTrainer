@@ -547,6 +547,11 @@ drive_loadouts() {
   ab wait 600 >/dev/null
   ab screenshot "$VERIFY_DIR/loadout-ranged.png" >/dev/null || { log "ranged setup screenshot failed"; return 1; }
   probe "snapshot().icons" >"$VERIFY_DIR/icons.json"
+  click_at "$LOADOUT_EQUIPMENT_TAB_X" "$LOADOUT_EQUIPMENT_TAB_Y" || return 1
+  ab wait 600 >/dev/null
+  ab screenshot "$VERIFY_DIR/equipment-ranged.png" >/dev/null || { log "ranged equipment tab screenshot failed"; return 1; }
+  click_at "$LOADOUT_INVENTORY_TAB_X" "$LOADOUT_INVENTORY_TAB_Y" || return 1
+  ab wait 600 >/dev/null
 
   for slot in $(seq $((LOADOUT_SPECIAL_SLOT + 1)) "$LOADOUT_SWITCHES"); do
     click_inventory_slot "$slot" || return 1
@@ -794,7 +799,7 @@ drive() {
     orb-hit.png $(seq -f "orb-dormant-%g.png" 1 "$ORB_FRAMES") $(seq -f "orb-glow-%g.png" 1 "$ORB_FRAMES") orb-click.json orb.json orb-console.log orb-page-errors.json orb-skip.png orb-skip.json orb-skip-console.log orb-skip-page-errors.json \
     explosion-left.png explosion-standing.png explosions.json explosion-audio.json explosion-console.log explosion-page-errors.json explosion-under.png explosions-under.json explosion-under-console.log explosion-under-page-errors.json \
     special-before.png special-vortex.png special-spike-disk.png special-semicircle.png special-black-disk.png special.json special-console.log special-page-errors.json special-late.json special-audio.json special-late-console.log special-late-page-errors.json \
-    loadout-before.json loadout-ranged.png icons.json loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png equipment-melee.png \
+    loadout-before.json loadout-ranged.png icons.json equipment-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png equipment-melee.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \

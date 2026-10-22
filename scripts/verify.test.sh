@@ -5,8 +5,8 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/verify.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|SUPPLY_[A-Z_]+|KEYBIND_[A-Z_]+|RIFT_[A-Z_]+|OVERHEAD_[A-Z_]+|ICON_BOX|NORTH_EAST_RIFT_[A-Z_]+|CHAT_POLL_[A-Z_]+|RISEN_BOSS_[A-Z_]+|DEFLECT_[A-Z_]+|DEFENCE_FLOOR_[A-Z_]+|SOUL_SPLIT_[A-Z_]+|KILL_CHAT|WALKWAY_[A-Z_]+|CORNER_[A-Z_]+|HOLES?_[A-Z_]+|CUE_[A-Z_]+|AUTOPLAY_POLICY_JS|CREDIT_LINE)=' "$SCRIPT")"
-for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts record_overhead_draws step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle keep_seed choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot glaives_landed drive_loadouts drive_defence_floor right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive_overheads_rifts seed_run restart_run drive_seed drive_floor_holes wait_until_ticking walk_by_click drive_walkway drive_corner audio_contexts sound_toggles audio_resumed drive_cues drive release_browser stage_browser; do
+eval "$(grep -E '^(DRILL_QUERY|BOSS_NPC|SPAWN_TILE|WALK_[A-Z_]+|EDGE_[A-Z_]+|CYCLE_[A-Z_]+|FOCUS_[A-Z_]+|BOSS_CLICK_[A-Z_]+|RING_CLICK_[A-Z_]+|FLOOD_[A-Z_]+|NEAR_SQUARE|VOID_[A-Z_]+|ORB_[A-Z_]+|LOADOUT_[A-Z_]+|EXPLOSION_[A-Z_]+|STEP_CLICK_[A-Z_]+|DODGE_CLICK_[A-Z_]+|UNDER_BOSS_CLICK_[A-Z_]+|MARKER_SHOT_[A-Z_]+|SOUND_[A-Z_]+|SPECIAL_[A-Z_]+|PROTECT_[A-Z_]+|TELL_[A-Z_]+|TRANSITION_[A-Z_]+|LANDING_[A-Z_]+|STYLE_[A-Z_]+|SUPPLY_[A-Z_]+|KEYBIND_[A-Z_]+|RIFT_[A-Z_]+|OVERHEAD_[A-Z_]+|ICON_BOX|NORTH_EAST_RIFT_[A-Z_]+|CHAT_POLL_[A-Z_]+|RISEN_BOSS_[A-Z_]+|DEFLECT_[A-Z_]+|DEFENCE_FLOOR_[A-Z_]+|SOUL_SPLIT_[A-Z_]+|KILL_CHAT|WALKWAY_[A-Z_]+|CORNER_[A-Z_]+|HOLES?_[A-Z_]+|CUE_[A-Z_]+|INVINCIBLE_[A-Z_]+|AUTOPLAY_POLICY_JS|CREDIT_LINE)=' "$SCRIPT")"
+for fn in json process_start serve state doctor stop probe fight_tick_at_least canvas_centre click_after_tick shot_after_tick save_sound_settings record_audio_starts record_overhead_draws step_on_marks step_south_and_back_on_marks drive_lead_in drive_walk click_past_the_edge drive_edge drive_flood_shot drive_cycle keep_seed choose_focus drive_focus drive_void_floor drive_void_shot drive_lifeforce_orb drive_explosions drive_transition_attack click_at click_inventory_slot glaives_landed drive_loadouts drive_defence_floor right_click_inventory_slot drive_supplies bind_inventory_key drive_keybinds drive_overheads_rifts seed_run restart_run drive_seed drive_floor_holes wait_until_ticking walk_by_click drive_walkway drive_corner invincible_toggle drive_invincible audio_contexts sound_toggles audio_resumed drive_cues drive release_browser stage_browser; do
   eval "$(sed -n "/^${fn}() {\$/,/^}\$/p" "$SCRIPT")"
 done
 
@@ -156,7 +156,7 @@ fixture_logs() {
       beats: [],
       events: [
         ...(standingHits[t] ? [{ kind: "floor-hit", at: t, tile: { x: 5, y: 1 }, receipt: { applied: standingHits[t] } }] : []),
-        ...(t === 54 ? [{ kind: "run-ended", at: t, reason: "death" }] : []),
+        ...(t === 54 ? [fault === "invincible-by-default" ? { kind: "death-prevented", at: t, source: "floor-hit" } : { kind: "run-ended", at: t, reason: "death" }] : []),
       ],
     }));
     const fs = require("fs");
@@ -165,6 +165,18 @@ fixture_logs() {
     write("focus-log.json", focus, focused);
     write("void-log.json", "void-floor", standing);
     write("void-shot-log.json", "void-floor", shot);
+    const died = fault === "invincible-died";
+    const invincibleHits = { ...standingHits, ...(died ? {} : { 55: 9, 56: 9 }) };
+    const invincible = Array.from({ length: died ? 55 : 57 }, (_, t) => ({
+      tick: t,
+      beats: [],
+      playerAtPostTick: { tile: { x: 5, y: 1 }, hp: t === 53 ? 1 : t === 54 && died ? 0 : 99 },
+      events: [
+        ...(invincibleHits[t] ? [{ kind: "floor-hit", at: t, tile: { x: 5, y: 1 }, receipt: { applied: invincibleHits[t] } }] : []),
+        ...(t === 54 ? [died ? { kind: "run-ended", at: t, reason: "death" } : { kind: "death-prevented", at: t, source: "floor-hit" }] : []),
+      ],
+    }));
+    write("invincible-log.json", "void-floor", invincible);
     const orbReturn = fault === "late-orb-return" ? 29 : 28;
     const orbAt = (x, y, hp) => ({ tile: { x, y }, hp });
     const orbEvents = {
@@ -699,6 +711,25 @@ cue_probe() {
   esac
 }
 
+invincible_probe() {
+  case "$1" in
+    checked)
+      local checked=false
+      [[ ! -e "$T/invincible" || -e "$T/invincible-restarted" && "$FAULT" == invincible-not-kept ]] || checked=true
+      [[ "$FAULT" != invincible-default-on ]] || checked=true
+      printf '{"data":{"checked":%s}}\n' "$checked"
+      ;;
+    search)
+      local search="?setup=ranged&focus=${VOID_DRILL}&invincible=on"
+      [[ "$FAULT" != invincible-not-kept ]] || search="?setup=ranged&focus=${VOID_DRILL}"
+      printf '{"data":{"result":"%s"}}\n' "$search"
+      ;;
+    chat)
+      if [[ "$FAULT" == invincible-died ]]; then echo '{"data":{"text":""}}'; else printf '{"data":{"text":"%s"}}\n' "$(command node -e 'console.log(JSON.parse(process.argv[1]).chat)' "$INVINCIBLE_EXPECTED")"; fi
+      ;;
+  esac
+}
+
 fake_browser() {
   FINAL_TILE="$1"
   SCREENSHOT="${2:-ok}"
@@ -726,6 +757,7 @@ fake_browser() {
         ;;
       "--init-script "*) : >"$T/cues" ;;
       "--json eval (window.__audioContexts ?? []).map((context) => context.state)") cue_probe contexts ;;
+      "--json is checked #invincible") invincible_probe checked ;;
       "--json is checked "*) cue_probe checked ;;
       "click #area_sound" | "click #sound") : >"$T/toggled" ;;
       "--json eval window.__overheadDraws") cat "$T/overhead-draws.json" ;;
@@ -739,6 +771,7 @@ fake_browser() {
       "--json eval localStorage.getItem('osrs-sdk:settings')") if [[ -e "$T/cues" ]]; then cue_probe saved; else supply_probe saved; fi ;;
       "--json eval window.__archiveOcellusProbe.log()")
         [[ ! -e "$T/cues" ]] || { cat "$T/cue-log.json"; return; }
+        [[ ! -e "$T/invincible" ]] || { cat "$T/invincible-log.json"; return; }
         [[ ! -e "$T/scenery" ]] || { scenery_probe log; return; }
         [[ ! -e "$T/deflect" ]] || { cat "$T/deflect-log.json"; return; }
         [[ ! -e "$T/rifts" ]] || { cat "$T/rift-log.json"; return; }
@@ -762,8 +795,9 @@ fake_browser() {
       "open "*"${HOLES_QUERY}") echo holes >"$T/scenery" ;;
       "--json get value #seed") if [[ -e "$T/seed-stage" && ! -e "$T/cues" ]]; then seed_probe box; else echo '{"data":{"value":"1"}}'; fi ;;
       "--json eval window.__archiveOcellusProbe.log().header.seed") seed_probe seed ;;
-      "--json eval location.search") seed_probe search ;;
+      "--json eval location.search") if [[ -e "$T/invincible" ]]; then invincible_probe search; else seed_probe search; fi ;;
       "--json eval performance.timeOrigin") seed_probe origin ;;
+      "open "*"${INVINCIBLE_QUERY}") : >"$T/invincible" ;;
       "open "*"focus=${VOID_DRILL}") : >"$T/void-shot" ;;
       "open "*"focus=${ORB_DRILL}") : >"$T/orb-skip" ;;
       "open "*"focus=${EXPLOSION_DRILL}") : >"$T/explosion-under" ;;
@@ -783,11 +817,12 @@ fake_browser() {
         ;;
       "click #restart")
         [[ ! -e "$T/cues" ]] || { : >"$T/cues-restarted"; return; }
+        [[ ! -e "$T/invincible" ]] || { : >"$T/invincible-restarted"; return; }
         [[ ! -e "$T/seed-stage" ]] || { echo $(($(cat "$T/seed-stage") + 1)) >"$T/seed-stage"; return; }
         echo $(($(cat "$T/restarts" 2>/dev/null || echo 0) + 1)) >"$T/restarts"
         [[ ! -e "$T/special" ]] || : >"$T/special-late"
         ;;
-      "--json get text #game_chat") if [[ -e "$T/cues" ]]; then cue_probe chat; elif [[ "$FAULT" == no-chat ]]; then echo '{"data":{"text":""}}'; else printf '{"data":{"text":"%s"}}\n' "$KILL_CHAT"; fi ;;
+      "--json get text #game_chat") if [[ -e "$T/cues" ]]; then cue_probe chat; elif [[ -e "$T/invincible" ]]; then invincible_probe chat; elif [[ "$FAULT" == no-chat ]]; then echo '{"data":{"text":""}}'; else printf '{"data":{"text":"%s"}}\n' "$KILL_CHAT"; fi ;;
       "--json get text "*) printf '{"data":{"text":"%s"}}\n' "$CREDIT_LINE" ;;
       "--json is visible "*) echo '{"data":{"visible":true}}' ;;
       "--json get box "*) echo '{"data":{"x":0,"y":0,"width":1280,"height":800}}' ;;
@@ -1398,6 +1433,34 @@ lifeforce_chat_missing_fails() {
   [[ "$(failed_checks)" == lifeforceChatOnTell ]] || { echo "expected only lifeforceChatOnTell to fail, got: $(failed_checks)"; return 1; }
 }
 
+invincible_toggle_checked_by_default_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' invincible-default-on
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the Invincible box started checked"; return 1; fi
+  [[ "$(failed_checks)" == invincibleStartsUnchecked ]] || { echo "expected only invincibleStartsUnchecked to fail, got: $(failed_checks)"; return 1; }
+}
+
+invincible_run_that_dies_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' invincible-died
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the invincible run died on tick 54"; return 1; fi
+  [[ "$(failed_checks)" == "invincibleLinkSurvivesTheLethalHit invincibleChatShown" ]] || { echo "expected the survival and chat checks to fail, got: $(failed_checks)"; return 1; }
+}
+
+invincible_lost_on_restart_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' invincible-not-kept
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although Restart dropped invincible=on"; return 1; fi
+  [[ "$(failed_checks)" == restartKeepsInvincible ]] || { echo "expected only restartKeepsInvincible to fail, got: $(failed_checks)"; return 1; }
+}
+
+invincible_without_the_parameter_fails() {
+  setup
+  fake_browser '{"x":8,"y":3}' ok 8 "$FOCUS_DRILL" '' '' invincible-by-default
+  if drive >"$T/drive.log" 2>&1; then echo "drive passed although the run without invincible=on survived its lethal hit"; return 1; fi
+  [[ "$(failed_checks)" == "floodHitsStandingStill mortalWithoutTheParameter" ]] || { echo "expected the flood and mortal checks to fail, got: $(failed_checks)"; return 1; }
+}
+
 failed=0
 for t in \
   refused_serve_does_not_stop_the_recorded_instance \
@@ -1492,7 +1555,11 @@ for t in \
   audio_running_before_any_click_fails \
   orb_chimes_a_tick_late_fail \
   flood_without_its_sound_fails \
-  lifeforce_chat_missing_fails; do
+  lifeforce_chat_missing_fails \
+  invincible_toggle_checked_by_default_fails \
+  invincible_run_that_dies_fails \
+  invincible_lost_on_restart_fails \
+  invincible_without_the_parameter_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

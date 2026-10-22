@@ -106,7 +106,7 @@ function DrillControls({ config }: Readonly<{ config: DrillConfig }>) {
         </select>
       </label>
       <label>
-        Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(config.seed)} onChange={(event) => setTypedSeed(event.target.value)} onKeyDown={(event) => event.stopPropagation()} />
+        Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(config.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
       </label>
       <button id="restart" type="submit">Restart</button>
       <button id="keybinds" type="button" onClick={() => ControlPanelController.controller.setActiveControl("SETTINGS")}>Keybinds</button>

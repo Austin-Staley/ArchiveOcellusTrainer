@@ -6,7 +6,7 @@ Each run takes a seed that fixes its rolls, such as the order of the transition 
 
 - `seed-fresh` draws a random seed for a page opened without `seed=` and shows it in the seed box.
 - `seed-restart` gives Restart a new random seed when the box still shows the run's seed.
-- `seed-typed` replays the typed seed after Restart and keeps it in the URL as `seed=`.
+- `seed-typed` replays the typed seed after Restart, even one equal to the seed the box shows, and keeps it in the URL as `seed=`.
 
 ## How to get to it (user POV)
 

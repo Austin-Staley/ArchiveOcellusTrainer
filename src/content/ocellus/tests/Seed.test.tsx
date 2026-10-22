@@ -25,7 +25,7 @@ const runSeed = () => window.__archiveOcellusProbe?.log().header.seed ?? null;
 describe("Seed per run", () => {
   beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
 
-  test("a run without a typed seed draws a fresh one and shows it, and Restart replays a seed only when one is typed", () => {
+  test("a run without a typed seed draws a fresh one and shows it, and Restart replays a seed only when one is typed, even the one already shown", () => {
     drawRandomSeeds([4242, 77, 55]);
     const navigation = captureNavigation();
 
@@ -42,6 +42,8 @@ describe("Seed per run", () => {
 
     const third = loadPage(navigation.assigned[1]);
     const thirdRun = [third.value("seed"), runSeed()];
+    third.type("seed", "4242");
+    third.click("restart");
     third.close();
     navigation.restore();
 
@@ -49,7 +51,11 @@ describe("Seed per run", () => {
       firstRun: ["4242", 4242],
       secondRun: ["77", 77],
       thirdRun: ["4242", 4242],
-      navigation: ["http://localhost/?setup=ranged&focus=full-fight", "http://localhost/?setup=ranged&focus=full-fight&seed=4242"],
+      navigation: [
+        "http://localhost/?setup=ranged&focus=full-fight",
+        "http://localhost/?setup=ranged&focus=full-fight&seed=4242",
+        "http://localhost/?setup=ranged&focus=full-fight&seed=4242",
+      ],
     });
   });
 });

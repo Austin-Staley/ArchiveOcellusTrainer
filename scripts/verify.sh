@@ -565,7 +565,12 @@ drive_cycle() {
   ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+open_settings() {
+  [[ "$(ab --json is visible "#settings_menu" | json data.visible)" == true ]] || ab click "#settings" >/dev/null || { log "the Settings button did not respond"; return 1; }
+}
+
 keep_seed() {
+  open_settings || return 1
   ab fill "#seed" "$(ab --json get value "#seed" | json data.value)" >/dev/null || { log "the seed box did not take the run's own seed"; return 1; }
 }
 
@@ -716,11 +721,11 @@ drive_supplies() {
 }
 
 bind_inventory_key() {
-  ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null && click_at "$KEYBIND_INVENTORY_BUTTON_X" "$KEYBIND_INVENTORY_BUTTON_Y" && ab press "$1" >/dev/null && ab wait 300 >/dev/null
+  open_settings && ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null && click_at "$KEYBIND_INVENTORY_BUTTON_X" "$KEYBIND_INVENTORY_BUTTON_Y" && ab press "$1" >/dev/null && ab wait 300 >/dev/null
 }
 
 drive_keybinds() {
-  ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null || { log "the Keybinds button did not respond"; return 1; }
+  open_settings && ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null || { log "the Keybinds button did not respond"; return 1; }
   probe "snapshot().panel" >"$VERIFY_DIR/keybinds-open.json"
   ab screenshot "$VERIFY_DIR/keybinds.png" >/dev/null || { log "key bindings screenshot failed"; return 1; }
   bind_inventory_key "$KEYBIND_NEW_KEY" || { log "the inventory key was not bound"; return 1; }
@@ -741,6 +746,7 @@ drive_keybinds() {
 
 seed_run() {
   local box seed search
+  open_settings || return 1
   box="$(ab --json get value "#seed" | json data.value)" || return 1
   seed="$(probe "log().header.seed")" || return 1
   search="$(ab --json eval "location.search" | json data.result)" || return 1
@@ -991,6 +997,7 @@ drive_overheads_rifts() {
 }
 
 invincible_toggle() {
+  open_settings || return 1
   printf '{"visible":%s,"checked":%s}\n' "$(ab --json is visible "#invincible" | json data.visible)" "$(ab --json is checked "#invincible" | json data.checked)"
 }
 
@@ -1031,6 +1038,7 @@ audio_contexts() {
 }
 
 sound_toggles() {
+  open_settings || return 1
   printf '{"sound":{"visible":%s,"checked":%s},"areaSound":{"visible":%s,"checked":%s}}\n' \
     "$(ab --json is visible "#sound" | json data.visible)" "$(ab --json is checked "#sound" | json data.checked)" \
     "$(ab --json is visible "#area_sound" | json data.visible)" "$(ab --json is checked "#area_sound" | json data.checked)"
@@ -1056,7 +1064,7 @@ drive_cues() {
   audio_contexts >"$VERIFY_DIR/cue-contexts-fresh-clicked.json" || { log "audio context capture failed"; return 1; }
   fight_tick_at_least "$CUE_TOGGLE_TICK" 30000 || { log "the fresh cue drill never stepped to P4 tick ${CUE_TOGGLE_TICK}"; return 1; }
   ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/cue-fresh-audio.json" || { log "audio capture failed"; return 1; }
-  ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not unticked"; return 1; }
+  open_settings && ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not unticked"; return 1; }
   ab --json eval "localStorage.getItem('${SOUND_SETTINGS_KEY}')" | json data.result >"$VERIFY_DIR/cue-sound-off-saved.json" || { log "saved settings capture failed"; return 1; }
   ab console >"$VERIFY_DIR/cue-fresh-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/cue-fresh-page-errors.json" || { log "page error capture failed"; return 1; }
@@ -1067,7 +1075,7 @@ drive_cues() {
   audio_contexts >"$VERIFY_DIR/cue-contexts-loaded.json" || { log "audio context capture failed"; return 1; }
   sound_toggles >"$VERIFY_DIR/cue-toggles-off.json" || { log "sound toggle capture failed"; return 1; }
   fight_tick_at_least "$CUE_TOGGLE_TICK" 30000 || { log "the cue drill never stepped to P4 tick ${CUE_TOGGLE_TICK}"; return 1; }
-  ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not clicked"; return 1; }
+  open_settings && ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not clicked"; return 1; }
   probe "snapshot().fight.run.tick" >"$VERIFY_DIR/cue-toggle-click.json"
   audio_resumed || log "the audio context did not resume after the toggle click"
   audio_contexts >"$VERIFY_DIR/cue-contexts-toggled.json" || { log "audio context capture failed"; return 1; }

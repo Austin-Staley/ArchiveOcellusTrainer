@@ -210,6 +210,7 @@ export type GearKeys = Readonly<{
 export type Setup = Readonly<{ [S in GearSlot]: GearKeys[S] }>;
 export type SupplyKey = "superCombatPotion" | "bastionPotion" | "saradominBrew" | "superRestore";
 export type TrainerItemKey = "inquisitorsGreatHelm" | "inquisitorsHauberk" | "inquisitorsPlateskirt" | "tonalzticsOfRalos";
+type SdkIconKey = "masoriMaskF" | "masoriBodyF" | "masoriChapsF" | "zaryteVambraces";
 type InquisitorPiece = "inquisitorsGreatHelm" | "inquisitorsHauberk" | "inquisitorsPlateskirt";
 type RangedStrengthPrayer = "Sharp Eye" | "Hawk Eye" | "Eagle Eye" | "Deadeye" | "Rigour";
 export type StanceSpeeds<T extends number = TickSpan> = Readonly<{ rapidSpeed: T; otherSpeed: T }>;
@@ -217,6 +218,7 @@ export type StanceSpeeds<T extends number = TickSpan> = Readonly<{ rapidSpeed: T
 type GearRecipe = Readonly<{
   items: Readonly<Record<TrainerItemKey, TrainerItem>>;
   sdkCacheIds: Readonly<{ necklaceOfRupture: Selected<number> }>;
+  sdkIcons: Readonly<Record<SdkIconKey, Selected<number>>>;
   supplies: Selected<readonly SupplyKey[]>;
   twistedBow: Selected<StanceSpeeds<TwistedBow["attackSpeed"]>>;
   ralos: Selected<StanceSpeeds & Readonly<{ range: number; longrangeRange: number; hits: number; hitMaxFraction: number }>>;
@@ -542,6 +544,8 @@ const item = (itemId: number, page: string, oldid: number, itemStats: ItemStats)
   itemId: selected(itemId, "spec-single", "unscaled", "infobox item id", wiki(`${OSRS_WIKI}${page}`, oldid)),
   stats: selected(itemStats, "spec-single", "unscaled", "infobox combat bonuses", wiki(`${OSRS_WIKI}${page}`, oldid)),
 });
+const sdkIcon = (itemId: number, page: Source): Selected<number> =>
+  selected(itemId, "spec-single", "unscaled", "infobox item id of an SDK item whose inventory icon the trainer draws from cache 2746; the SDK's bundled Masori body (f) image matches the wiki's 2022 upload and differs from the cache render in 107 pixels", page, cache(`item ${itemId} inventory model`));
 
 const GEAR: GearRecipe = {
   items: {
@@ -552,6 +556,12 @@ const GEAR: GearRecipe = {
   },
   sdkCacheIds: {
     necklaceOfRupture: selected(33639, "spec-confirmed", "unscaled", "the SDK's class carries anguish's id 19547 as a stand-in; cache 2746 holds item 33639 with male model 61426", cache("item 33639 maleModel0 61426"), RUPTURE_PAGE),
+  },
+  sdkIcons: {
+    masoriMaskF: sdkIcon(27235, MASORI_MASK_PAGE),
+    masoriBodyF: sdkIcon(27238, MASORI_BODY_PAGE),
+    masoriChapsF: sdkIcon(27241, MASORI_CHAPS_PAGE),
+    zaryteVambraces: sdkIcon(26235, ZARYTE_VAMBRACES_PAGE),
   },
   supplies: selected<readonly SupplyKey[]>(
     [

@@ -6,6 +6,9 @@ import {
   ImageLoader,
   ItemName,
   Legs,
+  MasoriBodyF,
+  MasoriChapsF,
+  MasoriMaskF,
   mergeProjectileOptions,
   NecklaceOfRupture,
   Projectile,
@@ -13,6 +16,7 @@ import {
   ScytheOfVitur,
   TwistedBow,
   Unit,
+  ZaryteVambraces,
 } from "osrs-sdk";
 import type { AttackBonuses, ProjectileOptions, UnitBonuses, UnitEquipment, Weapon } from "osrs-sdk";
 import type { StanceSpeeds, TrainerItemKey } from "../OcellusTimings";
@@ -43,12 +47,12 @@ function bonuses(key: TrainerItemKey): UnitBonuses {
   return { attack: { ...attack }, defence: { ...defence }, other: { ...other }, targetSpecific: { undead: 0, slayer: 0 } };
 }
 
-function inventoryIcon(key: TrainerItemKey): HTMLImageElement {
-  return ImageLoader.createImage(`osrs-assets/${itemIconFile(gear.items[key].itemId.value)}`);
+function inventoryIcon(itemId: number): HTMLImageElement {
+  return ImageLoader.createImage(`osrs-assets/${itemIconFile(itemId)}`);
 }
 
 export class InquisitorsGreatHelm extends Helmet {
-  override inventorySprite = inventoryIcon("inquisitorsGreatHelm");
+  override inventorySprite = inventoryIcon(this.cacheItemId);
   override get itemName(): ItemName {
     return ItemName.INQUISITORS_GREAT_HELM;
   }
@@ -61,7 +65,7 @@ export class InquisitorsGreatHelm extends Helmet {
 }
 
 export class InquisitorsHauberk extends Chest {
-  override inventorySprite = inventoryIcon("inquisitorsHauberk");
+  override inventorySprite = inventoryIcon(this.cacheItemId);
   override get itemName(): ItemName {
     return ItemName.INQUISITORS_HAUBERK;
   }
@@ -74,7 +78,7 @@ export class InquisitorsHauberk extends Chest {
 }
 
 export class InquisitorsPlateskirt extends Legs {
-  override inventorySprite = inventoryIcon("inquisitorsPlateskirt");
+  override inventorySprite = inventoryIcon(this.cacheItemId);
   override get itemName(): ItemName {
     return ItemName.INQUISITORS_PLATESKIRT;
   }
@@ -90,6 +94,22 @@ export class OcellusNecklaceOfRupture extends NecklaceOfRupture {
   override get cacheItemId(): number {
     return gear.sdkCacheIds.necklaceOfRupture.value;
   }
+}
+
+export class OcellusMasoriMaskF extends MasoriMaskF {
+  override inventorySprite = inventoryIcon(this.cacheItemId);
+}
+
+export class OcellusMasoriBodyF extends MasoriBodyF {
+  override inventorySprite = inventoryIcon(this.cacheItemId);
+}
+
+export class OcellusMasoriChapsF extends MasoriChapsF {
+  override inventorySprite = inventoryIcon(this.cacheItemId);
+}
+
+export class OcellusZaryteVambraces extends ZaryteVambraces {
+  override inventorySprite = inventoryIcon(this.cacheItemId);
 }
 
 function stanceSpeed<T extends number>(weapon: Weapon, { rapidSpeed, otherSpeed }: StanceSpeeds<T>): T {
@@ -183,7 +203,7 @@ class DivisionGlaive extends Projectile {
 }
 
 export class TonalzticsOfRalos extends RangedWeapon {
-  override inventorySprite = inventoryIcon("tonalzticsOfRalos");
+  override inventorySprite = inventoryIcon(this.cacheItemId);
   override get itemName(): ItemName {
     return ItemName.TONALZTICS_OF_RALOS;
   }

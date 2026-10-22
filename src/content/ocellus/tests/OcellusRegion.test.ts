@@ -36,7 +36,7 @@ describe("Ocellus arena", () => {
     }
     expect(rows).toEqual([
       "..............",
-      "....#.........",
+      "..............",
       "...##########.",
       "..###########.",
       "..##########..",
@@ -44,8 +44,8 @@ describe("Ocellus arena", () => {
       "..########....",
       "..#######.....",
       "..#######.....",
-      "..##..........",
-      "..###.........",
+      "..######......",
+      "..#####.......",
       "..####........",
       "..###.........",
       "..............",
@@ -65,21 +65,21 @@ describe("Ocellus arena", () => {
     expect([stopsAt({ x: 15, y: 1 }), stopsAt({ x: 12, y: 1 }), stopsAt({ x: 5, y: -3 })]).toEqual([
       { x: 11, y: 1 },
       { x: 11, y: 1 },
-      { x: 3, y: 0 },
+      { x: 5, y: 1 },
     ]);
   });
 
-  test("a walk between floor tiles goes around the platform's cut-outs instead of across them", () => {
+  test("a walk along the diagonal edge keeps to the floor instead of cutting across the blocked tiles beside it", () => {
     const drill = startDrill({ selection: NON_LETHAL });
-    drill.walkTo({ x: 4, y: 10 });
+    drill.walkTo({ x: 11, y: 1 });
     drill.region.world.tickWorld(6);
-    drill.walkTo({ x: 7, y: 7 });
+    drill.walkTo({ x: 3, y: 11 });
     const trail: At[] = [];
     for (let tick = 0; tick < 6; tick++) {
       drill.region.world.tickWorld();
       trail.push({ ...drill.player().location });
     }
-    expect(trail).toEqual([{ x: 2, y: 9 }, { x: 2, y: 7 }, { x: 4, y: 7 }, { x: 6, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }]);
+    expect(trail).toEqual([{ x: 9, y: 3 }, { x: 7, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
     drill.dispose();
   });
 });

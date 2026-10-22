@@ -5,14 +5,14 @@ export function paintedTiles(paint: (context: OffscreenCanvasRenderingContext2D,
   return painted;
 }
 
-export type Fill = Readonly<{ style: string; x: number; y: number }>;
+export type Fill = Readonly<{ style: string; x: number; y: number; width: number; height: number }>;
 
 export function paintedFills(paint: (context: OffscreenCanvasRenderingContext2D) => void): readonly Fill[] {
   const fills: Fill[] = [];
   const state: Record<string | symbol, unknown> = { fillStyle: "" };
   const context = new Proxy(state, {
     get: (target, property) =>
-      property === "fillRect" ? (x: number, y: number) => void fills.push({ style: String(target.fillStyle), x, y }) : property in target ? target[property] : () => undefined,
+      property === "fillRect" ? (x: number, y: number, width: number, height: number) => void fills.push({ style: String(target.fillStyle), x, y, width, height }) : property in target ? target[property] : () => undefined,
     set: (target, property, value) => {
       target[property] = value;
       return true;

@@ -55,7 +55,7 @@ type Orb =
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 
-type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number }>;
+type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number; spawnedAt: Tick }>;
 
 /** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
 const HEAL_SPLAT_TICKS = span(1);
@@ -394,6 +394,7 @@ export class Ocellus extends Mob {
       return;
     }
     const destroyed = this.destroyFallenRifts(moment.tick);
+    this.rifts.forEach((rift) => rift.mob.charge(span(moment.tick - rift.spawnedAt)));
     const reactions = moment.beats.flatMap((beat) => this.react(beat, moment.tick, draft.playerAtBossStep) ?? []);
     this.strikeHole(moment.tick, draft.playerAtBossStep);
     this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...destroyed, ...reactions] } };
@@ -518,7 +519,7 @@ export class Ocellus extends Mob {
       const mob = new VoidRift(this.region, place);
       this.region.addMob(mob);
       const id = riftId(at, slot);
-      this.rifts = [...this.rifts, { id, tile: place, forCycle, mob, hpAtPostTick: mob.currentStats.hitpoint }];
+      this.rifts = [...this.rifts, { id, tile: place, forCycle, mob, hpAtPostTick: mob.currentStats.hitpoint, spawnedAt: at }];
       return { kind: "rift-spawned", at, rift: id, tile: place };
     });
   }

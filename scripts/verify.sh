@@ -170,7 +170,7 @@ ICON_BOX='{"minX":-40,"maxX":40,"minY":-290,"maxY":-190}'
 RIFT_CLICK_TICK=68
 NORTH_EAST_RIFT_CLICK_LEFT_PX=325
 NORTH_EAST_RIFT_CLICK_UP_PX=52
-RIFT_BURST_TICK=78
+RIFT_BURST_TICK=90
 CHAT_POLL_WAIT_MS=600
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
 DEFLECT_CLICK_TICK=12
@@ -181,14 +181,14 @@ DEFLECT_FIRST_MELEE_TICK=31
 DEFLECT_BLOCKED_SHOT_TICK=31
 DEFLECT_LAST_TICK=46
 SOUL_SPLIT_HEAL_TICK=39
-RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[78,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
+RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":11,"y":2}]],"destroyed":"rift-67-1","bursts":[[90,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
 SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1355,"afterHp":1404}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1404,"afterHp":1451}]]'
 KILL_CHAT="Destroying the void rift empowers you!"
 RIFT_SOUND_SAMPLES='{"12640":11025,"12641":14332,"12642":26460,"12643":7717}'
 RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
 RIFT_KILL_SOUND='[0.27,12640]'
-RIFT_BURST_SOUNDS='[[78.13,12641],[78.93,12642]]'
-RIFT_SOUND_WINDOW='[66,80]'
+RIFT_BURST_SOUNDS='[[90.13,12641],[90.93,12642]]'
+RIFT_SOUND_WINDOW='[66,92]'
 CUE_QUERY="?seed=1&focus=${ORB_DRILL}"
 CUE_TOGGLE_TICK=6
 CUE_CHAT_BEFORE_TICK=10

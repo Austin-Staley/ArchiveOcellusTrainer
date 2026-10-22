@@ -1,3 +1,5 @@
+import type { Fill } from "../../../../test/paintedTiles";
+import { paintedFills } from "../../../../test/paintedTiles";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 
@@ -120,23 +122,23 @@ describe("U6 boss overheads, heals and rifts", () => {
 
   test.each([
     {
-      killLandsAt: 77,
-      destroyed: [[78, "rift-67-1"]],
-      bursts: [[78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
+      killLandsAt: 89,
+      destroyed: [[90, "rift-67-1"]],
+      bursts: [[90, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }]],
       chat: ["Destroying the void rift empowers you!"],
       northEastRiftSequences: [14896, 14897],
     },
     {
-      killLandsAt: 78,
+      killLandsAt: 90,
       destroyed: [],
       bursts: [
-        [78, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
-        [78, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
+        [90, "rift-67-0", { requested: 14, applied: 14, beforeHp: 99, afterHp: 85, prayer: null }],
+        [90, "rift-67-1", { requested: 14, applied: 14, beforeHp: 85, afterHp: 71, prayer: null }],
       ],
       chat: [],
       northEastRiftSequences: [14896, 14898],
     },
-  ])("a rift dead by the end of 77 despawns and is destroyed at 78, and a standing one detonates and bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat, northEastRiftSequences }) => {
+  ])("a rift dead by the end of 89 despawns and is destroyed at 90, and a standing one detonates and bursts for 14: north-east rift killed by a hit landing at $killLandsAt", ({ killLandsAt, destroyed, bursts, chat, northEastRiftSequences }) => {
     const drill = startDrill({ selection: { focus: "rifts" } });
     drill.tickTo(68);
     const northEast = northEastRift(drill);
@@ -144,12 +146,33 @@ describe("U6 boss overheads, heals and rifts", () => {
     northEast.setAnimationListener({ animationChanged: (id) => Promise.resolve(void sequences.push(id)), modelChanged: () => undefined });
     drill.tickTo(killLandsAt - 1);
     drill.hit(drill.player(), northEast, 44);
-    drill.tickTo(79);
+    drill.tickTo(91);
     expect([drill.events("rift-destroyed").map((e) => [e.at, e.rift]), drill.events("rift-burst").map((e) => [e.at, e.rift, e.receipt]), drill.region.chat(), sequences]).toEqual([
       destroyed,
       bursts,
       chat,
       northEastRiftSequences,
+    ]);
+    drill.dispose();
+  });
+
+  test("under each rift's HP bar a yellow timer bar of the same size fills from the left as the rift charges, full on the burst tick", () => {
+    const drill = startDrill({ selection: { focus: "rifts" } });
+    const drawn: Record<number, readonly Fill[]> = {};
+    for (const t of [67, 69, 78, 89, 90]) {
+      drill.tickTo(t);
+      const northWest = [...drill.region.mobs, ...drill.region.newMobs].find((mob) => mob.location.x === 2 && mob.location.y === 2);
+      drawn[t] = northWest ? paintedFills((context) => northWest.drawHPBar(context, 1, 0)) : [];
+    }
+    const bars = (yellow: number): readonly Fill[] => [
+      { style: "red", x: -15, y: 0, width: 30, height: 5 },
+      { style: "lime", x: -15, y: 0, width: 30, height: 5 },
+      { style: "#1e1e0c", x: -15, y: 5, width: 30, height: 5 },
+      { style: "#e0c020", x: -15, y: 5, width: yellow, height: 5 },
+    ];
+    expect([drawn, drill.events("rift-burst").map((e) => [e.at, e.rift])]).toEqual([
+      { 67: bars(0), 69: bars(60 / 23), 78: bars(330 / 23), 89: bars(660 / 23), 90: bars(30) },
+      [[90, "rift-67-0"], [90, "rift-67-1"]],
     ]);
     drill.dispose();
   });

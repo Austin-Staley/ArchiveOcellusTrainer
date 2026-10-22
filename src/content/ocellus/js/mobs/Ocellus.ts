@@ -208,7 +208,8 @@ export class Ocellus extends Mob {
     const maxHp = this.config.choices.bossMaxHp.option.value;
     this.stats = { ...OCELLUS_P4.boss.stats.value, hitpoint: maxHp };
     const lowestDefence = Math.ceil((this.stats.defence * OCELLUS_P4.boss.lowestDefencePercent.value) / 100);
-    this.currentStats = withDefenceFloor({ ...this.stats, hitpoint: Math.floor(maxHp * this.config.choices.entryHpFraction.option.value) }, lowestDefence);
+    const entryHp = this.config.bossEntryHp ?? Math.floor(maxHp * this.config.choices.entryHpFraction.option.value);
+    this.currentStats = withDefenceFloor({ ...this.stats, hitpoint: entryHp }, lowestDefence);
   }
 
   override mobName(): string {

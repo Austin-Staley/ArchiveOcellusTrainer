@@ -120,17 +120,6 @@ function rangedBonuses(weapon: Weapon, bonuses: AttackBonuses): AttackBonuses {
   return { ...bonuses, isAccurate: weapon.attackStyle() === AttackStyle.ACCURATE };
 }
 
-const PRAYER_FACTORS = gear.rangedStrengthPrayers.value;
-const strengthensRanged = (prayer: string): prayer is keyof typeof PRAYER_FACTORS => Object.prototype.hasOwnProperty.call(PRAYER_FACTORS, prayer);
-
-function rangedMaxHit(from: Unit, bonuses: AttackBonuses, weaponFactor: number): number {
-  const prayer = bonuses.effectivePrayers?.range?.name;
-  const prayerFactor = prayer !== undefined && strengthensRanged(prayer) ? PRAYER_FACTORS[prayer] : 1;
-  const strength = Math.floor(from.currentStats.range * prayerFactor) + (bonuses.isAccurate ? 3 : 0) + 8;
-  const base = Math.floor(0.5 + (strength * (from.bonuses.other.rangedStrength + 64)) / 640);
-  return Math.floor(Math.floor(Math.floor(base * (bonuses.gearRangeMultiplier ?? 1)) * weaponFactor) * (bonuses.overallMultiplier ?? 1));
-}
-
 export class OcellusTwistedBow extends TwistedBow {
   override get attackSpeed(): TwistedBow["attackSpeed"] {
     return stanceSpeed(this, gear.twistedBow.value);
@@ -138,10 +127,6 @@ export class OcellusTwistedBow extends TwistedBow {
 
   override attack(from: Unit, to: Unit, bonuses: AttackBonuses = {}, options: ProjectileOptions = {}): boolean {
     return super.attack(from, to, rangedBonuses(this, bonuses), options);
-  }
-
-  override _maxHit(from: Unit, to: Unit, bonuses: AttackBonuses): number {
-    return rangedMaxHit(from, bonuses, this._damageMultiplier(from, to, bonuses));
   }
 }
 
@@ -240,7 +225,7 @@ export class TonalzticsOfRalos extends RangedWeapon {
   }
 
   override _maxHit(from: Unit, to: Unit, bonuses: AttackBonuses): number {
-    return Math.floor(rangedMaxHit(from, bonuses, 1) * gear.ralos.value.hitMaxFraction);
+    return Math.floor(super._maxHit(from, to, bonuses) * gear.ralos.value.hitMaxFraction);
   }
 
   override _accuracyMultiplier(from: Unit, to: Unit, bonuses: AttackBonuses): number {

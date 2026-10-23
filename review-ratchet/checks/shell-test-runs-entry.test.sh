@@ -6,108 +6,62 @@ FIXTURES="$(cd "$(dirname "$0")/../fixtures/substituted-policy" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Each row is name|expected|line. expected is the command or carrier the finding names, - when the check must pass, or ? followed by the refusal it must exit 2 with.
-CASES="$(cat <<'EOF'
-plain_sed|sed|sed -n 1p "$SCRIPT"
-command_sed|sed|command sed -n 1p "$SCRIPT"
-env_split_sed|sed|env -S sed -n 1p "$SCRIPT"
-env_split_quoted_grep|grep|env -S 'grep -m1' '^set -' "$SCRIPT"
-env_split_bash_option|bash|env -S 'bash -e' "$SCRIPT"
-env_unknown_option|env|env --split-string=sed "$SCRIPT"
-cat_reads|cat|cat "$SCRIPT"
-redirect_reads|a redirect|while read -r l; do :; done <"$SCRIPT"
-here_string_reads|a here-string|xargs cat <<<"$SCRIPT"
-source_reads|source|source "$SCRIPT"
-builtin_source|source|builtin source "$SCRIPT"
-env_unset_grep|grep|POLICY="$(env -u HOME grep -m1 '^set -' "$SCRIPT")"
-env_assignment_awk|awk|LC_ALL=C env LANG=C awk 1 "$SCRIPT"
-escaped_cat|cat|\cat "$SCRIPT"
-quoted_sed|sed|"sed" -n 1p "$SCRIPT"
-absolute_head|head|/usr/bin/head -1 "$SCRIPT"
-if_grep|grep|if grep -q errexit "$SCRIPT"; then :; fi
-negated_grep|grep|! grep -q errexit "$SCRIPT"
-timeout_signal_tail|tail|timeout -s KILL 5 tail -1 "$SCRIPT"
-nice_nohup_cat|cat|nice -n 5 nohup cat "$SCRIPT"
-time_cut|cut|time -p cut -c1 "$SCRIPT"
-reader_before_bash|sed|sed -n 1p bash "$SCRIPT"
-bash_option|bash|bash -e "$SCRIPT"
-bash_c_argument|bash|bash -c 'cat "$1"' _ "$SCRIPT"
-echo_is_denied_too|echo|echo "$SCRIPT"
-alias_variable|sed|COPY="$SCRIPT"; sed -n 1p "$COPY"
-indirect_name|cat|NAME=SCRIPT; cat "${!NAME}"
-array_element|cat|PATHS=("$SCRIPT"); cat "${PATHS[0]}"
-literal_path|cat|cat "$(dirname "$0")/build.sh"
-glob_path|cat|cat "$(dirname "$0")"/build.s?
-brace_path|cat|cat "$(dirname "$0")"/build.{sh,txt}
-ansi_c_path|cat|cat "$(dirname "$0")"/$'build\x2esh'
-dynamic_path|?cannot tell whether ${NAME}.sh names|cat "$(dirname "$0")/${NAME}.sh"
-dynamic_target|?cannot tell which script $NAME.sh names|OTHER="$(dirname "$0")/$NAME.sh"
-function_named_bash|?redefines bash|bash() { cat "$1"; }
-stub_named_bash|?names a file called bash|printf 'cat "$1"\n' >"$WORK/bin/bash"
-finding_outranks_stub|sed|node() { :; }; sed -n 1p "$SCRIPT"
-unterminated_quote|?cannot parse the test: unterminated "|cat "$SCRIPT
-direct_run|-|"$SCRIPT" --verbose
-sh_run|-|sh "$SCRIPT"
-subshell_run|-|( bash "$SCRIPT" )
-command_bash_runs|-|command bash "$SCRIPT"
-env_split_bash_runs|-|env -S bash "$SCRIPT"
-env_assignment_bash_runs|-|env CACHE_ROOT=/tmp/cache bash "$SCRIPT"
-timeout_bash_runs|-|timeout 5 bash "$SCRIPT"
-if_bash_runs|-|if CACHE_ROOT=/tmp/cache bash "$SCRIPT"; then :; fi
-export_name|-|export SCRIPT
-comment_mentions|-|bash "$SCRIPT" # not cat "$SCRIPT"
+POSITION='scripts/build.test.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
+
+# Each row is name|fixture|exit|line|setup. setup runs inside a copy of the fixture before the check, and line must appear in the check's output.
+CASES="$(cat <<EOF
+clean|clean|0|shell-test-runs-entry: 0 finding(s) in 1 shell test(s)|
+violation|violation|1|${POSITION}|
+historical_own_errexit|historical-a3c10e6|1|scripts/netlify-build.test.sh: passes when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command", so the test does not run the policy it guards|
+historical_copied_set_line|historical-9d9143b|1|scripts/netlify-build.test.sh: passes when scripts/netlify-build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards|
+prefixed_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/prefixed.test.sh" scripts/build.test.sh
+split_string_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/split-string.test.sh" scripts/build.test.sh
+glob_in_variable|clean|1|${POSITION}|cp "\$FIXTURES/variants/alias-glob.test.sh" scripts/build.test.sh
+glob_in_here_document|clean|1|${POSITION}|cp "\$FIXTURES/variants/heredoc-glob.test.sh" scripts/build.test.sh
+interpreter_option|clean|1|${POSITION}|cp "\$FIXTURES/variants/interpreter-option.test.sh" scripts/build.test.sh
+embedded_copy|clean|1|${POSITION}|cp "\$FIXTURES/variants/embedded-copy.test.sh" scripts/build.test.sh
+unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.test.sh scripts/other.test.sh
+mutation_text_absent|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 0 times|sed -i.bak 's/^set -euo pipefail\$/set -eu -o pipefail/' scripts/build.sh && rm scripts/build.sh.bak
+failing_test|clean|2|scripts/build.test.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.test.sh
+passes_only_when_broken|clean|2|scripts/build.test.sh fails with exit 1 before any mutation|printf 'grep -q "^set -uo pipefail" scripts/build.sh\n' >scripts/build.test.sh
+mutation_text_twice|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 2 times|printf 'set -euo pipefail\n' >>scripts/build.sh
+missing_policy_file|clean|2|cannot read review-ratchet/guarded-policies.json|rm review-ratchet/guarded-policies.json
 EOF
 )"
 
-expect() {
-  local expected="$1" line="$2" dir output status
-  shift 2
-  dir="$(mktemp -d "$WORK/case.XXXXXX")"
-  printf '%s\n' 'SCRIPT="$(dirname "$0")/build.sh"' "$@" >"$dir/build.test.sh"
-  output="$(node "$CHECK" "$dir" 2>&1)"
-  status=$?
-  echo "$output"
-  case "$expected" in
-    -) [[ "$status" == 0 && "$output" == *"0 finding(s) in 1 shell test(s)"* ]] ;;
-    \?*) [[ "$status" == 2 && "$output" == *"${expected#\?}"* ]] ;;
-    *) [[ "$status" == 1 && "$output" == *"build.test.sh:$line: uses build.sh with $expected;"* ]] ;;
-  esac
+run_case() {
+  local name="$1" fixture="$2" status="$3" line="$4" setup="$5"
+  local tree="$WORK/$name"
+  cp -R "$FIXTURES/$fixture" "$tree"
+  (cd "$tree" && eval "$setup") || { echo "setup failed"; return 1; }
+  node "$CHECK" "$tree" >"$WORK/$name.out" 2>&1
+  local actual=$?
+  [[ "$actual" == "$status" ]] || { echo "exit $actual, expected $status"; cat "$WORK/$name.out"; return 1; }
+  grep -qxF -- "$line" "$WORK/$name.out" || grep -qxF -- "shell-test-runs-entry: $line" "$WORK/$name.out" || { echo "missing: $line"; cat "$WORK/$name.out"; return 1; }
 }
 
-here_document_reads() { expect "a here-document" 3 'bash <<EOF' 'source $SCRIPT' 'EOF'; }
-continued_line_reads() { expect sed 3 'sed -n 1p \' '  "$SCRIPT"'; }
-continued_line_runs() { expect - 0 "CACHE_ROOT=/tmp/cache \\" '  bash "$SCRIPT"'; }
-read_after_here_document() { expect sed 5 "cat <<'EOF'" 'text' 'EOF' 'sed -n 1p "$SCRIPT"'; }
-
-historical_fixture_is_rejected() {
-  local output status
-  output="$(node "$CHECK" "$FIXTURES/$1")"
-  status=$?
-  echo "$output"
-  [[ "$status" == 1 && "$output" == *"scripts/build.test.sh:5: uses build.sh with sed;"*"scripts/build.test.sh:6: uses build.sh with grep;"*"2 finding(s) in 1 shell test(s)"* ]]
+hanging_test() {
+  local tree="$WORK/hanging"
+  cp -R "$FIXTURES/clean" "$tree"
+  printf 'sleep 30\n' >"$tree/scripts/build.test.sh"
+  node "$CHECK" --timeout 1 "$tree" >"$WORK/hanging.out" 2>&1
+  local actual=$?
+  [[ "$actual" == 2 ]] || { echo "exit $actual, expected 2"; cat "$WORK/hanging.out"; return 1; }
+  grep -qxF "shell-test-runs-entry: scripts/build.test.sh timed out after 1s before any mutation" "$WORK/hanging.out" || { cat "$WORK/hanging.out"; return 1; }
 }
 
 failed=0
 report() {
-  local name="$1"
-  shift
-  if "$@" >"$WORK/$name.log" 2>&1; then
-    echo "PASS $name"
+  if "$@" >"$WORK/case.log" 2>&1; then
+    echo "PASS $NAME"
   else
-    echo "FAIL $name"
-    sed 's/^/  /' "$WORK/$name.log"
+    echo "FAIL $NAME"
+    sed 's/^/  /' "$WORK/case.log"
     failed=1
   fi
 }
-
-while IFS='|' read -r name expected line; do
-  report "$name" expect "$expected" 2 "$line"
+while IFS='|' read -r name fixture status line setup; do
+  NAME="$name" report run_case "$name" "$fixture" "$status" "$line" "$setup"
 done <<<"$CASES"
-report here_document_reads here_document_reads
-report continued_line_reads continued_line_reads
-report continued_line_runs continued_line_runs
-report read_after_here_document read_after_here_document
-for fixture in violation prefixed split-string; do
-  report "${fixture}_fixture_is_rejected" historical_fixture_is_rejected "$fixture"
-done
+NAME=hanging_test report hanging_test
 exit $failed

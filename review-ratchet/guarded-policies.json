@@ -1,0 +1,46 @@
+{
+  "ignore": ["review-ratchet/fixtures"],
+  "scripts": [
+    {
+      "path": "scripts/netlify-build.sh",
+      "tests": ["scripts/netlify-build.test.sh"],
+      "policies": [
+        {
+          "policy": "errexit stops the build at the first failed command",
+          "mutation": [{ "find": "set -euo pipefail\n", "replace": "set -uo pipefail\n" }]
+        },
+        {
+          "policy": "errexit is on before prepare_reader runs",
+          "mutation": [
+            { "find": "set -euo pipefail\n", "replace": "" },
+            { "find": "\nprepare_reader\n", "replace": "\nprepare_reader\nset -euo pipefail\n" }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "scripts/check-types.mjs",
+      "tests": ["scripts/check-types.test.sh"],
+      "policies": [
+        {
+          "policy": "a finding fails the check",
+          "mutation": [{ "find": "process.exit(findings.length === 0 ? 0 : 1);", "replace": "process.exit(0);" }]
+        }
+      ]
+    },
+    {
+      "path": "review-ratchet/checks/shell-test-runs-entry.mjs",
+      "tests": ["review-ratchet/checks/shell-test-runs-entry.test.sh"],
+      "policies": [
+        {
+          "policy": "a test that passes under a mutation is a finding",
+          "mutation": [{ "find": "        findings.push(`${test}: passes when", "replace": "        undecided.push(`${test}: passes when" }]
+        },
+        {
+          "policy": "every shell test outside the ignored directories is listed",
+          "mutation": [{ "find": "!ignored(file) && !listed.has(file)", "replace": "!ignored(file) && !listed.has(file) && false" }]
+        }
+      ]
+    }
+  ]
+}

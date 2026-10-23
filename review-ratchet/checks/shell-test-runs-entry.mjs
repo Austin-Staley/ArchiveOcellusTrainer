@@ -1,525 +1,265 @@
 #!/usr/bin/env node
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
-const usage = `usage: shell-test-runs-entry.mjs [ROOT]
+const POLICIES = "review-ratchet/guarded-policies.json";
+const usage = `usage: shell-test-runs-entry.mjs [--timeout SECS] [ROOT]
 
-Every *.test.sh under ROOT (default: the current directory) must run the
-script it tests as a process. The script's path, and every variable that
-resolves to it, may appear only where it runs: as the command itself, or as
-the word right after bash, sh or node, behind if, !, command, env, timeout
-and the other wrappers whose options the check knows. Every other appearance
-is a finding, whatever command, redirect, here-string or here-document
-carries it, because a test that can read the script's text can run extracted
-pieces under its own shell options. Exits 0 when every test only runs its
-script and 1 on a finding. Without a finding it exits 2 when a test names a
-path the check cannot resolve or redefines a command the rule trusts. It also
-exits 2 when a test cannot be parsed or names no script under test, and when
-ROOT holds no shell tests.
+ROOT (default: the current directory) names in ${POLICIES}
+each script its shell tests guard, the tests that guard it, and the script's
+policies. A policy's mutation is a list of literal edits that break it:
+  { "ignore": ["DIR", ...],
+    "scripts": [{ "path": "scripts/build.sh", "tests": ["scripts/build.test.sh"],
+                  "policies": [{ "policy": "...", "mutation": [{ "find": "...", "replace": "..." }] }] }] }
+Every *.test.sh under ROOT outside the ignored directories must be listed.
+Each test runs as bash TEST from a fresh scratch copy of ROOT, once as it is
+and once per policy of each script it guards, with that policy's mutation
+applied to the copy's script. A test that still passes under a mutation does
+not exercise the policy it guards, for example because it runs its own copy
+of the script's code under its own shell options.
+
+Exits 0 when every test passes as it is and fails under every mutation, and 1
+when a test passes under one. Without such a finding it exits 2 when the
+policy file is missing or malformed, a mutation's text does not occur exactly
+once, a shell test is not listed, or a test fails as it is, times out or
+cannot start. Each run may take up to --timeout seconds (default 300).
 `;
 
-const INTERPRETERS = new Set(["bash", "sh", "node"]);
-const DECLARATIONS = new Set(["export", "local", "readonly", "declare", "typeset"]);
-const wrapper = ({ flags = [], valued = [], split = [], duration = false, assignments = false } = {}) => ({
-  flags: new Set(flags),
-  valued: new Set(valued),
-  split: new Set(split),
-  duration,
-  assignments,
-});
-// Words that run the command after their options. An option outside these sets leaves the run slot unknown, so the rest of the command is denied.
-const WRAPPERS = new Map([
-  ...["!", "{", "if", "then", "elif", "else", "do", "while", "until", "nohup", "builtin"].map((word) => [word, wrapper()]),
-  ["time", wrapper({ flags: ["-p"] })],
-  ["command", wrapper({ flags: ["-p"] })],
-  ["exec", wrapper({ flags: ["-c", "-l"], valued: ["-a"] })],
-  ["nice", wrapper({ valued: ["-n"] })],
-  ["timeout", wrapper({ flags: ["--foreground", "--preserve-status", "-v", "--verbose"], valued: ["-s", "--signal", "-k", "--kill-after"], duration: true })],
-  ["env", wrapper({ flags: ["-i", "--ignore-environment"], valued: ["-u", "--unset", "-C", "--chdir"], split: ["-S", "--split-string"], assignments: true })],
-]);
-const TRUSTED = new Set([...INTERPRETERS, ...WRAPPERS.keys()]);
-const ASSIGNMENT = /^([A-Za-z_]\w*)(?:\[[^\]]*\])?\+?=/;
-const IDENTIFIER = /^[A-Za-z_]\w*$/;
-const DURATION = /^\d+(?:\.\d+)?[smhd]?$/;
-const SPLIT_STRING = /^[\w./=:+-]+(?: +[\w./=:+-]+)*$/;
-const SCRIPT_PATH = /[\w.-]+\.(?:sh|mjs|cjs|js)\b/g;
-const DYNAMIC_PATH = /(?:\$\w+|\$\{[^}]*\}|\$\(\)|[})])[\w.-]*\.(?:sh|mjs|cjs|js)\b/g;
-const ANSI_ESCAPES = { a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+class Undecidable extends Error {}
 
-class ShellSyntax extends Error {
-  constructor(message, line) {
-    super(message);
-    this.line = line;
+/**
+ * @typedef {Readonly<{ find: string; replace: string }>} Edit
+ * @typedef {Readonly<{ policy: string; mutation: readonly Edit[] }>} Policy
+ * @typedef {Readonly<{ path: string; tests: readonly string[]; policies: readonly Policy[] }>} Guarded
+ * @typedef {Readonly<{ ignore: readonly string[]; scripts: readonly Guarded[] }>} Registry
+ * @typedef {Readonly<{ script: string; text: string }>} Mutant
+ * @typedef {Readonly<{ kind: "passed" } | { kind: "failed"; ending: string; output: string } | { kind: "unrunnable"; reason: string }>} Outcome
+ */
+
+function parseArguments(argv) {
+  const options = { timeout: "300" };
+  const positional = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "-h" || arg === "--help") {
+      process.stdout.write(usage);
+      process.exit(0);
+    }
+    if (arg === "--timeout") options.timeout = argv[(index += 1)];
+    else if (arg.startsWith("-")) throw new Undecidable(`unexpected argument ${arg}\n${usage}`);
+    else positional.push(arg);
   }
+  if (positional.length > 1) throw new Undecidable(`expected at most one ROOT\n${usage}`);
+  if (!/^[1-9]\d*$/.test(options.timeout ?? "")) throw new Undecidable(`--timeout must be a positive number of seconds\n${usage}`);
+  const root = path.resolve(positional[0] ?? ".");
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Undecidable(`ROOT is not a directory: ${root}`);
+  return { root, timeoutMs: Number(options.timeout) * 1000 };
 }
 
-function refuse(message) {
-  process.stderr.write(`shell-test-runs-entry: ${message}\n`);
-  process.exit(2);
+function strings(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string" && item !== "");
 }
 
-function shellTests(dir) {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === "node_modules" || entry.name === ".git") return [];
-    const file = path.join(dir, entry.name);
-    if (entry.isDirectory()) return shellTests(file);
-    return entry.name.endsWith(".test.sh") ? [file] : [];
+/** @returns {Registry} */
+function parseRegistry(text) {
+  const registry = JSON.parse(text);
+  if (!strings(registry?.ignore)) throw new Error("ignore must be an array of paths");
+  if (!Array.isArray(registry.scripts) || registry.scripts.length === 0) throw new Error("scripts must be a non-empty array");
+  for (const [index, script] of registry.scripts.entries()) {
+    const where = `scripts[${index}]`;
+    if (typeof script?.path !== "string" || script.path === "") throw new Error(`${where} needs a path`);
+    if (!strings(script.tests) || script.tests.length === 0) throw new Error(`${where} needs a non-empty array of tests`);
+    if (!Array.isArray(script.policies) || script.policies.length === 0) throw new Error(`${where} needs a non-empty array of policies`);
+    for (const policy of script.policies) {
+      if (typeof policy?.policy !== "string" || policy.policy === "") throw new Error(`${where} has a policy with no description`);
+      const edits = policy.mutation;
+      if (!Array.isArray(edits) || edits.length === 0 || !edits.every((edit) => typeof edit?.find === "string" && edit.find !== "" && typeof edit.replace === "string")) {
+        throw new Error(`${where} policy "${policy.policy}" needs a mutation: a non-empty array of { find, replace } strings`);
+      }
+    }
+  }
+  return registry;
+}
+
+function walk(root, dir = "") {
+  return fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === ".git" || entry.name === "node_modules") return [];
+    const file = path.posix.join(dir, entry.name);
+    return entry.isDirectory() ? walk(root, file) : [file];
   });
 }
 
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-function ansiC(body) {
-  return body.replace(/\\(x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{1,4}|U[0-9A-Fa-f]{1,8}|[0-7]{1,3}|c.|.)/gs, (escape, code) => {
-    if (/^[xuU]/.test(code)) {
-      const point = parseInt(code.slice(1), 16);
-      return point <= 0x10ffff ? String.fromCodePoint(point) : escape;
-    }
-    if (/^[0-7]/.test(code)) return String.fromCharCode(parseInt(code, 8));
-    if (code[0] === "c" && code.length === 2) return String.fromCharCode(code.charCodeAt(1) & 31);
-    return ANSI_ESCAPES[code] ?? escape;
-  });
+// Inside a work tree, git's view leaves out ignored build output, which can be large; elsewhere every file is copied.
+function listFiles(root) {
+  const git = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const files = git.status === 0 ? git.stdout.split("\0").filter(Boolean) : walk(root);
+  return files.filter((file) => fs.existsSync(path.join(root, file)));
 }
 
-// A word's surface is its text after quote removal, with every command substitution shown as $().
-// pattern matches the word's last path component when unquoted glob or brace characters make it a pattern.
-function parseShell(text) {
-  const commands = [];
-  const bodies = [];
-  const functions = [];
-  const pendingBodies = [];
-  const closers = [];
-  let at = 0;
-  let line = 1;
-
-  function readBodies() {
-    while (pendingBodies.length > 0) {
-      const { delimiter, stripTabs } = pendingBodies.shift();
-      while (at < text.length) {
-        const newline = text.indexOf("\n", at);
-        const end = newline === -1 ? text.length : newline;
-        const row = text.slice(at, end);
-        const number = line;
-        at = end + 1;
-        line++;
-        if ((stripTabs ? row.replace(/^\t+/, "") : row) === delimiter) break;
-        bodies.push({ line: number, text: row });
-      }
-    }
+/** @param {readonly Edit[]} edits */
+function mutate(text, edits) {
+  let mutated = text;
+  for (const { find, replace } of edits) {
+    const count = mutated.split(find).length - 1;
+    if (count !== 1) throw new Error(`${JSON.stringify(find)} occurs ${count} times`);
+    mutated = mutated.replace(find, () => replace);
   }
+  return mutated;
+}
 
-  function closingParen(from) {
-    let depth = 0;
-    for (let index = from; index < text.length; index++) {
-      if (text[index] === "(") depth++;
-      if (text[index] === ")" && --depth === 0) return index;
-    }
-    throw new ShellSyntax("unterminated (", line);
+function plan(root) {
+  const files = listFiles(root);
+  if (!files.includes(POLICIES)) throw new Undecidable(`cannot read ${POLICIES}`);
+  let registry;
+  try {
+    registry = parseRegistry(fs.readFileSync(path.join(root, POLICIES), "utf8"));
+  } catch (error) {
+    throw new Undecidable(`cannot use ${POLICIES}: ${error.message}`);
   }
-
-  function readWord() {
-    const start = at;
-    const startLine = line;
-    const components = [""];
-    let surface = "";
-    let glob = false;
-    let braces = 0;
-    const literal = (chars) => {
-      for (const char of chars) {
-        if (char === "/") components.push("");
-        else components[components.length - 1] += escapeRegex(char);
-      }
-      surface += chars;
-    };
-    const wildcard = (source, raw) => {
-      components[components.length - 1] += source;
-      surface += raw;
-      glob = true;
-    };
-    const substitution = (closer, skip) => {
-      at += skip;
-      commandList(closer);
-      literal("$()");
-    };
-    const doubleQuoted = () => {
-      at++;
-      while (at < text.length && text[at] !== '"') {
-        const char = text[at];
-        if (char === "\\" && '$`"\\\n'.includes(text[at + 1] ?? "")) {
-          if (text[at + 1] === "\n") line++;
-          else literal(text[at + 1]);
-          at += 2;
-        } else if (char === "$" && text[at + 1] === "(") substitution(")", 2);
-        else if (char === "`") substitution("`", 1);
-        else {
-          if (char === "\n") line++;
-          literal(char);
-          at++;
-        }
-      }
-      if (at >= text.length) throw new ShellSyntax('unterminated "', startLine);
-      at++;
-    };
-
-    while (at < text.length) {
-      const char = text[at];
-      const next = text[at + 1];
-      if (braces === 0 && "<>".includes(char) && next === "(" && at === start) substitution(")", 2);
-      else if (braces === 0 && char === "(" && ASSIGNMENT.test(text.slice(start, at)) && text.slice(start, at).endsWith("=")) {
-        at++;
-        const elements = [];
-        for (;;) {
-          while (at < text.length && /[ \t\n]/.test(text[at])) if (text[at++] === "\n") line++;
-          if (at >= text.length) throw new ShellSyntax("unterminated array", startLine);
-          if (text[at] === ")") break;
-          elements.push(readWord().surface);
-        }
-        at++;
-        literal(`(${elements.join(" ")})`);
-      } else if (braces === 0 && "?*+@!".includes(char) && next === "(") {
-        const end = closingParen(at + 1);
-        wildcard("[^/]*", text.slice(at, end + 1));
-        at = end + 1;
-      } else if (braces === 0 && (/[\s;&|()<>]/.test(char) || (char === "`" && closers.at(-1) === "`"))) break;
-      else if (char === "'") {
-        const end = text.indexOf("'", at + 1);
-        if (end === -1) throw new ShellSyntax("unterminated '", startLine);
-        const quoted = text.slice(at + 1, end);
-        line += quoted.split("\n").length - 1;
-        literal(quoted);
-        at = end + 1;
-      } else if (char === "$" && next === "'") {
-        let end = at + 2;
-        while (end < text.length && text[end] !== "'") end += text[end] === "\\" ? 2 : 1;
-        if (end >= text.length) throw new ShellSyntax("unterminated $'", startLine);
-        const quoted = text.slice(at + 2, end);
-        line += quoted.split("\n").length - 1;
-        literal(ansiC(quoted));
-        at = end + 1;
-      } else if (char === '"') doubleQuoted();
-      else if (char === "$" && next === '"') {
-        at++;
-        doubleQuoted();
-      } else if (char === "\\") {
-        if (next === "\n") line++;
-        else if (next !== undefined) literal(next);
-        at += 2;
-      } else if (char === "$" && next === "(") substitution(")", 2);
-      else if (char === "`") substitution("`", 1);
-      else if (char === "$" && next === "{") {
-        literal("${");
-        braces++;
-        at += 2;
-      } else if (char === "}" && braces > 0) {
-        literal("}");
-        braces--;
-        at++;
-      } else if (braces === 0 && (char === "*" || char === "?")) {
-        wildcard(char === "*" ? "[^/]*" : "[^/]", char);
-        at++;
-      } else if (braces === 0 && char === "[" && /^\[!?[^\s\]]+\]/.test(text.slice(at))) {
-        const raw = text.slice(at).match(/^\[!?[^\s\]]+\]/)[0];
-        wildcard(`[${raw.slice(1, -1).replace(/^!/, "^").replace(/\\/g, "\\\\")}]`, raw);
-        at += raw.length;
-      } else if (braces === 0 && char === "{" && /^\{[^\s'"$`{}]*[,.][^\s'"$`{}]*\}/.test(text.slice(at))) {
-        const raw = text.slice(at).match(/^\{[^\s'"$`{}]*\}/)[0];
-        const body = raw.slice(1, -1);
-        if (body.includes(",") && !body.includes("..") && !body.includes("/")) wildcard(`(?:${body.split(",").map(escapeRegex).join("|")})`, raw);
-        else if (body.includes(",") || body.includes("..")) wildcard("[^/]*", raw);
-        else literal(raw);
-        at += raw.length;
-      } else {
-        if (char === "\n") line++;
-        literal(char);
-        at++;
-      }
+  const problems = [];
+  const fileSet = new Set(files);
+  const ignored = (file) => registry.ignore.some((dir) => file === dir || file.startsWith(`${dir.replace(/\/$/, "")}/`));
+  const listed = new Set(registry.scripts.flatMap((script) => script.tests));
+  for (const test of files.filter((file) => file.endsWith(".test.sh") && !ignored(file) && !listed.has(file))) {
+    problems.push(`${test} is not listed in ${POLICIES}, so no mutation checks it`);
+  }
+  /** @type {{ test: string; policy: string; mutant: Mutant }[]} */
+  const mutants = [];
+  for (const script of registry.scripts) {
+    for (const file of [script.path, ...script.tests]) {
+      if (!fileSet.has(file)) problems.push(`${file} is not a file under ROOT`);
     }
-    if (braces > 0) throw new ShellSyntax("unterminated ${", startLine);
-    let pattern = null;
-    if (glob) {
+    if (!fileSet.has(script.path)) continue;
+    const text = fs.readFileSync(path.join(root, script.path), "utf8");
+    for (const { policy, mutation } of script.policies) {
       try {
-        pattern = new RegExp(`^${components.at(-1)}$`);
-      } catch {
-        pattern = null;
+        const mutant = { script: script.path, text: mutate(text, mutation) };
+        mutants.push(...script.tests.map((test) => ({ test, policy, mutant })));
+      } catch (error) {
+        problems.push(`cannot break "${policy}" in ${script.path}: ${error.message}`);
       }
     }
-    return { line: startLine, raw: text.slice(start, at), surface, pattern };
   }
-
-  function commandList(closer) {
-    closers.push(closer);
-    let command = { words: [], redirects: [] };
-    let pending = null;
-    let depth = 0;
-    const finish = () => {
-      if (command.words.length > 0 || command.redirects.length > 0) commands.push(command);
-      command = { words: [], redirects: [] };
-      pending = null;
-    };
-    while (at < text.length) {
-      const char = text[at];
-      if (char === " " || char === "\t") at++;
-      else if (char === "\\" && text[at + 1] === "\n") {
-        at += 2;
-        line++;
-      } else if (char === "\n") {
-        at++;
-        line++;
-        finish();
-        readBodies();
-      } else if (char === "#") {
-        while (at < text.length && text[at] !== "\n") at++;
-      } else if (char === "`" && closer === "`") {
-        at++;
-        finish();
-        closers.pop();
-        return;
-      } else if (char === ")") {
-        at++;
-        finish();
-        if (depth === 0 && closer === ")") {
-          closers.pop();
-          return;
-        }
-        depth = Math.max(0, depth - 1);
-      } else if (char === "(") {
-        at++;
-        const empty = text.slice(at).match(/^[ \t]*\)/);
-        const words = command.words;
-        if (empty && (words.length === 1 || (words.length === 2 && words[0].surface === "function"))) {
-          functions.push(words.at(-1).surface);
-          at += empty[0].length;
-        } else depth++;
-        finish();
-      } else {
-        const redirect = /(?:\d+|\{\w+\})?(<<<|<<-|<<|<>|<&|>>|>\||>&|&>>|&>|<(?!\()|>(?!\())/y;
-        redirect.lastIndex = at;
-        const operator = redirect.exec(text);
-        if (operator) {
-          at = redirect.lastIndex;
-          const kind = operator[1];
-          pending = kind.startsWith("<<") && kind !== "<<<" ? { heredoc: kind === "<<-" } : { use: kind === "<<<" ? "a here-string" : "a redirect" };
-        } else if (";&|".includes(char)) {
-          at++;
-          if (";&|".includes(text[at] ?? "") && !(text[at] === "&" && text[at + 1] === ">")) at++;
-          finish();
-        } else {
-          const word = readWord();
-          if (pending === null) command.words.push(word);
-          else if ("heredoc" in pending) pendingBodies.push({ delimiter: word.surface, stripTabs: pending.heredoc });
-          else command.redirects.push({ use: pending.use, word });
-          pending = null;
-        }
-      }
-    }
-    if (closer !== null) throw new ShellSyntax(`unterminated ${closer === ")" ? "$(" : "`"}`, line);
-    finish();
-    closers.pop();
-  }
-
-  commandList(null);
-  return { commands, bodies, functions };
+  if (problems.length > 0) throw new Undecidable(problems.join("\nshell-test-runs-entry: "));
+  return { files, tests: [...listed], mutants };
 }
 
-function nameOf(word) {
-  return path.posix.basename(word.surface) || word.surface;
-}
-
-function splitString(word) {
-  const value = word.surface.trim();
-  if (!SPLIT_STRING.test(value)) return null;
-  return value.split(/ +/).map((part) => ({ line: word.line, raw: part, surface: part, pattern: null }));
-}
-
-function unwrap(rules, words) {
-  const options = [];
-  const rest = [...words];
-  let ended = false;
-  for (;;) {
-    const word = rest[0];
-    if (word === undefined) break;
-    const option = word.surface;
-    if (!ended && option === "--") {
-      options.push(rest.shift());
-      ended = true;
-    } else if (!ended && option.startsWith("-")) {
-      if (rules.flags.has(option)) options.push(rest.shift());
-      else if (rules.valued.has(option) && rest.length > 1) options.push(rest.shift(), rest.shift());
-      else if (rules.split.has(option) && rest.length > 1) {
-        const parts = splitString(rest[1]);
-        if (parts === null) return null;
-        options.push(rest.shift(), rest.shift());
-        rest.unshift(...parts);
-      } else return null;
-    } else if (rules.assignments && ASSIGNMENT.test(word.raw)) options.push(rest.shift());
-    else break;
-  }
-  if (rules.duration) {
-    if (rest[0] === undefined || !DURATION.test(rest[0].surface)) return null;
-    options.push(rest.shift());
-  }
-  return { options, rest };
-}
-
-function classify(words) {
-  const definitions = [];
-  const denied = [];
-  let run = words;
-  for (;;) {
-    while (run.length > 0 && ASSIGNMENT.test(run[0].raw)) {
-      definitions.push(run[0]);
-      run = run.slice(1);
-    }
-    if (run.length === 0 || !WRAPPERS.has(run[0].surface)) break;
-    const [head, ...after] = run;
-    const unwrapped = unwrap(WRAPPERS.get(head.surface), after);
-    if (unwrapped === null) {
-      denied.push(...after.map((word) => ({ word, use: nameOf(head) })));
-      return { definitions, denied };
-    }
-    denied.push(...unwrapped.options.map((word) => ({ word, use: nameOf(head) })));
-    run = unwrapped.rest;
-  }
-  const [program, ...args] = run;
-  if (program === undefined) return { definitions, denied };
-  if (DECLARATIONS.has(program.surface)) {
-    for (const word of args) {
-      if (ASSIGNMENT.test(word.raw)) definitions.push(word);
-      else if (!IDENTIFIER.test(word.surface)) denied.push({ word, use: nameOf(program) });
-    }
-    return { definitions, denied };
-  }
-  const free = INTERPRETERS.has(program.surface) ? 1 : 0;
-  denied.push(...args.slice(free).map((word) => ({ word, use: nameOf(program) })));
-  return { definitions, denied };
-}
-
-function redefines(words) {
-  const [program, ...args] = words;
-  switch (program?.surface) {
-    case "function":
-      return args.slice(0, 1).map((word) => word.surface);
-    case "alias":
-      return args.map((word) => word.surface.split("=")[0]);
-    case "hash":
-      return args.filter((word) => !word.surface.startsWith("-")).map(nameOf);
-    default:
-      return [];
-  }
-}
-
-function valueOf(definition) {
-  const surface = definition.surface.slice(definition.surface.indexOf("=") + 1);
-  return { ...definition, surface, pattern: null };
-}
-
-function scriptsIn(surface) {
-  return [...surface.matchAll(SCRIPT_PATH)].map((match) => match[0]).filter((name) => !name.endsWith(".test.sh"));
-}
-
-function dynamicPath(surface) {
-  return [...surface.matchAll(DYNAMIC_PATH)].map((match) => match[0]).find((name) => !name.endsWith(".test.sh"));
-}
-
-function appearance(word, guarded) {
-  for (const [variable, script] of guarded.variables) {
-    if (new RegExp(`\\b${variable}\\b`).test(word.surface)) return script;
-  }
-  for (const script of guarded.scripts) {
-    if (scriptsIn(word.surface).includes(script) || word.pattern?.test(script)) return script;
-  }
-  return null;
-}
-
-function check(where, text) {
-  let parsed;
+// The test's own background processes share its group, so a run ends with none left behind.
+function killGroup(pid) {
   try {
-    parsed = parseShell(text);
-  } catch (error) {
-    if (error instanceof ShellSyntax) refuse(`${where}:${error.line}: cannot parse the test: ${error.message}`);
-    throw error;
-  }
-  const classified = parsed.commands.map((command) => ({ command, ...classify(command.words) }));
-  const definitions = classified.flatMap((entry) => entry.definitions);
+    process.kill(-pid, "SIGKILL");
+  } catch {}
+}
 
-  const undecided = [];
-  const guarded = { variables: new Map(), scripts: new Set() };
-  for (const definition of definitions) {
-    const value = valueOf(definition);
-    const dynamic = dynamicPath(value.surface);
-    if (dynamic !== undefined) undecided.push(`${where}:${definition.line}: cannot tell which script ${dynamic} names; assign the script's literal file name`);
-    const scripts = scriptsIn(value.surface);
-    if (scripts.length === 0) continue;
-    guarded.variables.set(definition.raw.match(ASSIGNMENT)[1], scripts.at(-1));
-    for (const script of scripts) guarded.scripts.add(script);
-  }
-  if (guarded.variables.size === 0) refuse(`${where} names no script under test; assign its path to a variable such as SCRIPT`);
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const definition of definitions) {
-      const variable = definition.raw.match(ASSIGNMENT)[1];
-      const script = guarded.variables.has(variable) ? null : appearance(valueOf(definition), guarded);
-      if (script !== null) {
-        guarded.variables.set(variable, script);
-        grew = true;
-      }
+/**
+ * @param {Mutant | null} mutant
+ * @returns {Promise<Outcome>}
+ */
+async function runTest(root, files, test, mutant, timeoutMs) {
+  const run = fs.mkdtempSync(path.join(os.tmpdir(), "shell-test-runs-entry."));
+  const copy = path.join(run, "root");
+  const log = path.join(run, "output.log");
+  try {
+    fs.mkdirSync(path.join(run, "tmp"));
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(copy, file)), { recursive: true });
+      fs.copyFileSync(path.join(root, file), path.join(copy, file));
     }
+    if (fs.existsSync(path.join(root, "node_modules"))) fs.symlinkSync(path.join(root, "node_modules"), path.join(copy, "node_modules"));
+    if (mutant !== null) fs.writeFileSync(path.join(copy, mutant.script), mutant.text);
+    const output = fs.openSync(log, "w");
+    const child = spawn("bash", [test], { cwd: copy, env: { ...process.env, TMPDIR: path.join(run, "tmp") }, detached: true, stdio: ["ignore", output, output] });
+    fs.closeSync(output);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup(child.pid);
+    }, timeoutMs);
+    /** @type {{ status: number | null; signal: string | null; error: Error | null }} */
+    const exit = await new Promise((resolve) => {
+      child.on("error", (error) => resolve({ status: null, signal: null, error }));
+      child.on("exit", (status, signal) => resolve({ status, signal, error: null }));
+    });
+    clearTimeout(timer);
+    killGroup(child.pid);
+    if (exit.error !== null) return { kind: "unrunnable", reason: `cannot start bash: ${exit.error.message}` };
+    if (timedOut) return { kind: "unrunnable", reason: `timed out after ${timeoutMs / 1000}s` };
+    if (exit.status === 0) return { kind: "passed" };
+    const ending = exit.status === null ? `signal ${exit.signal}` : `exit ${exit.status}`;
+    return { kind: "failed", ending, output: fs.readFileSync(log, "utf8").trimEnd() };
+  } finally {
+    fs.rmSync(run, { recursive: true, force: true });
   }
+}
 
-  const shadowed = [...parsed.functions, ...parsed.commands.flatMap((command) => redefines(command.words))].find((name) => TRUSTED.has(name));
-  if (shadowed !== undefined) undecided.push(`${where} redefines ${shadowed}, so the check cannot tell what runs the script`);
+async function inParallel(tasks, limit) {
+  const results = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) {
+      const index = next++;
+      results[index] = await tasks[index]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
 
+/** @param {readonly Outcome[]} outcomes */
+function verdict(tests, mutants, outcomes) {
+  const baseline = new Map(tests.map((test, index) => [test, outcomes[index]]));
   const findings = [];
-  const uses = classified.flatMap((entry) => [...entry.denied, ...entry.command.redirects]);
-  for (const { word, use } of uses) {
-    const script = appearance(word, guarded);
-    if (script !== null) {
-      findings.push({ line: word.line, script, use });
-      continue;
+  const undecided = [];
+  for (const [test, outcome] of baseline) {
+    if (outcome.kind === "failed") {
+      const tail = outcome.output.split("\n").slice(-6).map((line) => `\n  ${line}`).join("");
+      undecided.push(`${test} fails with ${outcome.ending} before any mutation${outcome.output === "" ? "" : tail}`);
     }
-    const dynamic = dynamicPath(word.surface);
-    if (dynamic !== undefined) undecided.push(`${where}:${word.line}: cannot tell whether ${dynamic} names the script under test`);
-    if (word.surface.includes("/") && TRUSTED.has(nameOf(word))) undecided.push(`${where}:${word.line}: writes or names a file called ${nameOf(word)}, so the check cannot tell what runs the script`);
+    if (outcome.kind === "unrunnable") undecided.push(`${test} ${outcome.reason} before any mutation`);
   }
-  for (const body of parsed.bodies) {
-    const script = appearance({ line: body.line, raw: body.text, surface: body.text, pattern: null }, guarded);
-    if (script !== null) findings.push({ line: body.line, script, use: "a here-document" });
+  for (const [index, { test, policy, mutant }] of mutants.entries()) {
+    if (baseline.get(test)?.kind !== "passed") continue;
+    const outcome = outcomes[tests.length + index];
+    switch (outcome.kind) {
+      case "passed":
+        findings.push(`${test}: passes when ${mutant.script} breaks "${policy}", so the test does not run the policy it guards`);
+        break;
+      case "failed":
+        break;
+      case "unrunnable":
+        undecided.push(`${test} ${outcome.reason} when ${mutant.script} breaks "${policy}"`);
+        break;
+      default: {
+        /** @type {never} */
+        const unhandled = outcome;
+        throw new Error(`unhandled outcome ${JSON.stringify(unhandled)}`);
+      }
+    }
   }
-  const messages = findings
-    .sort((a, b) => a.line - b.line)
-    .map(({ line, script, use }) => `${where}:${line}: uses ${script} with ${use}; run it only as the program, as in bash ${script}, so its own shell options apply`);
-  return { findings: [...new Set(messages)], undecided };
+  return { findings, undecided };
 }
 
-const args = process.argv.slice(2);
-if (args.includes("-h") || args.includes("--help")) {
-  process.stdout.write(usage);
-  process.exit(0);
-}
-if (args.length > 1) refuse(`expected at most one ROOT\n${usage}`);
-const root = path.resolve(args[0] ?? ".");
-if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) refuse(`ROOT is not a directory: ${root}`);
-
-const tests = shellTests(root);
-if (tests.length === 0) refuse(`no *.test.sh under ${root}`);
-
-const findings = [];
-const undecided = [];
-for (const file of tests) {
-  const where = path.relative(root, file);
-  let text;
-  try {
-    text = fs.readFileSync(file, "utf8");
-  } catch (error) {
-    refuse(`cannot read ${where}: ${error.message}`);
-  }
-  const result = check(where, text);
-  findings.push(...result.findings);
-  undecided.push(...result.undecided);
+async function main() {
+  const { root, timeoutMs } = parseArguments(process.argv.slice(2));
+  const { files, tests, mutants } = plan(root);
+  const runs = [...tests.map((test) => ({ test, mutant: null })), ...mutants];
+  const outcomes = await inParallel(
+    runs.map(({ test, mutant }) => () => runTest(root, files, test, mutant, timeoutMs)),
+    os.availableParallelism(),
+  );
+  const { findings, undecided } = verdict(tests, mutants, outcomes);
+  for (const finding of findings) console.log(finding);
+  console.log(`shell-test-runs-entry: ${findings.length} finding(s) in ${tests.length} shell test(s)`);
+  for (const message of undecided) process.stderr.write(`shell-test-runs-entry: ${message}\n`);
+  return findings.length > 0 ? 1 : undecided.length > 0 ? 2 : 0;
 }
 
-for (const finding of findings) console.log(finding);
-console.log(`shell-test-runs-entry: ${findings.length} finding(s) in ${tests.length} shell test(s)`);
-if (findings.length > 0) process.exit(1);
-if (undecided.length > 0) refuse(undecided.join("\nshell-test-runs-entry: "));
-process.exit(0);
+main().then(
+  (code) => process.exit(code),
+  (error) => {
+    process.stderr.write(`shell-test-runs-entry: ${error instanceof Undecidable ? error.message : error.stack}\n`);
+    process.exit(2);
+  },
+);

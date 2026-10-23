@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
@@ -151,19 +152,31 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
   const [view, setView] = useState<MenuView>("closed");
   const [unseen, setUnseen] = useState(() => seenRelease() !== LATEST_RELEASE.version);
   const form = useRef<HTMLFormElement>(null);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const whatsNewTitle = useRef<HTMLHeadingElement>(null);
   const { playsAudio, playsAreaAudio } = useSettingsSnapshot();
   const restart = (focus: string) => startRun({ setup, focus, seed: typedSeed?.trim() || null, invincible: region.invincible });
 
   const openWhatsNew = () => {
-    setView("whats-new");
     rememberSeenRelease(LATEST_RELEASE.version);
-    setUnseen(false);
+    flushSync(() => {
+      setView("whats-new");
+      setUnseen(false);
+    });
+    whatsNewTitle.current?.focus();
+  };
+
+  const closeWhatsNew = () => {
+    setView("closed");
+    settingsButton.current?.focus();
   };
 
   useEffect(() => {
     if (view === "closed") return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setView("closed");
+      if (event.key !== "Escape") return;
+      if (view === "whats-new") closeWhatsNew();
+      else setView("closed");
     };
     const closeOutside = (event: Event) => {
       if (event.target instanceof Node && !form.current?.contains(event.target)) setView("closed");
@@ -208,16 +221,16 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
         <button id="whats_new" type="button" onClick={openWhatsNew}>What's new{unseen && <UnseenDot />}</button>
       </div>
       <section id="whats_new_panel" role="dialog" aria-labelledby="whats_new_title" hidden={view !== "whats-new"}>
-        <h2 id="whats_new_title">What's new</h2>
+        <h2 id="whats_new_title" ref={whatsNewTitle} tabIndex={-1}>What's new</h2>
         {CHANGELOG.map(({ version, notes }) => (
           <article key={version}>
             <h3><time dateTime={releaseDate(version)}>{version}</time></h3>
             <ul>{notes.map((note) => <li key={note}>{note}</li>)}</ul>
           </article>
         ))}
-        <button id="whats_new_close" type="button" onClick={() => setView("closed")}>Close</button>
+        <button id="whats_new_close" type="button" onClick={closeWhatsNew}>Close</button>
       </section>
-      <button id="settings" type="button" aria-expanded={view !== "closed"} aria-controls="settings_menu" onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>
+      <button id="settings" ref={settingsButton} type="button" aria-expanded={view !== "closed"} aria-controls="settings_menu" onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>
         ⚙ Settings{unseen && <UnseenDot />}
       </button>
       <button id="restart" type="submit">Restart</button>

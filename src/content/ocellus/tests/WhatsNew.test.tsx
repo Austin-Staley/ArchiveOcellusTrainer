@@ -74,6 +74,30 @@ describe("What's new", () => {
     expect({ settingsDot, menuDot }).toEqual({ settingsDot: true, menuDot: true });
   });
 
+  test("opening What's new from the keyboard moves focus to the panel's title", () => {
+    const page = loadPage("/?seed=1");
+    page.click("settings");
+    page.element("whats_new").focus();
+    page.click("whats_new");
+    const focused = document.activeElement?.id;
+    page.close();
+    expect(focused).toBe("whats_new_title");
+  });
+
+  test.each([
+    ["Close", (page: ReturnType<typeof loadPage>) => page.click("whats_new_close")],
+    ["Escape", (page: ReturnType<typeof loadPage>) => page.press("Escape", page.element("whats_new_close"))],
+  ])("closing What's new with %s returns focus to Settings", (_, close) => {
+    const page = loadPage("/?seed=1");
+    page.click("settings");
+    page.click("whats_new");
+    page.element("whats_new_close").focus();
+    close(page);
+    const closed = { focused: document.activeElement?.id, panelShown: page.element("whats_new_panel").hidden === false };
+    page.close();
+    expect(closed).toEqual({ focused: "settings", panelShown: false });
+  });
+
   test("storage that throws for the seen release still opens the panel and clears the dot for the visit", () => {
     // Blocked storage is a browser boundary; the SDK's own settings keys stay readable so the page can load.
     const { getItem, setItem } = Storage.prototype;

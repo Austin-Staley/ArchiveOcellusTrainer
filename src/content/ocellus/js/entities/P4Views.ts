@@ -344,10 +344,7 @@ const MARK = OCELLUS_P4.explosion.look.value;
 const SHARDS = 7;
 const SHARD_HALF_WIDTH = 0.05;
 const SHARD_HEIGHT = 0.85;
-const GLOW_TILES = 1.2;
 const GLOW_LIFT = 0.02;
-const GLOW_RAMP = 0.2;
-const DUST_TILES = 1.4;
 const DUST_LIFT = 0.15;
 const SPRITE_PX = 64;
 const FALLOFF: readonly (readonly [distance: number, alpha: number])[] = [[0, 1], [0.6, 0.85], [1, 0]];
@@ -368,6 +365,7 @@ const HEXAGON: Shape = (x, y) => Math.max(Math.abs(y), 0.866 * Math.abs(x) + 0.5
 const DISC: Shape = (x, y) => Math.hypot(x, y);
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
+const along = ([from, to]: readonly [from: number, to: number], t: number) => lerp(from, to, t);
 
 function falloff(distance: number): number {
   for (let stop = 1; stop < FALLOFF.length; stop++) {
@@ -404,28 +402,30 @@ function spriteTexture(colour: string, shape: Shape): THREE.Texture {
 function burstPose(blast: Blast, t: number): BurstPose {
   switch (blast) {
     case "marked": {
-      const converge = clamp01(t / MARK.glowFrom);
-      const glow = clamp01((t - MARK.glowFrom) / GLOW_RAMP);
+      const { mark } = MARK;
+      const converge = clamp01(t / mark.glowFrom);
+      const glow = clamp01((t - mark.glowFrom) / mark.glowRamp);
       return {
-        shardRadius: lerp(0.8, 0.25, converge),
-        shardLean: lerp(1.2, 0.3, converge),
-        shardOpacity: Math.min(clamp01(t / 0.1), 1 - glow),
+        shardRadius: along(mark.shardRadius, converge),
+        shardLean: along(mark.shardLean, converge),
+        shardOpacity: Math.min(clamp01(t / mark.shardsFadeIn), 1 - glow),
         glowOpacity: MARK.glowOpacity * glow,
-        glowScale: lerp(0.7, 1, glow),
+        glowScale: along(mark.glowScale, glow),
         dustOpacity: 0,
         dustScale: 1,
       };
     }
     case "detonated": {
+      const { impact } = MARK;
       const burst = 1 - (1 - t) ** 2;
       return {
-        shardRadius: lerp(0.2, 1.2, burst),
-        shardLean: lerp(0, -1, burst),
+        shardRadius: along(impact.shardRadius, burst),
+        shardLean: along(impact.shardLean, burst),
         shardOpacity: 1 - t,
-        glowOpacity: MARK.glowOpacity * clamp01(1 - t / 0.2),
-        glowScale: lerp(1, 1.2, t),
+        glowOpacity: MARK.glowOpacity * clamp01(1 - t / impact.glowFadeOut),
+        glowScale: along(impact.glowScale, t),
         dustOpacity: MARK.dustOpacity * (1 - t),
-        dustScale: lerp(0.6, 1.3, burst),
+        dustScale: along(impact.dustScale, burst),
       };
     }
     default: {
@@ -452,8 +452,8 @@ class BurstModel implements Model {
   private readonly shards: THREE.Mesh[] = [];
   private readonly glowMap = spriteTexture(MARK.glow, HEXAGON);
   private readonly dustMap = spriteTexture(MARK.dust, DISC);
-  private readonly glow = groundSprite(this.glowMap, GLOW_TILES, GLOW_LIFT);
-  private readonly dust = groundSprite(this.dustMap, DUST_TILES, DUST_LIFT);
+  private readonly glow = groundSprite(this.glowMap, MARK.glowTiles, GLOW_LIFT);
+  private readonly dust = groundSprite(this.dustMap, MARK.dustTiles, DUST_LIFT);
   private readonly owned: { dispose(): void }[] = [];
 
   constructor(private readonly blast: () => Blast) {
@@ -526,7 +526,7 @@ class ExplosionView extends Entity {
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
     if (this.blast !== "marked") return;
     const scale = Settings.tileSize;
-    const radius = (GLOW_TILES / 2) * scale;
+    const radius = (MARK.glowTiles / 2) * scale;
     markSprite ??= sprite(MARK.glow, HEXAGON);
     context.save();
     context.globalAlpha = burstPose("marked", tickPercent).glowOpacity;

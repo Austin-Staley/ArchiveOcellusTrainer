@@ -3,7 +3,7 @@
   "scripts": [
     {
       "path": "scripts/build.sh",
-      "tests": ["scripts/build.test.sh"],
+      "tests": ["scripts/build.fixture.sh"],
       "policies": [
         {
           "policy": "errexit stops the build at the first failed command",

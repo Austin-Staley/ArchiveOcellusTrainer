@@ -12,25 +12,25 @@ fail() {
   exit 1
 }
 
-POSITION='scripts/build.test.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
+POSITION='scripts/build.fixture.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
 
 # Each row is name|fixture|exit|line|setup. setup runs inside a copy of the fixture before the check, and line must appear in the check's output.
 CASES="$(cat <<EOF
 clean|clean|0|shell-test-runs-entry: 0 finding(s) in 1 shell test(s)|
 violation|violation|1|${POSITION}|
-historical_own_errexit|historical-a3c10e6|1|scripts/netlify-build.test.sh: passes when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command", so the test does not run the policy it guards|
-historical_copied_set_line|historical-9d9143b|1|scripts/netlify-build.test.sh: passes when scripts/netlify-build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards|
-prefixed_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/prefixed.test.sh" scripts/build.test.sh
-split_string_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/split-string.test.sh" scripts/build.test.sh
-glob_in_variable|clean|1|${POSITION}|cp "\$FIXTURES/variants/alias-glob.test.sh" scripts/build.test.sh
-glob_in_here_document|clean|1|${POSITION}|cp "\$FIXTURES/variants/heredoc-glob.test.sh" scripts/build.test.sh
-interpreter_option|clean|1|${POSITION}|cp "\$FIXTURES/variants/interpreter-option.test.sh" scripts/build.test.sh
-embedded_copy|clean|1|${POSITION}|cp "\$FIXTURES/variants/embedded-copy.test.sh" scripts/build.test.sh
-unrelated_setup_error|historical-9d9143b|2|scripts/netlify-build.test.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without an ASSERTION FAILED line, so the failure does not show that the test checks the policy|cp "\$FIXTURES/variants/unrelated-setup-error.test.sh" scripts/netlify-build.test.sh
-unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.test.sh scripts/other.test.sh
+historical_own_errexit|historical-a3c10e6|1|scripts/netlify-build.fixture.sh: passes when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command", so the test does not run the policy it guards|
+historical_copied_set_line|historical-9d9143b|1|scripts/netlify-build.fixture.sh: passes when scripts/netlify-build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards|
+prefixed_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/prefixed.fixture.sh" scripts/build.fixture.sh
+split_string_reader|clean|1|${POSITION}|cp "\$FIXTURES/variants/split-string.fixture.sh" scripts/build.fixture.sh
+glob_in_variable|clean|1|${POSITION}|cp "\$FIXTURES/variants/alias-glob.fixture.sh" scripts/build.fixture.sh
+glob_in_here_document|clean|1|${POSITION}|cp "\$FIXTURES/variants/heredoc-glob.fixture.sh" scripts/build.fixture.sh
+interpreter_option|clean|1|${POSITION}|cp "\$FIXTURES/variants/interpreter-option.fixture.sh" scripts/build.fixture.sh
+embedded_copy|clean|1|${POSITION}|cp "\$FIXTURES/variants/embedded-copy.fixture.sh" scripts/build.fixture.sh
+unrelated_setup_error|historical-9d9143b|2|scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without an ASSERTION FAILED line, so the failure does not show that the test checks the policy|cp "\$FIXTURES/variants/unrelated-setup-error.fixture.sh" scripts/netlify-build.fixture.sh
+unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.fixture.sh scripts/other.test.sh
 mutation_text_absent|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 0 times|sed -i.bak 's/^set -euo pipefail\$/set -eu -o pipefail/' scripts/build.sh && rm scripts/build.sh.bak
-failing_test|clean|2|scripts/build.test.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.test.sh
-passes_only_when_broken|clean|2|scripts/build.test.sh fails with exit 1 before any mutation|printf 'grep -q "^set -uo pipefail" scripts/build.sh\n' >scripts/build.test.sh
+failing_test|clean|2|scripts/build.fixture.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.fixture.sh
+passes_only_when_broken|clean|2|scripts/build.fixture.sh fails with exit 1 before any mutation|printf 'grep -q "^set -uo pipefail" scripts/build.sh\n' >scripts/build.fixture.sh
 mutation_breaks_syntax|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: the mutant fails bash -n|sed -i.bak 's/"replace": "set -uo pipefail/"replace": "fi/' review-ratchet/guarded-policies.json && rm review-ratchet/guarded-policies.json.bak
 mutation_text_twice|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 2 times|printf 'set -euo pipefail\n' >>scripts/build.sh
 missing_policy_file|clean|2|cannot read review-ratchet/guarded-policies.json|rm review-ratchet/guarded-policies.json
@@ -51,11 +51,11 @@ run_case() {
 hanging_test() {
   local tree="$WORK/hanging"
   cp -R "$FIXTURES/clean" "$tree"
-  printf 'sleep 30\n' >"$tree/scripts/build.test.sh"
+  printf 'sleep 30\n' >"$tree/scripts/build.fixture.sh"
   node "$CHECK" --timeout 1 "$tree" >"$WORK/hanging.out" 2>&1
   local actual=$?
   [[ "$actual" == 2 ]] || { cat "$WORK/hanging.out"; fail "exit $actual, expected 2"; }
-  grep -qxF "shell-test-runs-entry: scripts/build.test.sh timed out after 1s before any mutation" "$WORK/hanging.out" || { cat "$WORK/hanging.out"; fail "missing the timeout line"; }
+  grep -qxF "shell-test-runs-entry: scripts/build.fixture.sh timed out after 1s before any mutation" "$WORK/hanging.out" || { cat "$WORK/hanging.out"; fail "missing the timeout line"; }
 }
 
 failed=0

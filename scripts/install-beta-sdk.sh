@@ -2,7 +2,7 @@
 set -euo pipefail
 
 OSRS_SDK_REPO="${OSRS_SDK_REPO:-https://github.com/Julian-Dasilva/osrs-sdk.git}"
-OSRS_SDK_COMMIT="${OSRS_SDK_COMMIT:-f096de7ef811bf8d436da462cc72b2f9b6e1bb3c}"
+OSRS_SDK_COMMIT="${OSRS_SDK_COMMIT:-77fa67cfe3d2516c35fd8fa645f389223633b5ee}"
 OSRS_SDK_PACKS="${OSRS_SDK_PACKS:-}"
 
 cd "$(dirname "$0")/.."

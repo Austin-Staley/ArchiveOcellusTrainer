@@ -101,7 +101,7 @@ if (!Number.isInteger(ring) || ring < 0) throw new RangeError(`a ${floor.squareS
 
 // The SDK anchors a unit on its south-west tile and extends it east and north (lower y).
 const aroundBoss = (grow: number) => TileMask.area(tile(anchor.x - grow, anchor.y - size + 1 - grow), tile(anchor.x + size - 1 + grow, anchor.y + grow));
-const nearSquare = aroundBoss(ring);
+export const NEAR_SQUARE = aroundBoss(ring);
 export const FOOTPRINT = aroundBoss(0);
 export const PLATFORM = TileMask.of(geometry.platform.value, "#");
 export const WALKWAY = TileMask.of(geometry.platform.value, "w", "b");
@@ -111,9 +111,9 @@ export const WALKWAY_RIM = PLATFORM.touching(WALKWAY);
 function shaped(shape: FloorShape): TileMask {
   switch (shape) {
     case "near-square":
-      return nearSquare;
+      return NEAR_SQUARE;
     case "platform-minus-near-square":
-      return PLATFORM.minus(nearSquare);
+      return PLATFORM.minus(NEAR_SQUARE);
     default: {
       const unhandled: never = shape;
       return unhandled;

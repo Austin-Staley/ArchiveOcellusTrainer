@@ -51,6 +51,7 @@ const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133
 const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379038);
+const ORB_OFF_HOLES = owner("healing orbs never spawn on a floor hole; community feedback", "2026-10-23");
 const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
 const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
@@ -81,6 +82,7 @@ export type VoidRecipe<K extends VoidKind> = Readonly<{
   kind: K;
   duration: Selected<TickSpan>;
   orbMaturesAfterHit: Selected<TickSpan>;
+  orbLingersAfterClear: Selected<TickSpan>;
 }>;
 
 export type TransitionRecipe<K extends TransitionKind> = Readonly<{
@@ -106,7 +108,6 @@ type OverheadRecipe = Readonly<{
 }>;
 
 type LifeforceRecipe = Readonly<{ tellAfterOnset: Selected<TickSpan>; hitAfterOnset: Selected<TickSpan>; tellChat: Selected<string> }>;
-type OrbRecipe = Readonly<{ lastHealAfterHit: Selected<TickSpan> }>;
 type ExplosionRecipe = Readonly<{
   firstMarkAfterHit: TickSpan;
   count: number;
@@ -268,6 +269,14 @@ const INNER_VOID: VoidRecipe<"inner-void"> = {
   kind: "inner-void",
   duration: selected(span(22), "footage-repeated", "team-4-and-5", "inner void visible 22 ticks", vod("V1", "G33-G54, G93-G114, G153-G174"), vod("V2", "k48-k69, k108-k129, k168-k189, k228-k249")),
   orbMaturesAfterHit: selected(span(12), "footage-repeated", "team-4-and-5", "orb glows teal 12 ticks after the hit", vod("V1", "G49"), vod("V2", "k64"), cache("spotanim 4311 soul_fragment_spawn_12_ticks")),
+  orbLingersAfterClear: selected(
+    span(5),
+    "owner-estimated",
+    "unscaled",
+    "community feedback: an orb stays pickable a few seconds into the transition attack after its void; 5 ticks, 3.0 s, keeps it through S+26, past the tell at S+24 and before the hit at S+29; a pickup at S+21 returned at S+22 (V1 G175); a 1 fps guide shows the orb on clear floor about 1 s after the clear and gone 1 s later, a weak bound because the camera moved",
+    owner("healing orbs despawn almost instantly after a phase ends when usually you can grab it for a few seconds during the attack you need to pray against", "2026-10-23"),
+    vod("V1", "G175"),
+  ),
 };
 
 const AFTER_INNER: TransitionRecipe<"after-inner"> = {
@@ -282,6 +291,15 @@ const OUTER_VOID: VoidRecipe<"outer-void"> = {
   kind: "outer-void",
   duration: selected(span(20), "footage-repeated", "team-4-and-5", "outer void visible 20 ticks", vod("V1", "G64-G83, G124-G143"), vod("V2", "k79-k98, k139-k158, k199-k218")),
   orbMaturesAfterHit: selected(span(6), "footage-repeated", "team-4-and-5", "outer orb first glows 5 to 6 ticks after the hit", vod("V1", "G74"), vod("V2", "k88, k149"), cache("spotanim 4309 soul_fragment_spawn_6_ticks")),
+  orbLingersAfterClear: selected(
+    span(2),
+    "inferred",
+    "team-4-and-5",
+    "the flood clears at S+51 and an unclaimed outer orb heals the boss at hit + 19, S+54 (C17), so the last pickup is S+53, a tick into the tell; the community's few seconds would move that heal later than the footage shows",
+    vod("V1", "G147"),
+    vod("V2", "k102, k222"),
+    owner("healing orbs despawn almost instantly after a phase ends when usually you can grab it for a few seconds during the attack you need to pray against", "2026-10-23"),
+  ),
 };
 
 const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
@@ -313,10 +331,6 @@ const LIFEFORCE: LifeforceRecipe = {
   tellAfterOnset: selected(span(3), "footage-repeated", "team-4-and-5", "teal swirl and chat line", vod("V1", "G36, G127"), vod("V2", "k51")),
   hitAfterOnset: selected(span(4), "footage-repeated", "team-4-and-5", "hit 4 ticks after each void forms", vod("V1", "G37, G68, G97, G128, G157, G188"), vod("V2", "k52, k83, k112, k143, k172, k203")),
   tellChat: selected("Ocellus manipulates your lifeforce!", "footage-repeated", "team-4-and-5", "game chat line on the tell tick, first in the frame that shows the teal swirl", vod("V1", "3:54:02.78, G36"), vod("V2", "5:20:25.87, k51")),
-};
-
-const ORB: OrbRecipe = {
-  lastHealAfterHit: selected(span(18), "footage-once", "team-4", "latest observed heal; a lower bound on expiry", vod("V1", "G175")),
 };
 
 const cue = (sound: TransitionSound, afterTell: number, delayMs: number, note: string, first: Source, ...rest: Source[]): Selected<TransitionCue> =>
@@ -514,6 +528,7 @@ const FLOOR_HOLE_DAMAGE = choice("flood-rate", {
 });
 
 export type OrbFloor = "safe-floor" | "any-floor";
+export type OuterOrbTile = Readonly<{ kind: "near-player"; floor: OrbFloor }> | Readonly<{ kind: "opposite-entry" }>;
 type OrbVisual = "innerSpawn" | "outerSpawn" | "idle" | "despawn" | "tell" | "regain";
 
 type LifeforceOrbRecipe = Readonly<{
@@ -530,8 +545,8 @@ const spotAnim = (id: number, name: string, basis: Basis, note: string): Selecte
 
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles"), STRATEGIES),
-  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES),
-  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "inner orbs appear off the void", vod("V1", "G39"), vod("V2", "k53")),
+  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES, ORB_OFF_HOLES),
+  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "safe floor: inner orbs appear off the void and off the holes", vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
   returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
   look: {
     innerSpawn: selected(
@@ -760,7 +775,6 @@ export const OCELLUS_P4 = {
   overheads: OVERHEADS,
   deflects: DEFLECTS,
   lifeforce: LIFEFORCE,
-  orb: ORB,
   special: SPECIAL,
   bossHeals: BOSS_HEALS,
   rifts: RIFTS,
@@ -837,9 +851,16 @@ export const OCELLUS_P4 = {
       "on-tile": selected(0, "footage-repeated", "team-5", "the streamer stands on the orb tile a tick before each heal (C9)", vod("V2", "k67, k95")),
       adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", vod("V1", "G51, G135, G175")),
     }),
-    outerOrbTile: choice("safe-floor", {
-      "safe-floor": selected<OrbFloor>("safe-floor", "footage-repeated", "team-4", "outer orbs on the 5x5 edge, collected without leaving the square", vod("V1", "G74, G79, G128, G135")),
-      "any-floor": selected<OrbFloor>("any-floor", "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158")),
+    outerOrbTile: choice("opposite-entry", {
+      "opposite-entry": selected<OuterOrbTile>(
+        { kind: "opposite-entry" },
+        "spec-single",
+        "unscaled",
+        "on the 5x5 rim tile farthest in a straight line from the tile where the player last stepped into the 5x5, or from the player when they are outside it at the hit, never on a hole; ties are a seeded pick; a guide says the orb is pretty much always on the opposite side of where you enter, and its frame shows the orb on the far edge",
+        owner("the orb opposite of where you enter", "2026-10-23"),
+      ),
+      "safe-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "safe-floor" }, "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
+      "any-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "any-floor" }, "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
     }),
     focus: choice("full-fight", {
       "full-fight": selected<Focus>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", PRACTICE),

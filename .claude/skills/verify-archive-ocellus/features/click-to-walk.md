@@ -1,6 +1,6 @@
 # Click to walk
 
-Left-clicking a floor tile outlines that tile, and the player runs to it at two tiles per game tick. A click past the platform's edge, or on the raised brazier walkway, walks the player to the floor tile nearest the click, and the player stays there.
+Left-clicking a floor tile outlines that tile, and the player runs to it at two tiles per game tick. Holding Control while clicking walks the player there at one tile per tick instead, as in game, and the run orb stays on. A click past the platform's edge, or on the raised brazier walkway, walks the player to the floor tile nearest the click, and the player stays there.
 
 ## Sub-features
 
@@ -10,12 +10,14 @@ Left-clicking a floor tile outlines that tile, and the player runs to it at two 
 - `walk-edge` stops the player on the platform's edge when the click lands off the platform.
 - `walk-walkway` stops the player on the floor beside the walkway when the click lands on the walkway.
 - `walk-walkway-room` reaches (8, 7), beside the 5x5's south-east corner, where the walkway sat before it moved 1 tile out.
+- `walk-control` walks one tile per tick on a Control-click. On a Mac the browser treats Control-click as a context click, and the trainer opens no menu; a real right-click still opens it.
 - `walk-corner` reaches (3, 8) and (4, 9) in the south pocket beside the 5x5's corner, where the old rows had a hole and left (4, 10) jutting out.
 
 ## How to get to it (user POV)
 
 - Left-click any floor tile in the game view.
 - Left-click the black beyond the platform's edge.
+- Hold Control and left-click a floor tile.
 
 ## Driving it with agent-browser
 
@@ -30,8 +32,9 @@ Preconditions:
 - **After.** Record the state and the screen. Run the same `eval` and `agent-browser screenshot "$PWD/.verify/<run>/after.png"`. `player` and `destination` are both `WALK_TARGET_TILE`, `{"x":8,"y":3}`, at a 1280x800 viewport, and `tick` is higher than before. Compare against that literal tile, not against `destination`: both come from the trainer, so a click on the wrong tile still has `player` equal to `destination`.
 - **Edge.** With the player on (8, 3), click `EDGE_CLICK_DOWN_PX` (160) below the canvas centre. The click orders `EDGE_ORDER_TILE` (8, 0), which is off the platform, and the player stops on `EDGE_STOP_TILE` (8, 1). Wait until `snapshot().player` is `{"x":8,"y":1}` and read the state. Wait `EDGE_HOLD_TICKS` (3) more ticks and read it again, then run `agent-browser screenshot "$PWD/.verify/<run>/edge.png"`. Both reads put the player on (8, 1), and the last `walk-ordered` input in `log()` is (8, 0). The screenshot shows the player on the platform's north edge and the clicked tile outlined in the black beyond it.
 - **Walkway.** Open `?seed=1&focus=transition-attacks` and wait for tick 8. From spawn, click `WALKWAY_CLICK_LEFT_PX` (400) left of the canvas centre. The click orders `WALKWAY_ORDER_TILE` (13, 2), on the walkway, and the player stops on `WALKWAY_STOP_TILE` (12, 2) and stays there `EDGE_HOLD_TICKS` more ticks. The screenshot shows the olive walkway on the left. Reload, and from spawn click `WALKWAY_ROOM_CLICK_RIGHT_PX` (-128, so 128 left) and `WALKWAY_ROOM_CLICK_UP_PX` (133) above the centre. The click orders `WALKWAY_ROOM_TILE` (8, 7), and the player stands there `EDGE_HOLD_TICKS` ticks later, between the 5x5 and the walkway.
+- **Control-click.** Open `?seed=1&focus=transition-attacks` and wait for tick 8. From spawn, hold Control and click `WALKWAY_CLICK_LEFT_PX` (400) left of the canvas centre. The player walks one tile per tick through `CONTROL_WALK_TILES`, (6, 1) to (11, 2), and the walk order in `log()` has `pace` `"walk"`. The plain walkway click above runs through `WALKWAY_RUN_TILES`, (7, 1), (9, 1), (11, 2), with `pace` `"run-setting"`. `snapshot().menu` stays `null` after the Control-click. Then right-click the floor; `snapshot().menu` lists `Walk Here`.
 - **Corner.** Open `?seed=2&focus=transition-attacks` and wait for tick 8. From spawn, click 60 right of and 155 above the canvas centre; the player stands on (3, 8). Reload, and from spawn click 40 right of and 170 above the centre; the player stands on (4, 9). For a view like the owner's screenshot, reload, click 150 right of and 20 above the centre to stand on (2, 2), and drag the middle button 95 px left.
-- **Scripted.** `scripts/verify.sh browser` runs this recipe and writes `observed.json` with each check, including `edgeClickOrderedOffThePlatform`, `stoppedAtTheEdge`, `walkwayClickStaysOnFloor`, `walkwayDrawn`, `walkwayClearOfSquare` and `cornerFilled`.
+- **Scripted.** `scripts/verify.sh browser` runs this recipe and writes `observed.json` with each check, including `edgeClickOrderedOffThePlatform`, `stoppedAtTheEdge`, `walkwayClickStaysOnFloor`, `walkwayDrawn`, `walkwayClearOfSquare`, `plainClickRunsTwoTilesATick`, `controlClickWalksOneTileATick`, `controlClickOpensNoMenu`, `rightClickStillOpensMenu` and `cornerFilled`.
 
 ## Gotchas
 
@@ -39,6 +42,8 @@ Preconditions:
 - `agent-browser click "#world"` clicks the canvas centre, which is the tile just south of the player. Use `mouse` with an offset.
 - A click on a tile right beside the edge does not walk onto it. That tile holds a movement blocker, so the SDK orders a nearby open tile and the player walks to the floor tile nearest that order.
 - Wait for tick 8 before clicking so the proof starts after the GET READY countdown.
+- `agent-browser mouse` takes no modifier keys. `control_click_at` in `scripts/verify.sh` sends the Control-click through CDP's `Input.dispatchMouseEvent` with the Ctrl modifier (2), on the page whose URL starts with the server's.
+- On macOS, Chrome reports a Control-click as a primary `mousedown` with `ctrlKey` and then fires `contextmenu`; the page counts those `contextmenu` events, and `controlClickOpensNoMenu` needs at least one on a Mac.
 - The world ticks every 600 ms. Wait for the arrival condition, not a fixed sleep.
 - Click each corner tile from spawn on a fresh page. A second click from (3, 8) lands on a different tile depending on how far the trailing camera has caught up.
 - The rendered model trails the logical tile by up to one tick. Wait about one second after arrival before the after screenshot.

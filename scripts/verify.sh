@@ -1503,7 +1503,6 @@ drive_load_retry() {
   ab network requests --clear >/dev/null || return 1
   ab open "${URL}${LOAD_RETRY_QUERY}" >/dev/null &
   opened=$!
-  # The SDK retries after 250 ms and 750 ms, so lifting the route on the first request lets a later attempt through.
   deadline=$((SECONDS + 90))
   until [[ "$(ab --json network requests --filter "$file" | json data.requests.length)" -gt 0 ]]; do
     (( SECONDS < deadline )) || { log "the page never requested the boss asset"; ab network unroute >/dev/null; wait "$opened"; return 1; }

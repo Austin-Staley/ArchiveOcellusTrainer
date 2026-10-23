@@ -6,15 +6,17 @@ const ORB_DRILL = { focus: "lifeforce-orb" } as const;
 const INNER_ORB: At = { x: 9, y: 4 };
 const BESIDE_INNER_ORB: At = { x: 9, y: 3 };
 const OUTER_ORB_FROM_SPAWN: At = { x: 4, y: 3 };
+const NEAR_PLAYER_OUTER_ORB = { outerOrbTile: "safe-floor" } as const;
 const ANY_FLOOR_SEED = 31;
 const ANY_FLOOR_INNER_ORB: At = { x: 10, y: 2 };
 const OUTER_ORB_ON_FLOOD: At = { x: 1, y: 2 };
+const V1_TURN = { floorHoleLayout: "v1-turn" } as const;
 
 function returnsAfterWalkingAt(orderedAfter: number, selection: DrillSelection = {}) {
   const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
   drill.tickTo(orderedAfter);
   drill.walkTo(INNER_ORB);
-  drill.tickTo(31);
+  drill.tickTo(36);
   const observed = [drill.events("orb-returned").map((e) => e.at), drill.events("orb-expired").map((e) => e.at)];
   drill.dispose();
   return observed;
@@ -49,10 +51,10 @@ describe("U3 lifeforce hit and orb", () => {
     drill.dispose();
   });
 
-  test("the inner orb's last pickup lands at hit + 18 (30); arriving at the end of 30 is too late", () => {
-    expect([returnsAfterWalkingAt(27), returnsAfterWalkingAt(28)]).toEqual([
-      [[30], []],
-      [[], [30]],
+  test("the inner orb stays 5 ticks after the inner void clears at 30: its last pickup returns at 35, and arriving at the end of 35 is too late", () => {
+    expect([returnsAfterWalkingAt(32), returnsAfterWalkingAt(33)]).toEqual([
+      [[35], []],
+      [[], [35]],
     ]);
   });
 
@@ -61,20 +63,42 @@ describe("U3 lifeforce hit and orb", () => {
       const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
       drill.tickTo(13);
       drill.walkTo(BESIDE_INNER_ORB);
-      drill.tickTo(31);
+      drill.tickTo(36);
       const observed = [drill.events("orb-returned").map((e) => [e.at, e.receipt.afterHp]), drill.events("orb-expired").map((e) => e.at)];
       drill.dispose();
       return observed;
     };
     expect([standBeside({ orbPickupRadius: "adjacent" }), standBeside({})]).toEqual([
       [[[25, 99]], []],
-      [[], [30]],
+      [[], [35]],
     ]);
+  });
+
+  test("the default outer orb forms on the rim tile farthest from where the player stepped into the 5x5, including the first tile of a two-tile run, not from where they stand at the hit, or from the player who never entered", () => {
+    const outerOrbAfterEntering = (walks: readonly At[], selection: DrillSelection = {}) => {
+      const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
+      walks.forEach((to, i) => {
+        drill.tickTo(34 + 3 * i);
+        drill.walkTo(to);
+      });
+      drill.tickTo(43);
+      const observed = drill.events("orb-spawned").filter((e) => e.void === "outer-void").map((e) => e.tile);
+      drill.dispose();
+      return observed;
+    };
+    expect([
+      outerOrbAfterEntering([{ x: 3, y: 3 }]),
+      outerOrbAfterEntering([{ x: 7, y: 3 }]),
+      outerOrbAfterEntering([{ x: 3, y: 3 }, { x: 7, y: 3 }]),
+      outerOrbAfterEntering([{ x: 3, y: 2 }, { x: 5, y: 4 }]),
+      outerOrbAfterEntering([]),
+      outerOrbAfterEntering([{ x: 3, y: 3 }], NEAR_PLAYER_OUTER_ORB),
+    ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 7, y: 7 }], [{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
   });
 
   test("an unclaimed outer orb heals the boss by its credit at hit + 19 (62); an unclaimed inner orb or a collected outer orb does not", () => {
     const run = (selection: DrillSelection, collectOuterOrb = false) => {
-      const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
+      const drill = startDrill({ selection: { ...ORB_DRILL, ...NEAR_PLAYER_OUTER_ORB, ...selection } });
       drill.tickTo(44);
       if (collectOuterOrb) drill.walkTo(OUTER_ORB_FROM_SPAWN);
       drill.tickTo(63);
@@ -86,7 +110,7 @@ describe("U3 lifeforce hit and orb", () => {
       drill.dispose();
       return observed;
     };
-    const expired = [[30, "inner-void", { x: 9, y: 4 }, 49], [61, "outer-void", { x: 4, y: 3 }, 25]];
+    const expired = [[35, "inner-void", { x: 9, y: 4 }, 49], [61, "outer-void", { x: 4, y: 3 }, 25]];
     expect([run({}), run({ unclaimedOuterOrb: "off" }), run({}, true)]).toEqual([
       [expired, [[62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1355, afterHp: 1380 }]], { atBossStep: 1355, atPostTick: 1380 }],
       [expired, [], { atBossStep: 1355, atPostTick: 1355 }],
@@ -138,5 +162,19 @@ describe("U3 lifeforce hit and orb", () => {
       ended: [],
       hpAt50: 70,
     });
+  });
+
+  test("an orb never forms on a floor hole: seed 5's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
+    const orbs = (runSeed: number, selection: DrillSelection, until: number) => {
+      const drill = startDrill({ seed: runSeed, selection });
+      drill.playCorrectlyTo(until);
+      const observed = [drill.region.fightLog().header.choices.floorHoleLayout.key, drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile])];
+      drill.dispose();
+      return observed;
+    };
+    expect([orbs(5, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
+      ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
+      ["v1-turn", [[12, "inner-void", { x: 2, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
+    ]);
   });
 });

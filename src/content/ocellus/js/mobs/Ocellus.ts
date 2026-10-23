@@ -31,7 +31,7 @@ import type {
 import { after, riftId, span, tick, tile, worldTick } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
 import { FOOTPRINT, TileMask, VOID_MASKS, floorRule } from "../p4/floor";
-import { orbTile, reach } from "../p4/orb";
+import { enteredSquare, orbTile, reach } from "../p4/orb";
 import { rollInt } from "../p4/roll";
 import type { Moment } from "../p4/schedule";
 import { Schedule } from "../p4/schedule";
@@ -193,6 +193,7 @@ export class Ocellus extends Mob {
   readonly holes: TileMask;
   private run: Run = { kind: "waiting", inputs: [] };
   private orbs: readonly Orb[] = [];
+  private entered: Tile | null = null;
   private marks: readonly Mark[] = [];
   private stolen: readonly Readonly<{ ordinal: Ordinal; credit: number }>[] = [];
   private rifts: readonly Rift[] = [];
@@ -338,6 +339,7 @@ export class Ocellus extends Mob {
         const reason: RunEnd | null = run.kind === "killed" ? "kill" : died ? "death" : null;
         if (reason === null) {
           this.claimOrbs(row.tick, playerAtPostTick.tile);
+          this.entered = this.target.stepsThisTick.reduce(enteredSquare, this.entered);
           this.rifts = this.rifts.map((rift) => ({ ...rift, hpAtPostTick: rift.mob.currentStats.hitpoint }));
         }
         this.run = reason === null
@@ -607,7 +609,7 @@ export class Ocellus extends Mob {
 
   private drain(kind: VoidKind, at: Tick, player: Tile): void {
     const divisor = OCELLUS_P4.lifeforceOrb.drainDivisor.value;
-    const tile = orbTile(this.config.seed, at, player, kind, this.config.choices);
+    const tile = orbTile(this.config.seed, at, player, this.entered ?? player, kind, this.config.choices, this.holes);
     const hit = new P4Hit(this, this.target, (hp) => Math.floor(hp / divisor), (receipt) => {
       const credit = receipt.applied;
       this.orbs = [...this.orbs.filter((orb) => orb.void !== kind), { kind: "dormant", void: kind, credit, owed: credit, tile }];

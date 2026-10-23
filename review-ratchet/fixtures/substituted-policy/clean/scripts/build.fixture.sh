@@ -19,4 +19,10 @@ failed_install_is_not_reused() {
   [[ ! -e "$WORK/reader" ]] || fail "a failed install left $WORK/reader"
 }
 
-failed_install_is_not_reused && echo "PASS failed_install_is_not_reused"
+if (failed_install_is_not_reused) >"$WORK/case.log" 2>&1; then
+  echo "PASS failed_install_is_not_reused"
+else
+  echo "FAIL failed_install_is_not_reused"
+  sed 's/^/  /' "$WORK/case.log"
+  exit 1
+fi

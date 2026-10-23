@@ -7,12 +7,27 @@ const usage = `usage: shell-test-runs-entry.mjs [ROOT]
 Every *.test.sh under ROOT (default: the current directory) must run the
 script it tests as a process. Reading that script's text, with sed, grep,
 awk, cat, source and the like, lets the test run extracted pieces under its
-own shell options instead of the script's. Exits 0 when every test runs its
-script, 1 on a test that reads it, and 2 when a test names no script under
-test or ROOT holds no shell tests.
+own shell options instead of the script's. A reader counts behind prefixes
+such as command, builtin, env, timeout and if, and when quoted, escaped or
+named by path. Exits 0 when every test runs its script, 1 on a test that
+reads it, and 2 when a test names no script under test or ROOT holds no
+shell tests.
 `;
 
 const READERS = new Set(["sed", "grep", "egrep", "fgrep", "awk", "gawk", "cat", "head", "tail", "cut", "perl", "python", "python3", "source", ".", "mapfile", "readarray"]);
+const NO_VALUES = new Set();
+// Words that run the next word as the command, with the options that take a separate value.
+const PREFIXES = new Map([
+  ...["!", "{", "if", "then", "elif", "else", "do", "while", "until", "time", "command", "builtin", "nohup"].map((word) => [word, NO_VALUES]),
+  ["exec", new Set(["-a"])],
+  ["env", new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"])],
+  ["nice", new Set(["-n", "--adjustment"])],
+  ["timeout", new Set(["-s", "--signal", "-k", "--kill-after"])],
+  ["stdbuf", new Set(["-i", "-o", "-e"])],
+  ["sudo", new Set(["-u", "--user", "-g", "--group", "-C", "-D", "-h", "-p", "-r", "-t", "-U"])],
+]);
+const ASSIGNMENT = /^[A-Za-z_]\w*=/;
+const DURATION = /^\d+(?:\.\d+)?[smhd]?$/;
 const TARGET = /^\s*(?:readonly\s+|local\s+|export\s+)?([A-Za-z_]\w*)=(.*)$/;
 const SCRIPT_PATH = /[\w.-]+\.(?:sh|mjs|cjs|js)\b/g;
 
@@ -100,8 +115,21 @@ function segments(line) {
 }
 
 function command(segment) {
-  const words = segment.trim().split(/\s+/).filter((word) => !/^[A-Za-z_]\w*=/.test(word));
-  return words[0] ?? "";
+  const words = segment.trim().split(/\s+/).map((word) => word.replace(/["'\\]/g, ""));
+  let valued = null;
+  for (let index = 0; index < words.length; index++) {
+    const word = words[index];
+    if (ASSIGNMENT.test(word)) continue;
+    if (valued !== null && word.startsWith("-")) {
+      if (valued.has(word)) index++;
+      continue;
+    }
+    if (valued !== null && DURATION.test(word)) continue;
+    const name = path.posix.basename(word);
+    if (!PREFIXES.has(name)) return name;
+    valued = PREFIXES.get(name);
+  }
+  return "";
 }
 
 function readsOf(line, variable) {

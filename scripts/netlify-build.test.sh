@@ -5,10 +5,14 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/netlify-build.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# shell-test-runs-entry.mjs counts a failure under a mutation only when a case prints this line after its FAIL line.
+# shell-test-runs-entry.mjs credits a case's failure under a mutation only to an assertion after the case's ready line, so a case calls ready once its setup is done.
 fail() {
   printf 'ASSERTION FAILED: %s\n' "$*"
   exit 1
+}
+
+ready() {
+  printf 'ready %s\n' "$t"
 }
 
 # git and npm are the build's external commands. The application install marks that the reader step finished and fails, so the build stops there.
@@ -49,6 +53,7 @@ build() {
 failed_install_is_not_reused() {
   setup
   : >"$T/npm-fails"
+  ready
   if build; then fail "build continued although the reader's npm ci failed"; fi
   [[ ! -e "$READER" ]] || fail "a failed install left $READER"
   rm "$T/npm-fails"
@@ -59,6 +64,7 @@ failed_install_is_not_reused() {
 
 installed_reader_is_reused() {
   setup
+  ready
   build || fail "first build failed"
   build || fail "second build failed"
   local fetched
@@ -69,6 +75,7 @@ installed_reader_is_reused() {
 changed_pin_removes_the_old_reader() {
   setup
   mkdir -p "$CACHE_ROOT/osrscachereader-0000000000000000000000000000000000000000" "$CACHE_ROOT/openrs2/2746"
+  ready
   build || fail "build failed"
   [[ "$(ls "$CACHE_ROOT" | tr '\n' ' ')" == "openrs2 osrscachereader-1111111111111111111111111111111111111111 " ]] || fail "cache root holds: $(ls "$CACHE_ROOT" | tr '\n' ' ')"
 }
@@ -82,8 +89,8 @@ for t in \
     echo "PASS $t"
   else
     echo "FAIL $t"
-    sed 's/^/  /' "$WORK/$t.log"
     failed=1
   fi
+  sed 's/^/  /' "$WORK/$t.log"
 done
 exit $failed

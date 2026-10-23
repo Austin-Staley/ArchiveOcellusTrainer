@@ -6,10 +6,14 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# shell-test-runs-entry.mjs counts a failure under a mutation only when a case prints this line after its FAIL line.
+# shell-test-runs-entry.mjs credits a case's failure under a mutation only to an assertion after the case's ready line, so a case calls ready once its setup is done.
 fail() {
   printf 'ASSERTION FAILED: %s\n' "$*"
   exit 1
+}
+
+ready() {
+  printf 'ready %s\n' "$t"
 }
 
 clean_tree() {
@@ -55,6 +59,7 @@ plant() {
 
 expect_clean() {
   clean_tree
+  ready
   node "$CHECK" "$T" >"$T/out.txt" 2>&1 || { cat "$T/out.txt"; fail "check-types failed on the clean tree"; }
   grep -q "check-types: 0 finding(s)" "$T/out.txt" || { cat "$T/out.txt"; fail "check-types did not report 0 findings"; }
 }
@@ -63,6 +68,7 @@ expect_finding() {
   local file="$1" body="$2" rule="$3"
   clean_tree
   plant "$file" "$body"
+  ready
   if node "$CHECK" "$T" >"$T/out.txt" 2>&1; then
     fail "check passed although ${file} contains: ${body}"
   fi
@@ -76,6 +82,7 @@ expect_compile_error() {
   source="$(cat "$T/$file")"
   [[ "$source" == *"$from"* ]] || fail "${file} no longer contains: ${from}"
   printf '%s\n' "${source/"$from"/"$to"}" >"$T/$file"
+  ready
   if (cd "$T" && node_modules/.bin/tsc --noEmit -p .) >"$T/out.txt" 2>&1; then
     fail "tsc accepted ${to} in ${file}"
   fi
@@ -145,8 +152,8 @@ for t in \
     echo "PASS $t"
   else
     echo "FAIL $t"
-    sed 's/^/  /' "$WORK/$t.log"
     failed=1
   fi
+  sed 's/^/  /' "$WORK/$t.log"
 done
 exit $failed

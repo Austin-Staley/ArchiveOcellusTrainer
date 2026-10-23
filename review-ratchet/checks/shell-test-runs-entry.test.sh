@@ -6,10 +6,14 @@ FIXTURES="$(cd "$(dirname "$0")/../fixtures/substituted-policy" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# shell-test-runs-entry.mjs counts a failure under a mutation only when a case prints this line after its FAIL line.
+# shell-test-runs-entry.mjs credits a case's failure under a mutation only to an assertion after the case's ready line, so a case calls ready once its setup is done.
 fail() {
   printf 'ASSERTION FAILED: %s\n' "$*"
   exit 1
+}
+
+ready() {
+  printf 'ready %s\n' "$NAME"
 }
 
 POSITION='scripts/build.fixture.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
@@ -49,6 +53,7 @@ run_case() {
   local tree="$WORK/$name"
   cp -R "$FIXTURES/$fixture" "$tree"
   (cd "$tree" && eval "$setup") || { echo "setup failed"; return 1; }
+  ready
   node "$CHECK" "$tree" >"$WORK/$name.out" 2>&1
   local actual=$?
   [[ "$actual" == "$status" ]] || { cat "$WORK/$name.out"; fail "exit $actual, expected $status"; }
@@ -59,6 +64,7 @@ hanging_test() {
   local tree="$WORK/hanging"
   cp -R "$FIXTURES/clean" "$tree"
   printf 'sleep 30\n' >"$tree/scripts/build.fixture.sh"
+  ready
   node "$CHECK" --timeout 1 "$tree" >"$WORK/hanging.out" 2>&1
   local actual=$?
   [[ "$actual" == 2 ]] || { cat "$WORK/hanging.out"; fail "exit $actual, expected 2"; }
@@ -71,9 +77,9 @@ report() {
     echo "PASS $NAME"
   else
     echo "FAIL $NAME"
-    sed 's/^/  /' "$WORK/case.log"
     failed=1
   fi
+  sed 's/^/  /' "$WORK/case.log"
 }
 while IFS='|' read -r name fixture status line setup; do
   NAME="$name" report run_case "$name" "$fixture" "$status" "$line" "$setup"

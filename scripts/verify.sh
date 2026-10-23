@@ -93,6 +93,14 @@ PATHING_UNDER_TICK=30
 PATHING_AROUND_TICK=40
 PATHING_LAST_TICK=46
 PATHING_EXPECTED='[["after-inner",[{"x":5,"y":5},{"x":7,"y":5}]],["outer-void",[{"x":7,"y":3},{"x":5,"y":3},{"x":4,"y":3}]]]'
+PATHING_EDGE_CLICK_UP_PX=60
+PATHING_REROUTE_TICK=38
+PATHING_REROUTE_EXPECTED='[[{"x":5,"y":4}],[39],[["outer-void",[{"x":5,"y":3}]]]]'
+PATHING_UNDER_CLICK_UP_PX=100
+PATHING_UNDER_TILE='{"x":5,"y":5}'
+PATHING_OUT_CLICK_DOWN_PX=90
+PATHING_OUT_TICK=40
+PATHING_OUT_EXPECTED='[[{"x":5,"y":5},{"x":5,"y":3}],[41],[["lead-in",[{"x":5,"y":3},{"x":5,"y":5}]],["outer-void",[{"x":5,"y":3}]]]]'
 HOLES_QUERY="?seed=1&focus=floor-holes"
 HOLE_LAYOUT='{"key":"v1-turn","tiles":[{"x":1,"y":5},{"x":1,"y":6},{"x":2,"y":8},{"x":2,"y":9},{"x":4,"y":9},{"x":8,"y":5}]}'
 HOLE_PIXELS='[[{"x":8,"y":5},-128,-95],[{"x":1,"y":5},170,-95],[{"x":1,"y":6},161,-115],[{"x":2,"y":8},108,-151],[{"x":2,"y":9},102,-167]]'
@@ -886,6 +894,20 @@ drive_boss_pathing() {
   probe "log()" >"$VERIFY_DIR/pathing.json"
   ab console >"$VERIFY_DIR/pathing-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/pathing-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
+  click_after_tick "$PATHING_REROUTE_TICK" 0 "-$PATHING_EDGE_CLICK_UP_PX" || { log "the walk onto the boss's north edge was not clicked"; return 1; }
+  fight_tick_at_least $((PATHING_REROUTE_TICK + 4)) 30000 || { log "the reroute drill never stepped to P4 tick $((PATHING_REROUTE_TICK + 4))"; return 1; }
+  probe "log()" >"$VERIFY_DIR/pathing-reroute.json"
+  ab console >"$VERIFY_DIR/pathing-reroute-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/pathing-reroute-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
+  walk_by_click "$CX" $((CY - PATHING_UNDER_CLICK_UP_PX)) "$PATHING_UNDER_TILE" || return 1
+  click_after_tick "$PATHING_OUT_TICK" 0 "$PATHING_OUT_CLICK_DOWN_PX" || { log "the walk out from under the boss was not clicked"; return 1; }
+  shot_after_tick $((PATHING_OUT_TICK + 1)) 300 pathing-out.png || { log "the walk-out drill never reached P4 tick $((PATHING_OUT_TICK + 1))"; return 1; }
+  fight_tick_at_least $((PATHING_OUT_TICK + 4)) 30000 || { log "the walk-out drill never stepped to P4 tick $((PATHING_OUT_TICK + 4))"; return 1; }
+  probe "log()" >"$VERIFY_DIR/pathing-out.json"
+  ab console >"$VERIFY_DIR/pathing-out-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/pathing-out-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
 drive_floor_holes() {
@@ -1389,7 +1411,7 @@ drive() {
     holes-drawn.png holes-flood.png hole-click.json hole-hit.png holes.json holes-console.log holes-page-errors.json \
     walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
-    pathing-around.png pathing.json pathing-console.log pathing-page-errors.json \
+    pathing-around.png pathing.json pathing-console.log pathing-page-errors.json pathing-reroute.json pathing-reroute-console.log pathing-reroute-page-errors.json pathing-out.png pathing-out.json pathing-out-console.log pathing-out-page-errors.json \
     invincible-default.json invincible-linked.json invincible.png invincible-chat.json invincible.json invincible-console.log invincible-page-errors.json invincible-restarted.json \
     invincible-orb.png invincible-orb.json invincible-orb-console.log invincible-orb-page-errors.json \
     autoplay-policy.js cue-contexts-fresh.json cue-toggles-fresh.json cue-fresh-click.json cue-contexts-fresh-clicked.json cue-fresh-audio.json cue-sound-off-saved.json cue-fresh-console.log cue-fresh-page-errors.json \
@@ -1408,7 +1430,7 @@ drive() {
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
-      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected] = process.argv.slice(1);
+      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusAudio, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1427,6 +1449,7 @@ drive() {
     const [seedErrors, walkwayErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
     const [holesLog, holesErrors] = ["holes.json", "holes-page-errors.json"].map(read);
     const [pathingLog, pathingErrors] = ["pathing.json", "pathing-page-errors.json"].map(read);
+    const [rerouteLog, rerouteErrors, outLog, outErrors] = ["pathing-reroute.json", "pathing-reroute-page-errors.json", "pathing-out.json", "pathing-out-page-errors.json"].map(read);
     const [floorStart, floorFirst, floorLast, floorLog, floorErrors] = ["defence-floor-start.json", "defence-floor-first.json", "defence-floor.json", "defence-floor-log.json", "defence-floor-page-errors.json"].map(read);
     const floorGlaives = floorLog.rows.flatMap((row) => row.events.filter((event) => event.kind === "player-hit-judged")).slice(0, 4);
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
@@ -1512,6 +1535,7 @@ drive() {
     const voidShare = (file) => pixelShare(file, (...rgb) => want.every((v, c) => Math.abs(rgb[c] - v) <= 10));
     const walkwayRgb = [1, 3, 5].map((i) => parseInt(walkwayPixel.slice(i, i + 2), 16));
     const walkOrders = (log) => log.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination));
+    const orderTicks = (log) => log.rows.filter((row) => row.inputs.some((i) => i.kind === "walk-ordered")).map((row) => row.tick);
     const walks = (log) => {
       const starts = log.rows.flatMap((row, i) => (row.inputs.some((input) => input.kind === "walk-ordered") ? [i] : []));
       return starts.map((start, n) => {
@@ -1693,6 +1717,8 @@ drive() {
       },
       corner: { orders: [...walkOrders(cornerHoleLog), ...walkOrders(cornerNubLog)], stood: [cornerAtHole.player, cornerAtNub.player] },
       pathing: { orders: walkOrders(pathingLog), walks: walks(pathingLog) },
+      pathingReroute: { orders: walkOrders(rerouteLog), orderTicks: orderTicks(rerouteLog), walks: walks(rerouteLog) },
+      pathingOut: { orders: walkOrders(outLog), orderTicks: orderTicks(outLog), walks: walks(outLog) },
       holes: {
         layout: { key: holesLog.header.choices.floorHoleLayout.key, tiles: holesLog.header.choices.floorHoleLayout.option.value },
         darkShare: JSON.parse(holePixels).map((box) => ({ tile: box[0], drawn: darkAround("holes-drawn.png", box), flood: darkAround("holes-flood.png", box) })),
@@ -1890,6 +1916,8 @@ drive() {
         walkwayHeld.tick - walkwayArrived.tick >= Number(holdTicks),
       walkwayDrawn: observed.walkway.share >= Number(walkwayMinShare),
       bossBlocksOnlyInOuterVoid: sameJson(observed.pathing.orders, `[${pathingWest},${pathingEast},${pathingBack}]`) && sameJson(observed.pathing.walks.slice(1), pathingExpected),
+      walkOntoBossReroutesAsTheFloodStarts: sameJson([observed.pathingReroute.orders, observed.pathingReroute.orderTicks, observed.pathingReroute.walks], pathingRerouteExpected),
+      walkOutFromUnderBossInTheFlood: sameJson([observed.pathingOut.orders, observed.pathingOut.orderTicks.slice(1), observed.pathingOut.walks], pathingOutExpected),
       cornerFilled: sameJson(observed.corner.orders, `[${cornerHole},${cornerNub}]`) && sameJson(observed.corner.stood, `[${cornerHole},${cornerNub}]`),
       holesDrawnOnLayout: sameJson(observed.holes.layout, holeLayout) && observed.holes.darkShare.every((box) => onHole(box.tile) && box.drawn >= Number(holeMinDark)) &&
         observed.holes.freeDarkShare.every((box) => !onHole(box.tile) && box.drawn <= Number(holeMaxDark)),
@@ -1921,7 +1949,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, pathingErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1943,7 +1971,7 @@ drive() {
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
-    "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

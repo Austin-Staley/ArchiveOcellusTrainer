@@ -19,11 +19,12 @@ type ProtectionPrayer = "Protect from Magic" | "Protect from Range" | "Protect f
 const PROTECTS_FROM: Readonly<Record<Style, ProtectionPrayer>> = { magic: "Protect from Magic", ranged: "Protect from Range", melee: "Protect from Melee" };
 
 const inNearSquare = ({ x, y }: At) => x >= 3 && x <= 7 && y >= 3 && y <= 7;
+const underBoss = ({ x, y }: At) => x >= 4 && x <= 6 && y >= 4 && y <= 6;
 const onPlatform = ({ x, y }: At) => OCELLUS_P4.geometry.platform.value[y]?.[x] === "#";
 
 function besideOnSameFloor(home: At, insideSquare: boolean): At {
   const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: home.x + dx, y: home.y + dy }));
-  return sides.find((side) => onPlatform(side) && inNearSquare(side) === insideSquare) ?? home;
+  return sides.find((side) => onPlatform(side) && !underBoss(side) && inNearSquare(side) === insideSquare) ?? home;
 }
 
 export function startDrill(options: DrillOptions = {}) {

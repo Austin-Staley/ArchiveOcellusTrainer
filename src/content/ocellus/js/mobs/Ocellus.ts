@@ -1,4 +1,4 @@
-import { CacheRenderModel, CacheRenderReferences, Mob, Projectile } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderReferences, CollisionType, InvisibleMovementBlocker, Mob, Projectile } from "osrs-sdk";
 import type { Model, Region, UnitBonuses, UnitStats } from "osrs-sdk";
 import type { DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
@@ -247,6 +247,11 @@ export class Ocellus extends Mob {
 
   outOfMeleeReach(): boolean {
     return this.phase().boss === "present-out-of-melee-reach";
+  }
+
+  /** Blocking a player already under him would block every tile around that player, and the SDK finds no path out. */
+  blocksMovement(): boolean {
+    return OCELLUS_P4.boss.footprint.value[this.phase().stage] === "blocks-movement" && !FOOTPRINT.contains(this.target.observe().tile);
   }
 
   override get idlePoseId(): number {
@@ -689,5 +694,20 @@ export class Ocellus extends Mob {
         return unhandled;
       }
     }
+  }
+}
+
+/** The SDK paths players through mobs and around blocking entities, so the boss's body is an entity over his tiles. */
+export class BossFootprint extends InvisibleMovementBlocker {
+  constructor(region: Region, private readonly boss: Ocellus) {
+    super(region, { ...boss.location });
+  }
+
+  override get size(): number {
+    return this.boss.size;
+  }
+
+  override get collisionType(): CollisionType {
+    return this.boss.blocksMovement() ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
   }
 }

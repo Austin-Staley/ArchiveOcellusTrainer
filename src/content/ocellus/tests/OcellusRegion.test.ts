@@ -22,6 +22,7 @@ describe("Ocellus arena", () => {
     const drill = startDrill({ selection: NON_LETHAL });
     const painted = paintedTiles((context, scale) => drill.region.drawWorldBackground(context, scale));
     const standsOn = (to: At) => {
+      drill.restart();
       drill.walkTo(to);
       for (let moved = true; moved; ) {
         const { x, y } = drill.player().location;

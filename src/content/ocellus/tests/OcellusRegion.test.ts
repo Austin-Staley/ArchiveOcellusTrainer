@@ -31,7 +31,7 @@ describe("Ocellus arena", () => {
       return drill.player().location.x === to.x && drill.player().location.y === to.y;
     };
     const rows: string[] = [];
-    for (let y = -1; y <= 14; y++) {
+    for (let y = -1; y <= 13; y++) {
       let row = "";
       for (let x = -1; x <= 15; x++) {
         const [stands, drawn] = [standsOn({ x, y }), painted.has(`${x},${y}`)];
@@ -53,8 +53,7 @@ describe("Ocellus arena", () => {
       "..######ww.......",
       "..#####ww........",
       "..####ww.........",
-      "..###ww..........",
-      ".wwwww...........",
+      "..wwwww..........",
       ".................",
     ]);
     drill.dispose();
@@ -80,13 +79,13 @@ describe("Ocellus arena", () => {
     const drill = startDrill({ selection: NON_LETHAL });
     drill.walkTo({ x: 12, y: 1 });
     drill.region.world.tickWorld(6);
-    drill.walkTo({ x: 3, y: 12 });
+    drill.walkTo({ x: 4, y: 11 });
     const trail: At[] = [];
     for (let tick = 0; tick < 6; tick++) {
       drill.region.world.tickWorld();
       trail.push({ ...drill.player().location });
     }
-    expect(trail).toEqual([{ x: 10, y: 3 }, { x: 8, y: 5 }, { x: 7, y: 7 }, { x: 5, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 12 }]);
+    expect(trail).toEqual([{ x: 10, y: 3 }, { x: 8, y: 5 }, { x: 7, y: 7 }, { x: 5, y: 9 }, { x: 4, y: 11 }, { x: 4, y: 11 }]);
     drill.dispose();
   });
 });

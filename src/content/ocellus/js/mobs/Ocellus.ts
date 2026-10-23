@@ -248,8 +248,9 @@ export class Ocellus extends Mob {
     return this.phase().boss === "present-out-of-melee-reach";
   }
 
+  /** Blocking a player already under him would block every tile around that player, and the SDK finds no path out. */
   blocksMovement(): boolean {
-    return OCELLUS_P4.boss.footprint.value[this.phase().stage] === "blocks-movement";
+    return OCELLUS_P4.boss.footprint.value[this.phase().stage] === "blocks-movement" && !FOOTPRINT.contains(this.target.observe().tile);
   }
 
   override get idlePoseId(): number {

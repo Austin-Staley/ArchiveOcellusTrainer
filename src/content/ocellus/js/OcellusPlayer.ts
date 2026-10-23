@@ -1,4 +1,4 @@
-import { Player, Random } from "osrs-sdk";
+import { Collision, Player, Random } from "osrs-sdk";
 import type { Location, Region } from "osrs-sdk";
 import type { InputObservation, PlayerObservation, Style } from "./P4Types";
 import { tile } from "./P4Types";
@@ -34,6 +34,13 @@ export class OcellusPlayer extends Player {
   override moveTo(x: number, y: number): void {
     super.moveTo(x, y);
     this.report({ kind: "walk-ordered", destination: tile(x, y) });
+  }
+
+  /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. */
+  override determineDestination(): void {
+    super.determineDestination();
+    const to = this.destinationLocation;
+    if (to && Collision.collideableEntitiesAtPoint(this.region, to.x, to.y, 1).length > 0) super.moveTo(to.x, to.y);
   }
 
   override pretick(): void {

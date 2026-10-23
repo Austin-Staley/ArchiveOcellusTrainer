@@ -5,7 +5,7 @@ description: Verify Archive Ocellus Trainer, a browser trainer built on osrs-sdk
 
 # Verify Archive Ocellus Trainer
 
-The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena, their player and Ocellus (NPC 16677), clicks floor tiles to walk, switches gear from the inventory, and plays the phase 4 cycle, stepping in and out of the 5x5 under the boss as the void floor changes, stepping around the floor holes, stepping off each explosion mark, praying against each transition attack, attacking around the boss's curse overheads and killing void rifts before they burst. A Settings button and a Restart button sit at the bottom left. The Settings button opens a menu with the setup selector, the focus selector, the seed field, Keybinds, the two sound boxes and the Invincible checkbox, and `open_settings` in `scripts/verify.sh` opens it before a recipe reads or uses one of them. Invincible starts unchecked; `invincible=on` in the link checks it, and Restart keeps it. While it is checked, hits land as usual, but a hit that would kill the player restores full HP and logs a `death-prevented` event and a chat line. A run without a typed seed draws a fresh one and shows it in the seed field. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
+The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD around it. A user loads the page, sees the arena, their player and Ocellus (NPC 16677), clicks floor tiles to walk, switches gear from the inventory, and plays the phase 4 cycle, stepping in and out of the 5x5 under the boss as the void floor changes, stepping around the floor holes, stepping off each explosion mark, praying against each transition attack, attacking around the boss's curse overheads and killing void rifts before they burst. A Settings button and a Restart button sit at the bottom left. The Settings button opens a menu with the setup selector, the focus selector, the seed field, Keybinds, the two sound boxes and the Invincible checkbox, and `open_settings` in `scripts/verify.sh` opens it before a recipe reads or uses one of them. A second click, Escape or a click outside closes it. When a run ends, a result panel shows "Ocellus defeated" with the P4 time or "You died" with the P4 tick, and offers Restart (new seed) and Retry seed (same seed). `bosshp=N` in the link starts P4 at N boss hitpoints, from 1 to the max HP. Invincible starts unchecked; `invincible=on` in the link checks it, and Restart keeps it. While it is checked, hits land as usual, but a hit that would kill the player restores full HP and logs a `death-prevented` event and a chat line. A run without a typed seed draws a fresh one and shows it in the seed field. There is no backend. `scripts/verify.sh` runs every stage below and prints `PASS <stage>` or `FAIL <stage>`. It exits non-zero when any stage fails.
 
 ```sh
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
@@ -68,6 +68,12 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `build.log`, `types.log`, `test.log`, `vitest.json`, `assets.log` | Stage output; `vitest.json` holds the executed test count |
 | `server.log`, `server.pid` | Dev server output; PID, start time, port and revision |
 | `warm-up.png` | A blank page; a new browser's first screenshot takes about 10 s, so it is taken before the trainer opens |
+| `menu-closed-desktop.png`, `menu-open-desktop.png`, `menu-closed-small.png`, `menu-open-small.png`, `menu-closed-mobile.png`, `menu-open-mobile.png` | `?seed=1` at 1280x800, at 800x600 and on an emulated iPhone 14, with the Settings menu closed and after one click on Settings |
+| `menu.json`, `menu-checks.json` | At each size: the menu, every control in it, Settings, Restart and the credit line visible or not, the menu's box and the page's scroll width, closed, open and after a second click; at 1280x800 also after Escape, after a click on the seed box and after a click on the canvas; then each menu check's result |
+| `menu-page-errors.json`, `menu-small-page-errors.json`, `menu-mobile-page-errors.json` | Page errors of the three menu pages |
+| `death-result.json`, `death-result.png`, `death-restart.json` | `?seed=1&focus=void-floor` with the player left on the flood: the result panel's lines, buttons and the run state 600 ms after the death, its screen, then `location.search`, seed and panel of the run its Restart loaded |
+| `kill-result.json`, `kill-result.png`, `kill-result-small.png`, `kill-retry.json` | `?seed=4&bosshp=1` with the hovering boss clicked after P4 tick 12: the result panel after the bow's kill, its screen at 1280x800 and 800x600, then the start run's and the Retry seed run's `location.search`, seed, boss HP and panel |
+| `death-result-page-errors.json`, `kill-result-page-errors.json`, `result-checks.json` | Page errors of both result pages and each result check's result |
 | `hidden.json`, `hidden.png` | Screenshot, then state, after the boss's first P4 step; the check needs P4 tick 3 or earlier with the model hidden |
 | `before.json`, `before.png` | State and screenshot after load, before any input |
 | `click.json` | Canvas pixel that was clicked |
@@ -141,6 +147,7 @@ A browser proof captures the action and the resulting state, not only the last s
 ```sh
 agent-browser close
 agent-browser --session "${AGENT_BROWSER_SESSION}-autoplay" close
+agent-browser --session "${AGENT_BROWSER_SESSION}-mobile" close
 scripts/verify.sh stop
 ```
 

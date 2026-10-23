@@ -18,7 +18,7 @@ ready() {
 
 POSITION='scripts/build.fixture.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
 OTHER_CASES='scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without reporting the cases it reports as it is, so no case shows that the test checks the policy'
-CRASH='scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without a case that fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy'
+CRASH='scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without a case that prints its ready line in both runs and then fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy'
 
 # Each row is name|fixture|exit|line|setup. setup runs inside a copy of the fixture before the check, and line must appear in the check's output.
 CASES="$(cat <<EOF
@@ -37,6 +37,11 @@ setup_assertion|historical-9d9143b|2|${OTHER_CASES}|cp "\$FIXTURES/variants/setu
 setup_reported_as_case|historical-9d9143b|2|${OTHER_CASES}|cp "\$FIXTURES/variants/setup-reported-as-case.fixture.sh" scripts/netlify-build.fixture.sh
 crash_inside_case|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/crash-inside-case.fixture.sh" scripts/netlify-build.fixture.sh
 marker_before_cases|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/marker-before-cases.fixture.sh" scripts/netlify-build.fixture.sh
+setup_assertion_inside_case|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/setup-assertion-inside-case.fixture.sh" scripts/netlify-build.fixture.sh
+ready_after_setup|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/ready-after-setup.fixture.sh" scripts/netlify-build.fixture.sh
+assertion_before_ready|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/assertion-before-ready.fixture.sh" scripts/netlify-build.fixture.sh
+misnamed_ready|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/misnamed-ready.fixture.sh" scripts/netlify-build.fixture.sh
+ready_only_when_broken|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/ready-only-when-broken.fixture.sh" scripts/netlify-build.fixture.sh
 unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.fixture.sh scripts/other.test.sh
 mutation_text_absent|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 0 times|sed -i.bak 's/^set -euo pipefail\$/set -eu -o pipefail/' scripts/build.sh && rm scripts/build.sh.bak
 failing_test|clean|2|scripts/build.fixture.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.fixture.sh

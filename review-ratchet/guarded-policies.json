@@ -42,7 +42,23 @@
         },
         {
           "policy": "a failing case counts as catching a mutation only with an ASSERTION FAILED line in its output",
-          "mutation": [{ "find": "result: own.some((line) => ASSERTION_FAILED.test(line)) ? \"asserted\" : \"errored\"", "replace": "result: \"asserted\"" }]
+          "mutation": [{ "find": "result: behaviour.some((line) => ASSERTION_FAILED.test(line)) ? \"asserted\" : \"errored\"", "replace": "result: \"asserted\"" }]
+        },
+        {
+          "policy": "a failing case counts only when it prints its ready line under the mutation",
+          "mutation": [{ "find": "const behaviour = ready === -1 ? [] : own.slice(ready + 1);", "replace": "const behaviour = own.slice(ready + 1);" }]
+        },
+        {
+          "policy": "an ASSERTION FAILED line counts only after its case's ready line",
+          "mutation": [{ "find": "const behaviour = ready === -1 ? [] : own.slice(ready + 1);", "replace": "const behaviour = ready === -1 ? [] : own;" }]
+        },
+        {
+          "policy": "a ready line counts only when it names its case",
+          "mutation": [{ "find": "line.trim() === `ready ${name}`", "replace": "line.trim().startsWith(\"ready \")" }]
+        },
+        {
+          "policy": "a failing case counts only when it also prints its ready line before any mutation",
+          "mutation": [{ "find": "found.result === \"passed\" && found.ready ?", "replace": "found.result === \"passed\" ?" }]
         },
         {
           "policy": "an ASSERTION FAILED line counts only for the case whose output holds it",

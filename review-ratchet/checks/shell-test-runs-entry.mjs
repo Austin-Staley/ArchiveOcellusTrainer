@@ -23,15 +23,17 @@ of the script's code under its own shell options.
 A mutant must pass its syntax check (bash -n for .sh, node --check for .mjs),
 so a test that runs the real script reaches its assertions. A test reports
 each case on a line "PASS NAME" or "FAIL NAME", followed by that case's
-output; output before the first case, such as setup, belongs to no case. A
-failed assertion prints a line that starts "ASSERTION FAILED: ", optionally
-indented. A failure under a mutation counts only when the test reports the
-same cases as it does as it is, and one of them fails with that line in its
-output; a setup error, a crash or a different set of cases cannot show that
-the test checks the policy.
+output; output before the first case belongs to no case. Each case prints
+"ready NAME" once its setup is done, and a failed assertion prints a line that
+starts "ASSERTION FAILED: "; either line may be indented. A failure under a
+mutation counts only when the test reports the same cases as it does as it
+is, and a case that printed its ready line in both runs fails with an
+assertion line after it; a setup error or failed precondition, a crash or a
+different set of cases cannot show that the test checks the policy.
 
 Exits 0 when every test passes as it is with every case passing and fails an
-assertion in a case under every mutation, and 1 when a test passes under one.
+assertion after a ready line under every mutation, and 1 when a test passes
+under one.
 Without such a finding it exits 2 when the policy file is missing or
 malformed, a mutation's text does not occur exactly once, a mutant fails its
 syntax check, a shell test is not listed, a test or one of its cases fails as
@@ -51,7 +53,7 @@ class Undecidable extends Error {}
  * @typedef {Readonly<{ path: string; tests: readonly string[]; policies: readonly Policy[] }>} Guarded
  * @typedef {Readonly<{ ignore: readonly string[]; scripts: readonly Guarded[] }>} Registry
  * @typedef {Readonly<{ script: string; text: string }>} Mutant
- * @typedef {Readonly<{ name: string; result: "passed" | "asserted" | "errored" }>} Case
+ * @typedef {Readonly<{ name: string; result: "passed"; ready: boolean } | { name: string; result: "asserted" | "errored" }>} Case
  * @typedef {Readonly<{ kind: "passed"; cases: readonly Case[] } | { kind: "failed"; ending: string; output: string; cases: readonly Case[] } | { kind: "unrunnable"; reason: string }>} Outcome
  */
 
@@ -136,9 +138,11 @@ function cases(output) {
   const starts = lines.flatMap((line, index) => (CASE.test(line) ? [index] : []));
   return starts.map((start, index) => {
     const [, word, name] = CASE.exec(lines[start]);
-    if (word === "PASS") return { name, result: "passed" };
     const own = lines.slice(start + 1, starts[index + 1]);
-    return { name, result: own.some((line) => ASSERTION_FAILED.test(line)) ? "asserted" : "errored" };
+    const ready = own.findIndex((line) => line.trim() === `ready ${name}`);
+    if (word === "PASS") return { name, result: "passed", ready: ready !== -1 };
+    const behaviour = ready === -1 ? [] : own.slice(ready + 1);
+    return { name, result: behaviour.some((line) => ASSERTION_FAILED.test(line)) ? "asserted" : "errored" };
   });
 }
 
@@ -302,13 +306,15 @@ function verdict(tests, mutants, outcomes) {
       case "passed":
         findings.push(`${test}: passes when ${mutant.script} breaks "${policy}", so the test does not run the policy it guards`);
         break;
-      case "failed":
+      case "failed": {
+        const ready = new Set(control.flatMap((found) => (found.result === "passed" && found.ready ? [found.name] : [])));
         if (names(outcome.cases) !== names(control)) {
           undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without reporting the cases it reports as it is, so no case shows that the test checks the policy`, outcome.output));
-        } else if (!outcome.cases.some(({ result }) => result === "asserted")) {
-          undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without a case that fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy`, outcome.output));
+        } else if (!outcome.cases.some(({ name, result }) => result === "asserted" && ready.has(name))) {
+          undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without a case that prints its ready line in both runs and then fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy`, outcome.output));
         }
         break;
+      }
       case "unrunnable":
         undecided.push(`${test} ${outcome.reason} when ${mutant.script} breaks "${policy}"`);
         break;

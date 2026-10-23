@@ -74,7 +74,7 @@ describe("U3 lifeforce hit and orb", () => {
     ]);
   });
 
-  test("the default outer orb forms on the rim tile farthest from where the player stepped into the 5x5, not from where they stand at the hit, or from the player who never entered", () => {
+  test("the default outer orb forms on the rim tile farthest from where the player stepped into the 5x5, including the first tile of a two-tile run, not from where they stand at the hit, or from the player who never entered", () => {
     const outerOrbAfterEntering = (walks: readonly At[], selection: DrillSelection = {}) => {
       const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
       walks.forEach((to, i) => {
@@ -90,9 +90,10 @@ describe("U3 lifeforce hit and orb", () => {
       outerOrbAfterEntering([{ x: 3, y: 3 }]),
       outerOrbAfterEntering([{ x: 7, y: 3 }]),
       outerOrbAfterEntering([{ x: 3, y: 3 }, { x: 7, y: 3 }]),
+      outerOrbAfterEntering([{ x: 3, y: 2 }, { x: 5, y: 4 }]),
       outerOrbAfterEntering([]),
       outerOrbAfterEntering([{ x: 3, y: 3 }], NEAR_PLAYER_OUTER_ORB),
-    ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
+    ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 7, y: 7 }], [{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
   });
 
   test("an unclaimed outer orb heals the boss by its credit at hit + 19 (62); an unclaimed inner orb or a collected outer orb does not", () => {

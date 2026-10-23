@@ -1,10 +1,12 @@
 const path = require("path");
 const CopyPlugin = require("copy-webpack-plugin");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 module.exports = {
   entry: "./src/index.ts",
   output: {
-    filename: "main.js",
+    filename: "assets/main.[contenthash].js",
+    assetModuleFilename: "assets/[contenthash][ext]",
     path: path.resolve(__dirname, "dist"),
     publicPath: "",
   },
@@ -23,10 +25,11 @@ module.exports = {
     },
   },
   plugins: [
+    new HtmlWebpackPlugin({ template: "src/index.html", inject: "body", scriptLoading: "blocking" }),
     new CopyPlugin({
       patterns: [
         { from: "public/osrs-assets", to: "osrs-assets", noErrorOnMissing: true },
-        { from: "index.html", to: "", context: "src/" },
+        { from: "_headers", to: "", context: "src/" },
         { from: "*.png", to: "", context: "node_modules/osrs-sdk/_bundles/", noErrorOnMissing: true },
         { from: "*.gif", to: "", context: "node_modules/osrs-sdk/_bundles/", noErrorOnMissing: true },
         { from: "*.ogg", to: "", context: "node_modules/osrs-sdk/_bundles/", noErrorOnMissing: true },

@@ -12,7 +12,7 @@ const PRESENCE = {
 } satisfies Record<BossState, Presence>;
 
 describe("boss states", () => {
-  test("every boss state the fight logs shows its contracted presence: hidden is neither drawn nor targetable, and every present state is both", () => {
+  test("guard: every boss state the fight logs shows its contracted presence: hidden is neither drawn nor targetable, and every present state is both", () => {
     const drill = startDrill();
     const observations = [];
     for (let t = 0; t <= 70; t++) {

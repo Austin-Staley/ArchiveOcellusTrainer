@@ -50,7 +50,7 @@ function sampleTracks(selection: DrillSelection, ticks: number, paint2d: Paint2d
 }
 
 describe("render paths", () => {
-  test("every entity drawn in both 2D and 3D during a tick is drawn over the same fractions of it, including the explosion mark from its first fifth", () => {
+  test("guard: every entity drawn in both 2D and 3D during a tick is drawn over the same fractions of it, including the explosion mark from its first fifth", () => {
     const tracks = FOCUSES.flatMap((focus) => sampleTracks({ focus }, 60));
     const firstMark = tracks.find((track) => track.entity === "explosions:ExplosionView@5,1" && track.tick === 17);
     expect({
@@ -62,13 +62,13 @@ describe("render paths", () => {
     });
   }, 30_000);
 
-  test("a 2D mark whose shards draw at zero size is a gap until its glow shows halfway through the tick", () => {
+  test("guard: a 2D mark whose shards draw at zero size is a gap until its glow shows halfway through the tick", () => {
     const zeroSizeShards: Paint2d = (entity, at, context) => entity.draw(at, zeroSizeFillRects(context));
     const firstMark = sampleTracks({ focus: "explosions" }, 20, zeroSizeShards).filter((track) => track.entity === "explosions:ExplosionView@5,1" && track.tick === 17);
     expect(renderPathGaps(firstMark)).toEqual([{ entity: "explosions:ExplosionView@5,1", tick: 17, flatOnly: [], modelOnly: [0.1, 0.2, 0.3, 0.4, 0.5] }]);
   }, 30_000);
 
-  test("the 2D observer counts a draw only when it covers pixels", () => {
+  test("guard: the 2D observer counts a draw only when it covers pixels", () => {
     const pixel = (alpha: number) => (context: OffscreenCanvasRenderingContext2D) => {
       const image = new OffscreenCanvas(1, 1).getContext("2d")?.createImageData(1, 1);
       if (!image) throw new Error("no 2D context");

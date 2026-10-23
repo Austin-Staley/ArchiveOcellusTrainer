@@ -6,6 +6,8 @@ import { Ocellus } from "./mobs/Ocellus";
 import type { CombatStream } from "./p4/roll";
 
 export class OcellusPlayer extends Player {
+  private orderedPace: MovePace = "run-setting";
+
   constructor(
     region: Region,
     location: Location,
@@ -32,15 +34,16 @@ export class OcellusPlayer extends Player {
   }
 
   override moveTo(x: number, y: number, pace: MovePace = "run-setting"): void {
+    this.orderedPace = pace;
     super.moveTo(x, y, pace);
     this.report({ kind: "walk-ordered", destination: tile(x, y), pace });
   }
 
-  /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. */
+  /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. The SDK keeps the order's pace private, so the player holds it to re-order at the same pace. */
   override determineDestination(): void {
     super.determineDestination();
     const to = this.destinationLocation;
-    if (to && Collision.collideableEntitiesAtPoint(this.region, to.x, to.y, 1).length > 0) super.moveTo(to.x, to.y);
+    if (to && Collision.collideableEntitiesAtPoint(this.region, to.x, to.y, 1).length > 0) super.moveTo(to.x, to.y, this.orderedPace);
   }
 
   override pretick(): void {

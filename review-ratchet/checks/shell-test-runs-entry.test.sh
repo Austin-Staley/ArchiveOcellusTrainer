@@ -6,6 +6,12 @@ FIXTURES="$(cd "$(dirname "$0")/../fixtures/substituted-policy" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# shell-test-runs-entry.mjs counts a failure under a mutation only when this line is printed.
+fail() {
+  printf 'ASSERTION FAILED: %s\n' "$*"
+  exit 1
+}
+
 POSITION='scripts/build.test.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
 
 # Each row is name|fixture|exit|line|setup. setup runs inside a copy of the fixture before the check, and line must appear in the check's output.
@@ -36,8 +42,8 @@ run_case() {
   (cd "$tree" && eval "$setup") || { echo "setup failed"; return 1; }
   node "$CHECK" "$tree" >"$WORK/$name.out" 2>&1
   local actual=$?
-  [[ "$actual" == "$status" ]] || { echo "exit $actual, expected $status"; cat "$WORK/$name.out"; return 1; }
-  grep -qxF -- "$line" "$WORK/$name.out" || grep -qxF -- "shell-test-runs-entry: $line" "$WORK/$name.out" || { echo "missing: $line"; cat "$WORK/$name.out"; return 1; }
+  [[ "$actual" == "$status" ]] || { cat "$WORK/$name.out"; fail "exit $actual, expected $status"; }
+  grep -qxF -- "$line" "$WORK/$name.out" || grep -qxF -- "shell-test-runs-entry: $line" "$WORK/$name.out" || { cat "$WORK/$name.out"; fail "missing: $line"; }
 }
 
 hanging_test() {
@@ -46,13 +52,13 @@ hanging_test() {
   printf 'sleep 30\n' >"$tree/scripts/build.test.sh"
   node "$CHECK" --timeout 1 "$tree" >"$WORK/hanging.out" 2>&1
   local actual=$?
-  [[ "$actual" == 2 ]] || { echo "exit $actual, expected 2"; cat "$WORK/hanging.out"; return 1; }
-  grep -qxF "shell-test-runs-entry: scripts/build.test.sh timed out after 1s before any mutation" "$WORK/hanging.out" || { cat "$WORK/hanging.out"; return 1; }
+  [[ "$actual" == 2 ]] || { cat "$WORK/hanging.out"; fail "exit $actual, expected 2"; }
+  grep -qxF "shell-test-runs-entry: scripts/build.test.sh timed out after 1s before any mutation" "$WORK/hanging.out" || { cat "$WORK/hanging.out"; fail "missing the timeout line"; }
 }
 
 failed=0
 report() {
-  if "$@" >"$WORK/case.log" 2>&1; then
+  if ("$@") >"$WORK/case.log" 2>&1; then
     echo "PASS $NAME"
   else
     echo "FAIL $NAME"

@@ -139,4 +139,18 @@ describe("U3 lifeforce hit and orb", () => {
       hpAt50: 70,
     });
   });
+
+  test("an orb never forms on a floor hole: seed 5's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
+    const orbs = (runSeed: number, selection: DrillSelection, until: number) => {
+      const drill = startDrill({ seed: runSeed, selection });
+      drill.playCorrectlyTo(until);
+      const observed = [drill.region.fightLog().header.choices.floorHoleLayout.key, drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile])];
+      drill.dispose();
+      return observed;
+    };
+    expect([orbs(5, {}, 12), orbs(2, { outerOrbTile: "any-floor" }, 43)]).toEqual([
+      ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
+      ["v1-turn", [[12, "inner-void", { x: 2, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
+    ]);
+  });
 });

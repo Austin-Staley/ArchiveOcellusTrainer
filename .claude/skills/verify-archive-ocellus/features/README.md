@@ -41,6 +41,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Settings menu and run results](./settings-and-results.md) covers the Settings menu, the kill and death result panel and the `bosshp` link option.
 - [Click to walk](./click-to-walk.md) covers walking the player to a clicked floor tile, walking one tile a tick on a Control-click, and stopping at the platform's edge.
 - [Credit line](./credit-line.md) covers the Fan Content Policy credit that must stay visible.
+- [What's new and the version label](./whats-new.md) covers the What's new panel in Settings, its unseen dot, and the version beside the credit line.
 - [Seed per run](./seed.md) covers the fresh seed for each run, the seed box, and replaying a typed seed.
 - [P4 cycle](./p4-cycle.md) covers the boss, the lead-in, the 60-tick cycle's stages and overheads, the fight log and the drill focus control.
 - [Loadouts](./loadouts.md) covers the ranged and melee setups, inventory switches, Ralos's Division special attack and the setup control.

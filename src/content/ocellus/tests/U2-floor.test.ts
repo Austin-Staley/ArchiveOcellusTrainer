@@ -5,7 +5,7 @@ import { FLOOD_NORTH_OF_RING, RING_NORTH, SPAWN_ON_FLOOD, UNDER_BOSS, startDrill
 const VOID_FLOOR = { focus: "void-floor" } as const;
 
 function innerVoidHits(selection: DrillSelection, leaveAfter: number) {
-  const drill = startDrill({ selection: { ...VOID_FLOOR, ...selection } });
+  const drill = startDrill({ selection: { ...VOID_FLOOR, drillStart: "cycle-start", ...selection } });
   drill.walkTo(RING_NORTH);
   drill.tickTo(leaveAfter);
   drill.walkTo(SPAWN_ON_FLOOD);

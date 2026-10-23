@@ -271,7 +271,7 @@ export class Ocellus extends Mob {
     const run = this.run;
     switch (run.kind) {
       case "waiting":
-        this.step(this.schedule.at(tick(0)), null, run.inputs);
+        this.step(this.schedule.at(this.schedule.start), null, run.inputs);
         return;
       case "between":
         this.step(this.schedule.at(tick(run.last.tick + 1)), run.last.phase, run.inputs);
@@ -368,7 +368,7 @@ export class Ocellus extends Mob {
     const run = this.run;
     switch (run.kind) {
       case "waiting":
-        return this.schedule.at(tick(0)).phase;
+        return this.schedule.at(this.schedule.start).phase;
       case "stepping":
       case "killed":
         return run.draft.phase;

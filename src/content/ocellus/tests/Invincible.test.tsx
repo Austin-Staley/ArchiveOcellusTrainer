@@ -140,7 +140,7 @@ describe("Invincible", () => {
     },
   ] as const)("scythe swings into Deflect Melee, $lethal: off, the run dies on those receipts; on, one death is prevented, naming the first lethal hit", ({ seed, at, blocked, hits, source, chat }) => {
     const scytheTheBoss = (invincible: boolean) => {
-      const drill = startDrill({ seed, selection: { focus: "rifts", setup: "melee", hoverMeleeReach: "reachable" } });
+      const drill = startDrill({ seed, selection: { focus: "rifts", setup: "melee", hoverMeleeReach: "reachable", drillStart: "cycle-start" } });
       drill.region.invincible = invincible;
       drill.tickTo(13);
       drill.player().setAggro(drill.boss());

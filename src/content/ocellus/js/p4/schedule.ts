@@ -1,4 +1,4 @@
-import type { Focus, ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } from "../OcellusTimings";
+import type { DrillStart, Focus, ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Beat, BossOverhead, Cycle, Mechanic, Phase, Seed, Special, Tick, TransitionKind, VoidKind } from "../P4Types";
 import { cycle, ordinal, tick } from "../P4Types";
@@ -61,11 +61,17 @@ function mechanicOf(beat: Beat): Mechanic | null {
 }
 
 export class Schedule {
+  readonly start: Tick;
+
   private constructor(
     private readonly leadIn: readonly Moment[],
     private readonly slots: readonly Slot[],
     private readonly focus: Focus,
-  ) {}
+    drillStart: DrillStart,
+    horizon: number,
+  ) {
+    this.start = this.startTick(drillStart, horizon);
+  }
 
   static compile(seed: Seed, choices: ResolvedChoices): Schedule {
     const { leadIn, cycle: stages, overheads, lifeforce, orb, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
@@ -170,7 +176,26 @@ export class Schedule {
     };
 
     const slots = beats.map((slotBeats, offset): Slot => ({ phase: phaseAt(offset), beats: slotBeats }));
-    return new Schedule(leadInTable, slots, choices.focus.option.value);
+    // Rifts are the only beats gated by cycle, and they spawn before their first rift cycle starts.
+    return new Schedule(leadInTable, slots, choices.focus.option.value, choices.drillStart.option.value, leadInLength + length * firstRiftCycle);
+  }
+
+  private startTick(drillStart: DrillStart, horizon: number): Tick {
+    if (this.focus.kind === "full-fight") return tick(0);
+    switch (drillStart.kind) {
+      case "cycle-start":
+        return tick(0);
+      case "before-first-beat": {
+        for (let t = 0; t < horizon; t++) {
+          if (this.at(tick(t)).beats.some((beat) => mechanicOf(beat) !== null)) return tick(Math.max(0, t - drillStart.lead));
+        }
+        return tick(0);
+      }
+      default: {
+        const unhandled: never = drillStart;
+        return unhandled;
+      }
+    }
   }
 
   acts(mechanic: Mechanic): boolean {

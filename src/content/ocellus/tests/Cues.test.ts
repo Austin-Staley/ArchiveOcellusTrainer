@@ -30,7 +30,7 @@ describe("timing cues", () => {
   });
 
   test('the "End..." shout plays 12490 at 5, and each flood plays 12497 as it forms, at 39 and 99', () => {
-    expect(cuesThrough(100, { focus: "lifeforce-orb" }).sounds).toEqual([
+    expect(cuesThrough(100, { focus: "lifeforce-orb", drillStart: "cycle-start" }).sounds).toEqual([
       [5, "cache-sound:12490"],
       [39, "cache-sound:12497"],
       [99, "cache-sound:12497"],

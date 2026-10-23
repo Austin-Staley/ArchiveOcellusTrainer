@@ -42,14 +42,33 @@ describe("U1 cycle skeleton", () => {
     ]);
   });
 
-  test("a focus keeps the whole cycle running but lets only its mechanic's beats act", () => {
+  test("a focus starts 5 ticks before its mechanic first acts, keeps the cycle running from there and lets only its mechanic's beats act", () => {
     const drill = startDrill({ selection: { focus: "transition-attacks" } });
     drill.tickTo(67);
     expect(drill.rows().flatMap((row) => row.beats.map((b) => [row.tick, b.kind]))).toEqual([
-      [5, "boss-shouts"], [29, "boss-landing-starts"], [32, "special-tell"], [32, "special-sound"], [37, "special-hit"], [37, "special-sound"], [39, "soul-split-heal"],
+      [29, "boss-landing-starts"], [32, "special-tell"], [32, "special-sound"], [37, "special-hit"], [37, "special-sound"], [39, "soul-split-heal"],
       [60, "special-tell"], [60, "special-sound"], [65, "special-hit"], [65, "special-sound"], [67, "soul-split-heal"],
     ]);
-    expect(drill.events("stage-entered").map((e) => e.at)).toEqual([0, 8, 30, 39, 59]);
+    expect(drill.events("stage-entered").map((e) => [e.at, e.stage])).toEqual([[27, "inner-void"], [30, "after-inner"], [39, "outer-void"], [59, "after-outer"]]);
+    drill.dispose();
+  });
+
+  test.each([
+    [{ focus: "full-fight" }, 0],
+    [{ focus: "void-floor" }, 5],
+    [{ focus: "lifeforce-orb" }, 6],
+    [{ focus: "orb-retrieval" }, 5],
+    [{ focus: "explosions" }, 9],
+    [{ focus: "transition-attacks" }, 27],
+    [{ focus: "boss-heals" }, 6],
+    [{ focus: "rifts" }, 62],
+    [{ focus: "rifts", riftFirstCycle: "cycle-3" }, 122],
+    [{ focus: "floor-holes" }, 0],
+    [{ focus: "rifts", drillStart: "cycle-start" }, 0],
+  ] as const)("the run under %o starts on P4 tick %i", (selection, start) => {
+    const drill = startDrill({ selection });
+    drill.tickTo(start + 1);
+    expect(drill.rows().map((row) => row.tick)).toEqual([start, start + 1]);
     drill.dispose();
   });
 
@@ -179,7 +198,7 @@ describe("U1 cycle skeleton", () => {
   test("native combat rolls replay from the seed, and the SDK's random source is restored between ticks", () => {
     const fight = (global: number) => {
       Random.setRandom(() => global);
-      const drill = startDrill({ selection: { focus: "rifts" } });
+      const drill = startDrill({ selection: { focus: "rifts", drillStart: "cycle-start" } });
       drill.tickTo(8);
       drill.player().setAggro(drill.boss());
       drill.tickTo(40);

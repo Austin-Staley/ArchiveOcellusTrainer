@@ -161,6 +161,7 @@ type GeometryRecipe = Readonly<{
 }>;
 
 export type Focus = Readonly<{ kind: "full-fight" }> | Readonly<{ kind: "drill"; mechanics: readonly [Mechanic, ...Mechanic[]] }>;
+export type DrillStart = Readonly<{ kind: "before-first-beat"; lead: TickSpan }> | Readonly<{ kind: "cycle-start" }>;
 
 type BossPose =
   | "idle"
@@ -701,7 +702,7 @@ const GEAR: GearRecipe = {
 
 const PRACTICE = owner("practice one mechanic at a time; a drill option, not game data");
 const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus> =>
-  selected<Focus>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs in full; only these mechanics act", PRACTICE);
+  selected<Focus>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs from the drill's start; only these mechanics act", PRACTICE);
 
 export const OCELLUS_P4 = {
   vods: VODS,
@@ -803,6 +804,10 @@ export const OCELLUS_P4 = {
       rifts: drill("rifts"),
       "floor-holes": drill("floor-holes"),
     }),
+    drillStart: choice("at-mechanic", {
+      "at-mechanic": selected<DrillStart>({ kind: "before-first-beat", lead: span(5) }, "assumption", "unscaled", "a drill starts 5 ticks before its first focused beat, or at tick 0 when it has none, as floor holes do; the full fight always starts at 0", owner("jumping straight to a mechanic", "2026-10-22")),
+      "cycle-start": selected<DrillStart>({ kind: "cycle-start" }, "assumption", "unscaled", "a drill starts at P4 tick 0 with the full fight", PRACTICE),
+    }),
   },
 } as const;
 
@@ -869,6 +874,7 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     orbPickupRadius: pick("orbPickupRadius"),
     outerOrbTile: pick("outerOrbTile"),
     focus: pick("focus"),
+    drillStart: pick("drillStart"),
   };
 }
 

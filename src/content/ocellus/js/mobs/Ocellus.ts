@@ -270,9 +270,11 @@ export class Ocellus extends Mob {
   override queueStep(): void {
     const run = this.run;
     switch (run.kind) {
-      case "waiting":
-        this.step(this.schedule.at(this.schedule.start), null, run.inputs);
+      case "waiting": {
+        const { start } = this.schedule;
+        this.step(this.schedule.at(start), start > 0 ? this.schedule.at(tick(start - 1)).phase : null, run.inputs);
         return;
+      }
       case "between":
         this.step(this.schedule.at(tick(run.last.tick + 1)), run.last.phase, run.inputs);
         return;

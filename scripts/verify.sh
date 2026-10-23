@@ -29,7 +29,7 @@ CYCLE_OVERHEAD_SWITCHES='[[8,"deflect-melee"],[33,"soul-split"],[38,null],[39,"d
 CYCLE_SPECIAL_HITS='[[37,"vortex"],[65,"spike-disk"]]'
 FOCUS_DRILL="transition-attacks"
 FOCUS_LAST_TICK=40
-FOCUS_BEATS='["boss-landing-starts","boss-shouts","soul-split-heal","special-hit","special-sound","special-tell"]'
+FOCUS_EXPECTED='{"start":27,"beats":["boss-landing-starts","soul-split-heal","special-hit","special-sound","special-tell"]}'
 LOADOUT_QUERY="?seed=6&setup=ranged"
 LOADOUT_RANGED_WORN='{"weapon":20997,"offhand":null,"helmet":27235,"chest":27238,"legs":27241,"gloves":26235,"cape":28951,"necklace":33639,"feet":31097,"ring":28310,"ammo":11212}'
 LOADOUT_MELEE_WORN='{"weapon":22325,"offhand":null,"helmet":24419,"chest":24420,"legs":24421,"gloves":22981,"cape":21295,"necklace":29801,"feet":31097,"ring":25485,"ammo":11212}'
@@ -163,7 +163,7 @@ STYLE_WINDOWS='[[32,37.5],[60,65.5],[92,97.5]]'
 SOUND_TOLERANCE_TICKS=0.2
 SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
 ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[12,{"x":9,"y":4},49]],"matured":[[24,{"x":9,"y":4}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
-RIFT_QUERY="?seed=1&focus=rifts"
+RIFT_QUERY="?seed=1&focus=rifts&drillStart=cycle-start"
 OVERHEAD_SHOT_TICKS="5 31 35 45"
 OVERHEAD_GAP_DRAWS='{"37":["440-11"],"38":[],"39":["440-16"],"66":["440-11"],"67":[],"68":["440-15"]}'
 ICON_BOX='{"minX":-40,"maxX":40,"minY":-290,"maxY":-190}'
@@ -190,7 +190,7 @@ KILL_RESULT_BOSS_HP=1
 KILL_RESULT_CLICK_TICK=12
 KILL_RESULT_LINES='["Ocellus defeated","P4 time: 16 ticks (0:09.6)"]'
 RESULT_BUTTONS='["Restart","Retry seed"]'
-DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
+DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee&drillStart=cycle-start"
 DEFLECT_CLICK_TICK=12
 DEFLECT_HOVER_SHOT_TICK=20
 DEFLECT_HOVER_TILE='{"x":5,"y":3}'
@@ -198,7 +198,7 @@ DEFLECT_HOVER_TICKS='[14,29]'
 DEFLECT_FIRST_MELEE_TICK=31
 DEFLECT_BLOCKED_SHOT_TICK=31
 DEFLECT_LAST_TICK=46
-REFLECT_QUERY="?seed=4&focus=rifts"
+REFLECT_QUERY="?seed=4&focus=rifts&drillStart=cycle-start"
 REFLECT_CLICK_TICK=38
 REFLECT_BOSS_CLICK_UP_PX=100
 REFLECT_NONE_SHOT_TICK=42
@@ -217,7 +217,7 @@ RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
 RIFT_KILL_SOUND='[0.27,12640]'
 RIFT_BURST_SOUNDS='[[90.13,12641],[90.93,12642]]'
 RIFT_SOUND_WINDOW='[66,92]'
-CUE_QUERY="?seed=1&focus=${ORB_DRILL}"
+CUE_QUERY="?seed=1&focus=${ORB_DRILL}&drillStart=cycle-start"
 CUE_TOGGLE_TICK=6
 CUE_CHAT_BEFORE_TICK=10
 CUE_CHAT_TICK=11
@@ -1325,7 +1325,7 @@ drive() {
   done
 
   node -e '
-    const [dir, spawn, target, edgeOrder, edgeStop, holdTicks, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusBeats, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected, orbBox, orbFrames,
+    const [dir, spawn, target, edgeOrder, edgeStop, holdTicks, bossNpc, lastHiddenTick, lastTick, stages, overheads, specials, focusKey, focusExpected, square, floodDamage, floodLast, voidHits, voidEnd, voidPixel, rangedWorn, meleeWorn, drain, orbExpected, orbBox, orbFrames,
       innerMarks, lateMark, explosionPixel, explosionExpected, soundSamples, explosionSounds, centreX, centreY, tellBox, specialExpected,
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
       supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat,
@@ -1520,7 +1520,7 @@ drive() {
       stageEntries: events(cycle.rows, "stage-entered", (e) => [e.at, e.stage]),
       overheadSwitches: events(cycle.rows, "overhead-switched", (e) => [e.at, e.overhead]),
       specialHits: upTo(cycle.rows, Number(lastTick)).flatMap((row) => row.beats.filter((b) => b.kind === "special-hit").map((b) => [row.tick, b.variant])),
-      focusBeats: [...new Set(focus.rows.flatMap((row) => row.beats.map((b) => b.kind)))].sort(),
+      focus: { start: focus.rows[0]?.tick ?? null, beats: [...new Set(focus.rows.flatMap((row) => row.beats.map((b) => b.kind)))].sort() },
       floodShot: {
         launch: launch && { at: launch.tick, startedOn: launch.playerAtBossStep.tile, firedFrom: launch.playerAtPostTick.tile, floorHitOnStart: floorHit(launch) },
         landing: landing && { at: landing.at, style: landing.style, outcome: landing.outcome, damage: landing.requested, bossHp: [landing.bossHp.atBossStep, landing.bossHp.atPostTick] },
@@ -1715,7 +1715,7 @@ drive() {
       stagesOnSchedule: sameJson(observed.stageEntries, stages),
       overheadsOnSchedule: sameJson(observed.overheadSwitches, overheads),
       transitionAttacksReplayed: sameJson(observed.specialHits, specials),
-      focusApplied: focus.header.choices.focus.key === focusKey && sameJson(observed.focusBeats, focusBeats),
+      focusApplied: focus.header.choices.focus.key === focusKey && sameJson(observed.focus, focusExpected),
       rangedShotFromTheFlood: launch !== undefined && !inSquare(edgeStopTile) && same(launch.playerAtBossStep.tile, edgeStopTile) && same(launch.playerAtPostTick.tile, edgeStopTile) && floorHit(launch),
       rangedShotLanded: launch !== undefined && landing !== undefined && landing.at > launch.tick && landing.outcome === "passed" && landing.requested > 0 &&
         landing.bossHp.atBossStep - landing.bossHp.atPostTick === landing.requested,
@@ -1829,7 +1829,7 @@ drive() {
     }
     console.log(JSON.stringify({ hidden, before, after, target: targetTile, edge: { order: edgeOrderTile, stop: edgeStopTile }, observed, checks }, null, 2));
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
-  ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$EDGE_ORDER_TILE" "$EDGE_STOP_TILE" "$EDGE_HOLD_TICKS" "$BOSS_NPC" "$CYCLE_LAST_HIDDEN_TICK" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_BEATS" \
+  ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$EDGE_ORDER_TILE" "$EDGE_STOP_TILE" "$EDGE_HOLD_TICKS" "$BOSS_NPC" "$CYCLE_LAST_HIDDEN_TICK" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_EXPECTED" \
     "$NEAR_SQUARE" "$FLOOD_DAMAGE_TICK" "$FLOOD_LAST_TICK" "$VOID_FLOOR_HITS" "$VOID_RUN_END" "$VOID_PIXEL" \
     "$LOADOUT_RANGED_WORN" "$LOADOUT_MELEE_WORN" "$LOADOUT_DIVISION_DRAIN" "$ORB_EXPECTED" "$ORB_BOX" "$ORB_FRAMES" \
     "[${EXPLOSION_INNER_MARKS// /,}]" "${EXPLOSION_OUTER_MARKS%% *}" "$EXPLOSION_PIXEL" "$EXPLOSION_EXPECTED" "$SOUND_SAMPLES" "$EXPLOSION_SOUNDS" "$CX" "$CY" "$TELL_BOX" "$SPECIAL_EXPECTED" \

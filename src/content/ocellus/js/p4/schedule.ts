@@ -74,7 +74,7 @@ export class Schedule {
   }
 
   static compile(seed: Seed, choices: ResolvedChoices): Schedule {
-    const { leadIn, cycle: stages, overheads, lifeforce, orb, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
+    const { leadIn, cycle: stages, overheads, lifeforce, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
     const hidden = leadIn.hiddenFor.value;
     const leadInLength = hidden + leadIn.presentFor.value;
     const shout = leadIn.shout.value;
@@ -108,9 +108,10 @@ export class Schedule {
       put(start + lifeforce.tellAfterOnset.value, `${kind} lifeforce tell`, () => ({ kind: "lifeforce-tell", void: kind }));
       put(hit, `${kind} lifeforce hit`, () => ({ kind: "lifeforce-hit", void: kind }));
       put(hit + recipe.orbMaturesAfterHit.value, `${kind} orb maturity`, () => ({ kind: "orb-matures", void: kind }));
-      put(hit + orb.lastHealAfterHit.value, `${kind} orb expiry`, () => ({ kind: "orb-expires", void: kind }));
+      const expiry = start + recipe.duration.value + recipe.orbLingersAfterClear.value;
+      put(expiry, `${kind} orb expiry`, () => ({ kind: "orb-expires", void: kind }));
       if (kind === "outer-void" && unclaimed.kind === "heals-boss") {
-        if (unclaimed.afterHit <= orb.lastHealAfterHit.value) throw new RangeError(`an unclaimed outer orb must heal the boss after its last pickup at hit + ${orb.lastHealAfterHit.value}, not at hit + ${unclaimed.afterHit}`);
+        if (hit + unclaimed.afterHit <= expiry) throw new RangeError(`an unclaimed outer orb must heal the boss after it expires at ${expiry}, not at ${hit + unclaimed.afterHit}`);
         put(hit + unclaimed.afterHit, "unclaimed outer orb heal", () => ({ kind: "unclaimed-orb-heals" }));
       }
       put(hit + explosionCues.seriesStartsAfterHit.value, `${kind} explosion series start`, () => ({ kind: "explosion-series-starts", void: kind }));

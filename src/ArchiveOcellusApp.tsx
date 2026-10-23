@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
@@ -6,6 +7,9 @@ import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { DrillConfig } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P4, parseDrillRequest } from "./content/ocellus/js/OcellusTimings";
 import type { FightLog, FightSnapshot, RunState } from "./content/ocellus/js/P4Types";
+import { CHANGELOG } from "./content/ocellus/changelog";
+import type { ReleaseVersion } from "./releases";
+import { releaseDate } from "./releases";
 import { keepHoverTextOnCanvas } from "./hoverText";
 
 keepHoverTextOnCanvas();
@@ -121,21 +125,61 @@ function startRun({ setup, focus, seed, invincible }: RunRequest) {
   window.location.assign(url.href);
 }
 
+const [LATEST_RELEASE] = CHANGELOG;
+const SEEN_RELEASE_KEY = "archive-ocellus:seen-release";
+
+function seenRelease(): string | null {
+  try {
+    return localStorage.getItem(SEEN_RELEASE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberSeenRelease(version: ReleaseVersion) {
+  try {
+    localStorage.setItem(SEEN_RELEASE_KEY, version);
+  } catch {}
+}
+
+const UnseenDot = () => <span className="unseen_dot" role="img" aria-label="new" />;
+
+type MenuView = "closed" | "settings" | "whats-new";
+
 function DrillControls({ config, region }: Readonly<{ config: DrillConfig; region: OcellusRegion }>) {
   const [setup, setSetup] = useState<string>(config.choices.setup.key);
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [view, setView] = useState<MenuView>("closed");
+  const [unseen, setUnseen] = useState(() => seenRelease() !== LATEST_RELEASE.version);
   const form = useRef<HTMLFormElement>(null);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const whatsNewTitle = useRef<HTMLHeadingElement>(null);
   const { playsAudio, playsAreaAudio } = useSettingsSnapshot();
   const restart = (focus: string) => startRun({ setup, focus, seed: typedSeed?.trim() || null, invincible: region.invincible });
 
+  const openWhatsNew = () => {
+    rememberSeenRelease(LATEST_RELEASE.version);
+    flushSync(() => {
+      setView("whats-new");
+      setUnseen(false);
+    });
+    whatsNewTitle.current?.focus();
+  };
+
+  const closeWhatsNew = () => {
+    setView("closed");
+    settingsButton.current?.focus();
+  };
+
   useEffect(() => {
-    if (!menuOpen) return;
+    if (view === "closed") return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key !== "Escape") return;
+      if (view === "whats-new") closeWhatsNew();
+      else setView("closed");
     };
     const closeOutside = (event: Event) => {
-      if (event.target instanceof Node && !form.current?.contains(event.target)) setMenuOpen(false);
+      if (event.target instanceof Node && !form.current?.contains(event.target)) setView("closed");
     };
     // Capture, because the seed box and the SDK canvas stop their events from bubbling.
     document.addEventListener("keydown", closeOnEscape, true);
@@ -144,11 +188,11 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
       document.removeEventListener("keydown", closeOnEscape, true);
       document.removeEventListener("pointerdown", closeOutside, true);
     };
-  }, [menuOpen]);
+  }, [view]);
 
   return (
     <form id="drill_controls" ref={form} onSubmit={(event) => { event.preventDefault(); restart(config.choices.focus.key); }}>
-      <div id="settings_menu" hidden={!menuOpen}>
+      <div id="settings_menu" hidden={view !== "settings"}>
         <label>
           Setup{" "}
           <select id="setup" value={setup} onChange={(event) => setSetup(event.target.value)}>
@@ -174,8 +218,21 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
         </label>
+        <button id="whats_new" type="button" onClick={openWhatsNew}>What's new{unseen && <UnseenDot />}</button>
       </div>
-      <button id="settings" type="button" aria-expanded={menuOpen} aria-controls="settings_menu" onClick={() => setMenuOpen((open) => !open)}>⚙ Settings</button>
+      <section id="whats_new_panel" role="dialog" aria-labelledby="whats_new_title" hidden={view !== "whats-new"}>
+        <h2 id="whats_new_title" ref={whatsNewTitle} tabIndex={-1}>What's new</h2>
+        {CHANGELOG.map(({ version, notes }) => (
+          <article key={version}>
+            <h3><time dateTime={releaseDate(version)}>{version}</time></h3>
+            <ul>{notes.map((note) => <li key={note}>{note}</li>)}</ul>
+          </article>
+        ))}
+        <button id="whats_new_close" type="button" onClick={closeWhatsNew}>Close</button>
+      </section>
+      <button id="settings" ref={settingsButton} type="button" aria-expanded={view !== "closed"} aria-controls="settings_menu" onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>
+        ⚙ Settings{unseen && <UnseenDot />}
+      </button>
       <button id="restart" type="submit">Restart</button>
     </form>
   );
@@ -273,7 +330,10 @@ export function ArchiveOcellusApp() {
         <GameChat region={region} />
         <DrillControls config={config} region={region} />
         <RunResultPanel config={config} region={region} />
-        <p id="credit_line">{CREDIT_LINE}</p>
+        <footer id="credits">
+          <p id="credit_line">{CREDIT_LINE}</p>
+          <p id="app_version">v{LATEST_RELEASE.version}</p>
+        </footer>
       </GameOverlay>
     </TrainerApp>
   );

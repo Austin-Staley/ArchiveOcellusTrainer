@@ -1,6 +1,6 @@
 # Settings menu and run results
 
-The drill controls sit behind one Settings button at the bottom left, beside a Restart button that is always visible. The menu holds Setup, Focus, Seed, Keybinds, Sound effects, Area sounds and Invincible, and closes on a second click, Escape or a click outside it. When a run ends, a result panel over the game shows "Ocellus defeated" with the P4 time, or "You died" with the P4 tick, and offers Restart and Retry seed. `bosshp=N` in the link starts P4 at N boss hitpoints, so a tester can reach the kill result fast.
+The drill controls sit behind one Settings button at the bottom left, beside a Restart button that is always visible. The menu holds Setup, Focus, Seed, Keybinds, Sound effects, Area sounds, Invincible and What's new, and closes on a second click, Escape or a click outside it. When a run ends, a result panel over the game shows "Ocellus defeated" with the P4 time, or "You died" with the P4 tick, and offers Restart and Retry seed. `bosshp=N` in the link starts P4 at N boss hitpoints, so a tester can reach the kill result fast.
 
 ## Sub-features
 
@@ -25,7 +25,7 @@ Preconditions:
 - The baseline preconditions in the index hold.
 
 - **Closed.** Open `?seed=1`. `agent-browser --json is visible "#settings_menu"` is `false`, `#seed` is not visible, and `#settings`, `#restart` and `#credit_line` are visible.
-- **Open.** `agent-browser click "#settings"`. `#settings_menu` and all seven controls are visible, `#settings` has `aria-expanded="true"`, and the menu's box from `get box "#settings_menu"` lies inside the viewport.
+- **Open.** `agent-browser click "#settings"`. `#settings_menu` and all eight controls are visible, `#settings` has `aria-expanded="true"`, and the menu's box from `get box "#settings_menu"` lies inside the viewport.
 - **Close.** Click `#settings` again, or press Escape, or click the canvas centre. `#settings_menu` is not visible. A click on `#seed` inside the open menu leaves it open.
 - **Small and phone.** Repeat at `agent-browser set viewport 800 600` and in a separate session after `agent-browser set device "iPhone 14"`. `document.documentElement.scrollWidth` equals `innerWidth` with the menu closed and open.
 - **Death.** Open `?seed=1&focus=void-floor` and wait until `snapshot().fight.run.kind` is `ended` (P4 tick 54), then 600 ms for the panel's poll. `#run_result` reads "You died" and "on P4 tick 54" with Restart and Retry seed. Click `#result_restart`; the new `location.search` is `?focus=void-floor&setup=ranged` with a fresh seed.

@@ -108,6 +108,13 @@ export function startDrill(options: DrillOptions = {}) {
         .map((fill) => ({ x: Math.floor(fill.x / Settings.tileSize), y: Math.floor(fill.y / Settings.tileSize) }))
         .sort((a, b) => a.x - b.x || a.y - b.y);
     },
+    drawnShardReach(around: At, tickPercent: number): readonly number[] {
+      const shard = OCELLUS_P4.explosion.shards.value;
+      const scale = Settings.tileSize;
+      return paintedFills((context) => region.entities.forEach((entity) => entity.draw(tickPercent, context)))
+        .filter((fill) => fill.style === shard)
+        .map((fill) => Math.hypot((fill.x + fill.width / 2) / scale - (around.x + 0.5), (fill.y + fill.height / 2) / scale - (around.y + 0.5)));
+    },
     walkTo,
     pray,
     clickInventory(cacheItemId: number) {

@@ -55,6 +55,14 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
+  test("in 2D, the mark's shards close in on the player's tile through the first half of the mark tick, then give way to the glow", () => {
+    const drill = startDrill({ selection: EXPLOSIONS });
+    drill.tickTo(17);
+    const reach = [0.1, 0.25, 0.45, 0.75].map((t) => drill.drawnShardReach(SPAWN_ON_FLOOD, t).map((tiles) => Math.round(tiles * 10) / 10));
+    expect(reach).toEqual([Array(7).fill(0.7), Array(7).fill(0.5), Array(7).fill(0.3), []]);
+    drill.dispose();
+  });
+
   test("standing under the boss gives no cover: stepping under on a mark tick leaves that mark behind, and the next mark under the boss hits", () => {
     const drill = startDrill({ selection: EXPLOSIONS });
     drill.walkTo(FLOOD_NORTH_OF_RING);

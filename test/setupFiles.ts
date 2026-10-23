@@ -1,7 +1,10 @@
 /// <reference types="vitest/globals" />
 
 const canvasContext = new Proxy({}, {
-  get: (target, property) => property === "measureText" ? () => ({ width: 0 }) : () => undefined,
+  get: (target, property) =>
+    property === "measureText" ? () => ({ width: 0 })
+    : property === "createImageData" ? (width: number, height: number) => ({ width, height, data: new Uint8ClampedArray(4 * width * height) })
+    : () => undefined,
   set: () => true,
 });
 

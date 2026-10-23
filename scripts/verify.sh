@@ -1513,6 +1513,8 @@ whats_new_state() {
       creditBox: box('credit_line'),
       versionBox: box('app_version'),
       seen: localStorage.getItem('archive-ocellus:seen-release'),
+      focused: document.activeElement?.id || null,
+      focusedVisible: visible(document.activeElement),
       viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
     };
   })()" | json data.result
@@ -1523,7 +1525,7 @@ open_whats_new_page() {
 }
 
 drive_whats_new() {
-  local notes first menu opened small phone closed escape reloaded reopened
+  local notes first menu opened small phone closed escape key_menu key_opened key_closed key_escaped reloaded reopened
   notes="$(node scripts/release-notes.mjs)" || { log "release-notes.mjs rejected the changelog"; return 1; }
   open_whats_new_page || return 1
   first="$(whats_new_state)" || return 1
@@ -1544,6 +1546,14 @@ drive_whats_new() {
   closed="$(whats_new_state)" || return 1
   open_settings && ab click "#whats_new" >/dev/null && ab wait 300 >/dev/null && ab press Escape >/dev/null && ab wait 300 >/dev/null || { log "Escape was not pressed on the open What's new panel"; return 1; }
   escape="$(whats_new_state)" || return 1
+  ab focus "#settings" >/dev/null && ab press Enter >/dev/null && ab press Shift+Tab >/dev/null && ab wait 300 >/dev/null || { log "Settings was not opened from the keyboard"; return 1; }
+  key_menu="$(whats_new_state)" || return 1
+  ab press Enter >/dev/null && ab wait 300 >/dev/null || { log "Enter was not pressed on What's new"; return 1; }
+  key_opened="$(whats_new_state)" || return 1
+  ab focus "#whats_new_close" >/dev/null && ab press Enter >/dev/null && ab wait 300 >/dev/null || { log "Enter was not pressed on Close"; return 1; }
+  key_closed="$(whats_new_state)" || return 1
+  ab focus "#settings" >/dev/null && ab press Enter >/dev/null && ab press Shift+Tab >/dev/null && ab press Enter >/dev/null && ab wait 300 >/dev/null && ab press Escape >/dev/null && ab wait 300 >/dev/null || { log "Escape was not pressed on the keyboard-opened panel"; return 1; }
+  key_escaped="$(whats_new_state)" || return 1
   ab --json errors | json data.errors >"$VERIFY_DIR/whats-new-page-errors.json" || { log "page error capture failed"; return 1; }
   open_whats_new_page || return 1
   reloaded="$(whats_new_state)" || return 1
@@ -1553,8 +1563,8 @@ drive_whats_new() {
   ab --json errors | json data.errors >"$VERIFY_DIR/whats-new-reload-page-errors.json" || { log "page error capture failed"; return 1; }
   ab press Escape >/dev/null
 
-  printf '{"first":%s,"menu":%s,"opened":%s,"small":%s,"phone":%s,"closed":%s,"escape":%s,"reloaded":%s,"reopened":%s}\n' \
-    "$first" "$menu" "$opened" "$small" "$phone" "$closed" "$escape" "$reloaded" "$reopened" >"$VERIFY_DIR/whats-new.json"
+  printf '{"first":%s,"menu":%s,"opened":%s,"small":%s,"phone":%s,"closed":%s,"escape":%s,"keyMenu":%s,"keyOpened":%s,"keyClosed":%s,"keyEscaped":%s,"reloaded":%s,"reopened":%s}\n' \
+    "$first" "$menu" "$opened" "$small" "$phone" "$closed" "$escape" "$key_menu" "$key_opened" "$key_closed" "$key_escaped" "$reloaded" "$reopened" >"$VERIFY_DIR/whats-new.json"
   node -e '
     const fs = require("fs"), [dir, notes, credit] = process.argv.slice(1);
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
@@ -1570,6 +1580,8 @@ drive_whats_new() {
       dotClearsOnOpen: !w.opened.settingsDot && w.opened.seen === newest.version,
       panelFitsEveryViewport: [w.opened, w.small, w.phone].every((s) => s.panel && inViewport(s) && noPageScroll(s)) && w.small.viewport.width === 800 && w.phone.viewport.width < 500,
       panelClosesOnCloseAndEscape: !w.closed.panel && !w.closed.menu && !w.escape.panel && !w.escape.menu,
+      keyboardOpenFocusesPanelTitle: w.keyMenu.menu && w.keyMenu.focused === "whats_new" && w.keyOpened.panel && w.keyOpened.focused === "whats_new_title" && w.keyOpened.focusedVisible,
+      keyboardCloseAndEscapeFocusSettings: [w.keyClosed, w.keyEscaped].every((s) => !s.panel && !s.menu && s.focused === "settings" && s.focusedVisible),
       dotStaysClearedAfterReload: w.reloaded.seen === newest.version && !w.reloaded.settingsDot && w.reopened.whatsNewButton && !w.reopened.menuDot,
       versionBesideCredit: w.first.credit === credit && w.first.version === `v${newest.version}` && beside(w.first) && w.phone.version === `v${newest.version}`,
       noWhatsNewPageErrors: ["whats-new-page-errors.json", "whats-new-reload-page-errors.json"].map(read).every((list) => list.length === 0),

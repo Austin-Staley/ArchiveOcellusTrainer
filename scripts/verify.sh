@@ -242,6 +242,7 @@ KILL_RESULT_BOSS_HP=1
 KILL_RESULT_CLICK_TICK=12
 KILL_RESULT_LINES='["Ocellus defeated","P4 time: 16 ticks (0:09.6)"]'
 RESULT_BUTTONS='["Restart","Retry seed"]'
+LOAD_RETRY_QUERY="?seed=1"
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee&drillStart=cycle-start"
 DEFLECT_CLICK_TICK=12
 DEFLECT_HOVER_SHOT_TICK=20
@@ -1494,6 +1495,48 @@ drive_run_results() {
   return $verdict
 }
 
+drive_load_retry() {
+  local file opened deadline
+  file="$(node -p 'require(process.argv[1]).assets["npc-" + process.argv[2]].file' "$MANIFEST" "$BOSS_NPC")" || { log "the boss asset is not in the manifest"; return 1; }
+  ab open about:blank >/dev/null || return 1
+  ab network har start --content none >/dev/null || { log "HAR recording did not start"; return 1; }
+  ab network route "**/osrs-assets/${file}" --abort >/dev/null || { log "the boss asset route was not set"; return 1; }
+  ab network requests --clear >/dev/null || return 1
+  ab open "${URL}${LOAD_RETRY_QUERY}" >/dev/null &
+  opened=$!
+  deadline=$((SECONDS + 90))
+  until [[ "$(ab --json network requests --filter "$file" | json data.requests.length)" -gt 0 ]]; do
+    (( SECONDS < deadline )) || { log "the page never requested the boss asset"; ab network unroute >/dev/null; wait "$opened"; return 1; }
+  done
+  ab network unroute >/dev/null || { log "the boss asset route was not lifted"; return 1; }
+  wait "$opened" || return 1
+  ab wait --fn "window.__archiveOcellusProbe?.snapshot().tick >= 8" --timeout 90000 >/dev/null || log "the trainer never started ticking after the dropped boss asset"
+  ab network har stop "$VERIFY_DIR/load-retry.har" >/dev/null || { log "HAR capture failed"; return 1; }
+  ab --json network requests --filter "favicon.ico" | json data.requests >"$VERIFY_DIR/load-favicon-requests.json" || { log "favicon request capture failed"; return 1; }
+  ab --json eval "({ text: document.body.innerText, tick: window.__archiveOcellusProbe?.snapshot().tick ?? null })" | json data.result >"$VERIFY_DIR/load-retry.json" || { log "load state capture failed"; return 1; }
+  ab screenshot "$VERIFY_DIR/load-retry.png" >/dev/null || { log "load retry screenshot failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/load-retry-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  node -e '
+    const fs = require("fs"), [dir, file] = process.argv.slice(1);
+    const read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, "utf8"));
+    const attempts = read("load-retry.har").log.entries.filter((entry) => entry.request.url.endsWith(`/osrs-assets/${file}`)).map((entry) => entry.response.status);
+    const [page, favicon, errors] = ["load-retry.json", "load-favicon-requests.json", "load-retry-page-errors.json"].map(read);
+    const checks = {
+      droppedBossAssetRetried: attempts.length >= 2 && attempts[0] === 0 && attempts[attempts.length - 1] === 200,
+      trainerLoadsAfterTheDrop: page.tick >= 8 && !page.text.includes("Loading failed"),
+      noFaviconRequest: favicon.length === 0,
+      noLoadRetryPageErrors: errors.length === 0,
+    };
+    console.log(JSON.stringify({ attempts, favicon: favicon.map((request) => request.url), checks }, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$file" >"$VERIFY_DIR/load-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/load-checks.json"
+  [[ $verdict -eq 0 ]] || log "a load check failed"
+  return $verdict
+}
+
 whats_new_state() {
   ab --json eval "(() => {
     const visible = (element) => element?.checkVisibility() === true;
@@ -1599,7 +1642,7 @@ drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
   ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
-  drive_settings_menu && drive_run_results && drive_whats_new || return 1
+  drive_load_retry && drive_settings_menu && drive_run_results && drive_whats_new || return 1
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \

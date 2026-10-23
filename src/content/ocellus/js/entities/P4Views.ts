@@ -526,11 +526,20 @@ class ExplosionView extends Entity {
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
     if (this.blast !== "marked") return;
     const scale = Settings.tileSize;
+    const pose = burstPose("marked", tickPercent);
+    const [cx, cy] = [(this.location.x + 0.5) * scale, (this.location.y + 0.5) * scale];
     const radius = (MARK.glowTiles / 2) * scale;
+    const shard = MARK.shardTiles2d * scale;
     markSprite ??= sprite(MARK.glow, HEXAGON);
     context.save();
-    context.globalAlpha = burstPose("marked", tickPercent).glowOpacity;
-    context.drawImage(markSprite, (this.location.x + 0.5) * scale - radius, (this.location.y + 0.5) * scale - radius, 2 * radius, 2 * radius);
+    context.globalAlpha = pose.glowOpacity;
+    context.drawImage(markSprite, cx - radius, cy - radius, 2 * radius, 2 * radius);
+    context.globalAlpha = pose.shardOpacity;
+    context.fillStyle = SHARD_COLOUR;
+    for (let at = 0; at < SHARDS; at++) {
+      const angle = (2 * Math.PI * at) / SHARDS;
+      context.fillRect(cx + Math.cos(angle) * pose.shardRadius * scale - shard / 2, cy + Math.sin(angle) * pose.shardRadius * scale - shard / 2, shard, shard);
+    }
     context.restore();
   }
 

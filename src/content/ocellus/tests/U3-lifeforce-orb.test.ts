@@ -3,12 +3,12 @@ import type { At } from "./drill";
 import { RING_NORTH, startDrill } from "./drill";
 
 const ORB_DRILL = { focus: "lifeforce-orb" } as const;
-const INNER_ORB: At = { x: 1, y: 5 };
-const BESIDE_INNER_ORB: At = { x: 2, y: 5 };
+const INNER_ORB: At = { x: 9, y: 4 };
+const BESIDE_INNER_ORB: At = { x: 9, y: 3 };
 const OUTER_ORB_FROM_SPAWN: At = { x: 4, y: 3 };
 const NEAR_PLAYER_OUTER_ORB = { outerOrbTile: "safe-floor" } as const;
 const ANY_FLOOR_SEED = 31;
-const ANY_FLOOR_INNER_ORB: At = { x: 1, y: 3 };
+const ANY_FLOOR_INNER_ORB: At = { x: 10, y: 2 };
 const OUTER_ORB_ON_FLOOD: At = { x: 1, y: 2 };
 const V1_TURN = { floorHoleLayout: "v1-turn" } as const;
 
@@ -38,15 +38,15 @@ describe("U3 lifeforce hit and orb", () => {
     drill.dispose();
   });
 
-  test("the inner orb forms on (1, 5) on the hit tick, 12, and returns the stolen HP once, the tick after the player stands on it ready", () => {
+  test("the inner orb forms on (9, 4) on the hit tick, 12, and returns the stolen HP once, the tick after the player stands on it ready", () => {
     const drill = startDrill({ selection: ORB_DRILL });
     drill.tickTo(12);
-    expect(drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile, e.credit])).toEqual([[12, "inner-void", { x: 1, y: 5 }, 49]]);
+    expect(drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile, e.credit])).toEqual([[12, "inner-void", { x: 9, y: 4 }, 49]]);
     drill.walkTo(INNER_ORB);
     drill.tickTo(29);
-    expect(drill.row(16).playerAtBossStep.tile).toEqual({ x: 1, y: 5 });
-    expect(drill.events("orb-matured").map((e) => [e.at, e.tile])).toEqual([[24, { x: 1, y: 5 }]]);
-    expect(drill.events("orb-returned").map((e) => [e.at, e.tile, e.receipt])).toEqual([[25, { x: 1, y: 5 }, { requested: 49, applied: 49, beforeHp: 50, afterHp: 99 }]]);
+    expect(drill.row(16).playerAtBossStep.tile).toEqual({ x: 9, y: 4 });
+    expect(drill.events("orb-matured").map((e) => [e.at, e.tile])).toEqual([[24, { x: 9, y: 4 }]]);
+    expect(drill.events("orb-returned").map((e) => [e.at, e.tile, e.receipt])).toEqual([[25, { x: 9, y: 4 }, { requested: 49, applied: 49, beforeHp: 50, afterHp: 99 }]]);
     expect(drill.row(25).playerAtPostTick.hp).toBe(99);
     drill.dispose();
   });
@@ -110,7 +110,7 @@ describe("U3 lifeforce hit and orb", () => {
       drill.dispose();
       return observed;
     };
-    const expired = [[35, "inner-void", { x: 1, y: 5 }, 49], [61, "outer-void", { x: 4, y: 3 }, 25]];
+    const expired = [[35, "inner-void", { x: 9, y: 4 }, 49], [61, "outer-void", { x: 4, y: 3 }, 25]];
     expect([run({}), run({ unclaimedOuterOrb: "off" }), run({}, true)]).toEqual([
       [expired, [[62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1355, afterHp: 1380 }]], { atBossStep: 1355, atPostTick: 1380 }],
       [expired, [], { atBossStep: 1355, atPostTick: 1355 }],
@@ -164,7 +164,7 @@ describe("U3 lifeforce hit and orb", () => {
     });
   });
 
-  test("an orb never forms on a floor hole: seed 10's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
+  test("an orb never forms on a floor hole: seed 5's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
     const orbs = (runSeed: number, selection: DrillSelection, until: number) => {
       const drill = startDrill({ seed: runSeed, selection });
       drill.playCorrectlyTo(until);
@@ -172,9 +172,9 @@ describe("U3 lifeforce hit and orb", () => {
       drill.dispose();
       return observed;
     };
-    expect([orbs(10, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
-      ["v1-turn", [[12, "inner-void", { x: 8, y: 4 }]]],
-      ["v1-turn", [[12, "inner-void", { x: 9, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
+    expect([orbs(5, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
+      ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
+      ["v1-turn", [[12, "inner-void", { x: 1, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
     ]);
   });
 });

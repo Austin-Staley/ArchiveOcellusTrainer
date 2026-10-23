@@ -70,10 +70,6 @@ export class TileMask<K extends VoidKind | null = VoidKind | null> {
     );
   }
 
-  touching(other: TileMask): TileMask<null> {
-    return new TileMask(null, new Map([...this.byKey].filter(([, at]) => SIDES.some((side) => other.contains(beside(at, side))))));
-  }
-
   surround(): TileMask<null> {
     const around = new Map<string, Tile>();
     for (const { x, y } of this.tiles()) {
@@ -106,7 +102,6 @@ export const FOOTPRINT = aroundBoss(0);
 export const PLATFORM = TileMask.of(geometry.platform.value, "#");
 export const WALKWAY = TileMask.of(geometry.platform.value, "w", "b");
 export const BRAZIERS = TileMask.of(geometry.platform.value, "b");
-export const WALKWAY_RIM = PLATFORM.touching(WALKWAY);
 
 function shaped(shape: FloorShape): TileMask {
   switch (shape) {

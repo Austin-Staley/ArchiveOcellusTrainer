@@ -13,7 +13,7 @@ Ocellus rises when the inner void forms, hovers over it and starts landing a tic
 
 ## How to get to it (user POV)
 
-- Open `http://127.0.0.1:8002/` and watch the boss after the inner void clears at P4 tick 30. The prayer book is open in the side panel. Tick **Sound effects** and **Area sounds** at the bottom left to hear the cues.
+- Open `http://127.0.0.1:8002/` and watch the boss after the inner void clears at P4 tick 30. The prayer book is open in the side panel. Tick **Sound effects** and **Area sounds** in the Settings menu to hear the cues.
 - Pick `Transition attacks` in the `Focus` selector to practise the tells alone. The drill reloads at once.
 - Add `specialSelection=replay-v2` to the URL for the order V2's kill ran: vortex, spike disk, black disk, then again.
 

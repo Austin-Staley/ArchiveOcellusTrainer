@@ -15,7 +15,7 @@ Every item in the inventory menu shows its name, for example `Equip Tonalztics o
 
 - Open `http://127.0.0.1:8002/?setup=ranged` or `?setup=melee`, open the inventory tab, and hover or right-click an item.
 - Click a potion in the inventory to drink it.
-- Click `Keybinds` at the bottom left, click one of the five tab buttons under Key Bindings, then press the new key.
+- Click **Settings** at the bottom left, then `Keybinds`, click one of the five tab buttons under Key Bindings, then press the new key.
 - The wrench tab in the bottom row of the side panel opens the same settings.
 
 ## Driving it with agent-browser

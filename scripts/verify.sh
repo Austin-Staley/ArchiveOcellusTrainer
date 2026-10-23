@@ -179,6 +179,17 @@ RIFT_ONE_HIT='[[72,"rift-67-1","ranged",44]]'
 RIFT_RALOS_HITS='[[72,"rift-67-1","ranged",18],[72,"rift-67-1","ranged",18]]'
 RIFT_RALOS_LAST_TICK=74
 CHAT_POLL_WAIT_MS=600
+MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible"]'
+MENU_QUERY="?seed=1"
+MENU_SMALL_VIEWPORT="800 600"
+MENU_MOBILE_DEVICE="iPhone 14"
+DEATH_RESULT_QUERY="?seed=1&focus=void-floor"
+DEATH_RESULT_LINES='["You died","on P4 tick 54"]'
+KILL_RESULT_QUERY="?seed=4&bosshp=1"
+KILL_RESULT_BOSS_HP=1
+KILL_RESULT_CLICK_TICK=12
+KILL_RESULT_LINES='["Ocellus defeated","P4 time: 16 ticks (0:09.6)"]'
+RESULT_BUTTONS='["Restart","Retry seed"]'
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
 DEFLECT_CLICK_TICK=12
 DEFLECT_HOVER_SHOT_TICK=20
@@ -1121,10 +1132,165 @@ drive_cues() {
   ab close >/dev/null 2>&1
 }
 
+menu_state() {
+  ab --json eval "(() => {
+    const visible = (id) => document.getElementById(id)?.checkVisibility() === true;
+    const box = (id) => { const r = document.getElementById(id)?.getBoundingClientRect(); return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null; };
+    return {
+      expanded: document.getElementById('settings')?.getAttribute('aria-expanded') ?? null,
+      menu: visible('settings_menu'),
+      controls: Object.fromEntries(${MENU_CONTROLS}.map((id) => [id, visible(id)])),
+      buttons: { settings: visible('settings'), restart: visible('restart') },
+      credit: visible('credit_line'),
+      menuBox: box('settings_menu'),
+      viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
+    };
+  })()" | json data.result
+}
+
+menu_open_close() {
+  local name=$1 closed opened second
+  ab open "${URL}${MENU_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the ${name} menu page never took its first P4 step" >&2; return 1; }
+  closed="$(menu_state)" || return 1
+  ab screenshot "$VERIFY_DIR/menu-closed-${name}.png" >/dev/null || { log "closed ${name} menu screenshot failed" >&2; return 1; }
+  ab click "#settings" >/dev/null && ab wait 300 >/dev/null || { log "the ${name} Settings button was not clicked" >&2; return 1; }
+  opened="$(menu_state)" || return 1
+  ab screenshot "$VERIFY_DIR/menu-open-${name}.png" >/dev/null || { log "open ${name} menu screenshot failed" >&2; return 1; }
+  ab click "#settings" >/dev/null && ab wait 300 >/dev/null || { log "the ${name} Settings button was not clicked again" >&2; return 1; }
+  second="$(menu_state)" || return 1
+  printf '{"closed":%s,"open":%s,"secondClick":%s}\n' "$closed" "$opened" "$second"
+}
+
+drive_settings_menu() {
+  local desktop small mobile escape outside inside
+  desktop="$(menu_open_close desktop)" || return 1
+  open_settings && ab wait 300 >/dev/null && ab press Escape >/dev/null && ab wait 300 >/dev/null || { log "Escape was not pressed on the open menu"; return 1; }
+  escape="$(menu_state)" || return 1
+  open_settings && ab wait 300 >/dev/null && ab click "#seed" >/dev/null && ab wait 300 >/dev/null || { log "the seed box was not clicked in the open menu"; return 1; }
+  inside="$(menu_state)" || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_at "$CX" "$CY" && ab wait 300 >/dev/null || { log "the canvas was not clicked with the menu open"; return 1; }
+  outside="$(menu_state)" || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/menu-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  ab set viewport $MENU_SMALL_VIEWPORT >/dev/null || return 1
+  small="$(menu_open_close small)" || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/menu-small-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab set viewport 1280 800 >/dev/null || return 1
+
+  local BROWSER_SESSION="${BROWSER_SESSION}-mobile"
+  ab set device "$MENU_MOBILE_DEVICE" >/dev/null || { log "the mobile session did not start"; return 1; }
+  mobile="$(menu_open_close mobile)" || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/menu-mobile-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab close >/dev/null 2>&1
+
+  printf '{"desktop":%s,"small":%s,"mobile":%s,"escape":%s,"inside":%s,"outside":%s}\n' "$desktop" "$small" "$mobile" "$escape" "$inside" "$outside" >"$VERIFY_DIR/menu.json"
+  node -e '
+    const fs = require("fs"), dir = process.argv[1], controls = JSON.parse(process.argv[2]);
+    const menu = JSON.parse(fs.readFileSync(`${dir}/menu.json`, "utf8"));
+    const errors = ["menu-page-errors.json", "menu-small-page-errors.json", "menu-mobile-page-errors.json"].map((file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8")));
+    const views = [menu.desktop, menu.small, menu.mobile];
+    const closed = (s) => s.expanded === "false" && s.menu === false && controls.every((id) => s.controls[id] === false) && s.buttons.settings && s.buttons.restart && s.credit;
+    const noPageScroll = (s) => s.viewport.scrollWidth <= s.viewport.width;
+    const inViewport = (s) => s.menuBox.left >= 0 && s.menuBox.top >= 0 && s.menuBox.right <= s.viewport.width && s.menuBox.bottom <= s.viewport.height;
+    const checks = {
+      menuHiddenUntilOpened: views.every((view) => closed(view.closed) && noPageScroll(view.closed)),
+      menuOpensWithEveryControl: views.every((view) => view.open.expanded === "true" && view.open.menu && controls.every((id) => view.open.controls[id] === true) && view.open.buttons.restart && view.open.credit),
+      menuFitsEveryViewport: views.every((view) => inViewport(view.open) && noPageScroll(view.open)) && menu.small.open.viewport.width === 800 && menu.mobile.open.viewport.width < 500,
+      menuClosesOnSecondClick: views.every((view) => closed(view.secondClick)),
+      menuClosesOnEscape: closed(menu.escape),
+      menuStaysOpenOnInsideClick: menu.inside.expanded === "true" && menu.inside.menu === true,
+      menuClosesOnOutsideClick: closed(menu.outside),
+      noMenuPageErrors: errors.every((list) => list.length === 0),
+    };
+    console.log(JSON.stringify(checks, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$MENU_CONTROLS" >"$VERIFY_DIR/menu-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/menu-checks.json"
+  [[ $verdict -eq 0 ]] || log "a settings menu check failed"
+  return $verdict
+}
+
+result_panel() {
+  ab --json eval "(() => {
+    const panel = document.getElementById('run_result');
+    return {
+      visible: panel?.checkVisibility() === true,
+      lines: panel ? [...panel.querySelectorAll('h2, p')].map((line) => line.textContent) : [],
+      buttons: panel ? [...panel.querySelectorAll('button')].map((button) => button.textContent) : [],
+      run: window.__archiveOcellusProbe.snapshot().fight?.run ?? null,
+    };
+  })()" | json data.result
+}
+
+next_run() {
+  ab --json eval "(() => { const probe = window.__archiveOcellusProbe; return { search: location.search, seed: probe.log().header.seed, bossHp: probe.snapshot().fight?.boss.hp ?? null, panel: document.getElementById('run_result') !== null }; })()" | json data.result
+}
+
+click_result() {
+  local loaded
+  loaded="$(ab --json eval "performance.timeOrigin" | json data.result)" || return 1
+  ab click "#$1" >/dev/null || return 1
+  ab wait --fn "performance.timeOrigin !== ${loaded} && (window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= 0" --timeout 120000 >/dev/null || { log "#$1 never loaded a new run"; return 1; }
+}
+
+drive_run_results() {
+  local start
+  ab open "${URL}${DEATH_RESULT_QUERY}" >/dev/null || return 1
+  ab wait --fn "window.__archiveOcellusProbe?.snapshot().fight?.run.kind === 'ended'" --timeout 120000 >/dev/null || { log "the player on the flood never died"; return 1; }
+  ab wait "$CHAT_POLL_WAIT_MS" >/dev/null
+  result_panel >"$VERIFY_DIR/death-result.json" || { log "death result capture failed"; return 1; }
+  ab screenshot "$VERIFY_DIR/death-result.png" >/dev/null || { log "death result screenshot failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/death-result-page-errors.json" || { log "page error capture failed"; return 1; }
+  click_result result_restart || return 1
+  next_run >"$VERIFY_DIR/death-restart.json" || { log "restarted run capture failed"; return 1; }
+
+  ab open "${URL}${KILL_RESULT_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the bosshp drill never took its first P4 step"; return 1; }
+  start="$(next_run)" || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$KILL_RESULT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the boss was not clicked"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe.snapshot().fight?.run.kind === 'ended'" --timeout 60000 >/dev/null || { log "the bosshp run never ended"; return 1; }
+  ab wait "$CHAT_POLL_WAIT_MS" >/dev/null
+  result_panel >"$VERIFY_DIR/kill-result.json" || { log "kill result capture failed"; return 1; }
+  ab screenshot "$VERIFY_DIR/kill-result.png" >/dev/null || { log "kill result screenshot failed"; return 1; }
+  ab set viewport $MENU_SMALL_VIEWPORT >/dev/null && ab wait 600 >/dev/null && ab screenshot "$VERIFY_DIR/kill-result-small.png" >/dev/null || { log "small kill result screenshot failed"; return 1; }
+  ab set viewport 1280 800 >/dev/null && ab wait 600 >/dev/null || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/kill-result-page-errors.json" || { log "page error capture failed"; return 1; }
+  click_result result_retry || return 1
+  printf '{"start":%s,"retry":%s}\n' "$start" "$(next_run)" >"$VERIFY_DIR/kill-retry.json" || { log "retried run capture failed"; return 1; }
+
+  node -e '
+    const fs = require("fs"), [dir, deathLines, killLines, buttons, killBossHp] = process.argv.slice(1);
+    const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
+    const [death, restart, kill, retry] = ["death-result.json", "death-restart.json", "kill-result.json", "kill-retry.json"].map(read);
+    const params = (search) => Object.fromEntries(new URLSearchParams(search));
+    const same = (a, b) => JSON.stringify(a) === b;
+    const checks = {
+      deathResultShown: death.visible && same(death.lines, deathLines) && same(death.buttons, buttons) && death.run?.kind === "ended" && death.run.reason === "death" && death.run.at === 54,
+      resultRestartDrawsFreshSeed: same(params(restart.search), JSON.stringify({ focus: "void-floor", setup: "ranged" })) && restart.seed !== 1 && restart.panel === false,
+      bossHpLinkStartsLow: retry.start.bossHp === Number(killBossHp) && same(params(retry.start.search), JSON.stringify({ seed: "4", bosshp: killBossHp })),
+      killResultShown: kill.visible && same(kill.lines, killLines) && same(kill.buttons, buttons) && kill.run?.kind === "ended" && kill.run.reason === "kill" && kill.run.at === 16,
+      retryReplaysSeedAndBossHp: same(params(retry.retry.search), JSON.stringify({ seed: "4", bosshp: killBossHp, setup: "ranged", focus: "full-fight" })) &&
+        retry.retry.seed === 4 && retry.retry.bossHp === Number(killBossHp) && retry.retry.panel === false,
+      noResultPageErrors: ["death-result-page-errors.json", "kill-result-page-errors.json"].map(read).every((list) => list.length === 0),
+    };
+    console.log(JSON.stringify(checks, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$DEATH_RESULT_LINES" "$KILL_RESULT_LINES" "$RESULT_BUTTONS" "$KILL_RESULT_BOSS_HP" >"$VERIFY_DIR/result-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/result-checks.json"
+  [[ $verdict -eq 0 ]] || log "a run result check failed"
+  return $verdict
+}
+
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
   ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
+  drive_settings_menu && drive_run_results || return 1
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
@@ -1685,6 +1851,7 @@ drive() {
 release_browser() {
   ab close >/dev/null 2>&1
   agent-browser --session "${BROWSER_SESSION}-autoplay" close >/dev/null 2>&1
+  agent-browser --session "${BROWSER_SESSION}-mobile" close >/dev/null 2>&1
   [[ -n "$LAUNCHED_PID" && -f "$STATE_FILE" && "$(state pid)" == "$LAUNCHED_PID" ]] || return 0
   stop
 }

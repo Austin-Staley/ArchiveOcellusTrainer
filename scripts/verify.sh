@@ -119,6 +119,7 @@ INVINCIBLE_ORB_UNDER_BOSS_CLICK_UP_PX=100
 INVINCIBLE_ORB_CLICK_TICK=19
 INVINCIBLE_ORB_CLICK_RIGHT_PX=-50
 INVINCIBLE_ORB_CLICK_UP_PX=75
+MENU_WALK_HERE_DOWN_PX=49
 INVINCIBLE_ORB_LAST_TICK=26
 INVINCIBLE_ORB_EXPECTED='{"revived":[15,"floor-hit",38],"returned":[[25,{"requested":0,"applied":0,"beforeHp":99,"afterHp":99}]],"hp":[25,99],"maxHp":99}'
 ORB_DRILL="lifeforce-orb"
@@ -230,7 +231,7 @@ RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
 RIFT_KILL_SOUND='[0.27,12640]'
 RIFT_BURST_SOUNDS='[[90.13,12641],[90.93,12642]]'
 RIFT_SOUND_WINDOW='[66,92]'
-CUE_QUERY="?seed=1&focus=${ORB_DRILL}&drillStart=cycle-start"
+CUE_QUERY="?seed=7&focus=${ORB_DRILL}&drillStart=cycle-start"
 CUE_TOGGLE_TICK=6
 CUE_CHAT_BEFORE_TICK=10
 CUE_CHAT_TICK=11
@@ -430,6 +431,11 @@ canvas_centre() {
 click_after_tick() {
   printf '[["wait","--fn","(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= %d","--timeout","90000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' \
     "$1" $((CX + $2)) $((CY + $3)) | ab batch --bail >/dev/null
+}
+
+walk_here_after_tick() {
+  printf '[["wait","--fn","(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= %d","--timeout","90000"],["mouse","move","%d","%d"],["mouse","down","right"],["mouse","up","right"],["wait","200"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' \
+    "$1" $((CX + $2)) $((CY + $3)) $((CX + $2)) $((CY + $3 + MENU_WALK_HERE_DOWN_PX)) | ab batch --bail >/dev/null
 }
 
 shot_after_tick() {
@@ -1109,7 +1115,7 @@ drive_invincible() {
   fight_tick_at_least 0 120000 || { log "the invincible full fight never took its first P4 step"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }
   click_at "$CX" $((CY - INVINCIBLE_ORB_UNDER_BOSS_CLICK_UP_PX)) || { log "the walk under the boss was not clicked"; return 1; }
-  click_after_tick "$INVINCIBLE_ORB_CLICK_TICK" "$INVINCIBLE_ORB_CLICK_RIGHT_PX" "-$INVINCIBLE_ORB_CLICK_UP_PX" || { log "the walk to the orb was not clicked"; return 1; }
+  walk_here_after_tick "$INVINCIBLE_ORB_CLICK_TICK" "$INVINCIBLE_ORB_CLICK_RIGHT_PX" "-$INVINCIBLE_ORB_CLICK_UP_PX" || { log "the walk to the orb was not chosen from the menu"; return 1; }
   fight_tick_at_least "$INVINCIBLE_ORB_LAST_TICK" 30000 || { log "the invincible full fight never stepped to P4 tick ${INVINCIBLE_ORB_LAST_TICK}"; return 1; }
   ab screenshot "$VERIFY_DIR/invincible-orb.png" >/dev/null || { log "invincible orb screenshot failed"; return 1; }
   probe "log()" >"$VERIFY_DIR/invincible-orb.json"

@@ -229,10 +229,11 @@ RIFT_ONE_HIT='[[72,"rift-67-1","ranged",44]]'
 RIFT_RALOS_HITS='[[72,"rift-67-1","ranged",18],[72,"rift-67-1","ranged",18]]'
 RIFT_RALOS_LAST_TICK=74
 CHAT_POLL_WAIT_MS=600
-MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible"]'
+MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible","whats_new"]'
 MENU_QUERY="?seed=1"
 MENU_SMALL_VIEWPORT="800 600"
 MENU_MOBILE_DEVICE="iPhone 14"
+WHATS_NEW_PHONE_VIEWPORT="390 844"
 DEATH_RESULT_QUERY="?seed=1&focus=void-floor"
 DEATH_RESULT_LINES='["You died","on P4 tick 54"]'
 KILL_RESULT_QUERY="?seed=4&bosshp=1"
@@ -1492,11 +1493,100 @@ drive_run_results() {
   return $verdict
 }
 
+whats_new_state() {
+  ab --json eval "(() => {
+    const visible = (element) => element?.checkVisibility() === true;
+    const box = (id) => { const r = document.getElementById(id)?.getBoundingClientRect(); return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null; };
+    const panel = document.getElementById('whats_new_panel');
+    const version = document.getElementById('app_version');
+    return {
+      settingsDot: visible(document.querySelector('#settings .unseen_dot')),
+      menuDot: visible(document.querySelector('#whats_new .unseen_dot')),
+      whatsNewButton: visible(document.getElementById('whats_new')),
+      menu: visible(document.getElementById('settings_menu')),
+      panel: visible(panel),
+      releases: [...(panel?.querySelectorAll('article') ?? [])].map((release) => ({ version: release.querySelector('h3')?.textContent ?? null, notes: [...release.querySelectorAll('li')].map((note) => note.textContent) })),
+      panelBox: box('whats_new_panel'),
+      credit: document.getElementById('credit_line')?.textContent ?? null,
+      version: visible(version) ? version.textContent : null,
+      creditBox: box('credit_line'),
+      versionBox: box('app_version'),
+      seen: localStorage.getItem('archive-ocellus:seen-release'),
+      viewport: { width: innerWidth, height: innerHeight, scrollWidth: document.documentElement.scrollWidth },
+    };
+  })()" | json data.result
+}
+
+open_whats_new_page() {
+  ab open "${URL}${MENU_QUERY}" >/dev/null && fight_tick_at_least 0 120000 || { log "the What's new page never took its first P4 step"; return 1; }
+}
+
+drive_whats_new() {
+  local notes first menu opened small phone closed escape reloaded reopened
+  notes="$(node scripts/release-notes.mjs)" || { log "release-notes.mjs rejected the changelog"; return 1; }
+  open_whats_new_page || return 1
+  first="$(whats_new_state)" || return 1
+  ab screenshot "$VERIFY_DIR/whats-new-unseen.png" >/dev/null || { log "unseen What's new screenshot failed"; return 1; }
+  ab click "#settings" >/dev/null && ab wait 300 >/dev/null || { log "the Settings button was not clicked"; return 1; }
+  menu="$(whats_new_state)" || return 1
+  ab click "#whats_new" >/dev/null && ab wait 300 >/dev/null || { log "the What's new button was not clicked"; return 1; }
+  opened="$(whats_new_state)" || return 1
+  ab screenshot "$VERIFY_DIR/whats-new-open.png" >/dev/null || { log "open What's new screenshot failed"; return 1; }
+  ab set viewport $MENU_SMALL_VIEWPORT >/dev/null && ab wait 300 >/dev/null || return 1
+  small="$(whats_new_state)" || return 1
+  ab screenshot "$VERIFY_DIR/whats-new-small.png" >/dev/null || { log "small What's new screenshot failed"; return 1; }
+  ab set viewport $WHATS_NEW_PHONE_VIEWPORT >/dev/null && ab wait 300 >/dev/null || return 1
+  phone="$(whats_new_state)" || return 1
+  ab screenshot "$VERIFY_DIR/whats-new-phone.png" >/dev/null || { log "phone What's new screenshot failed"; return 1; }
+  ab set viewport 1280 800 >/dev/null && ab wait 300 >/dev/null || return 1
+  ab click "#whats_new_close" >/dev/null && ab wait 300 >/dev/null || { log "the What's new Close button was not clicked"; return 1; }
+  closed="$(whats_new_state)" || return 1
+  open_settings && ab click "#whats_new" >/dev/null && ab wait 300 >/dev/null && ab press Escape >/dev/null && ab wait 300 >/dev/null || { log "Escape was not pressed on the open What's new panel"; return 1; }
+  escape="$(whats_new_state)" || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/whats-new-page-errors.json" || { log "page error capture failed"; return 1; }
+  open_whats_new_page || return 1
+  reloaded="$(whats_new_state)" || return 1
+  ab screenshot "$VERIFY_DIR/whats-new-seen.png" >/dev/null || { log "seen What's new screenshot failed"; return 1; }
+  ab click "#settings" >/dev/null && ab wait 300 >/dev/null || { log "the reloaded Settings button was not clicked"; return 1; }
+  reopened="$(whats_new_state)" || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/whats-new-reload-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab press Escape >/dev/null
+
+  printf '{"first":%s,"menu":%s,"opened":%s,"small":%s,"phone":%s,"closed":%s,"escape":%s,"reloaded":%s,"reopened":%s}\n' \
+    "$first" "$menu" "$opened" "$small" "$phone" "$closed" "$escape" "$reloaded" "$reopened" >"$VERIFY_DIR/whats-new.json"
+  node -e '
+    const fs = require("fs"), [dir, notes, credit] = process.argv.slice(1);
+    const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
+    const w = read("whats-new.json");
+    const [heading, , ...items] = notes.trimEnd().split("\n");
+    const newest = { version: heading.replace(/^## /, ""), notes: items.map((item) => item.replace(/^- /, "")) };
+    const inViewport = (s) => s.panelBox.left >= 0 && s.panelBox.top >= 0 && s.panelBox.right <= s.viewport.width && s.panelBox.bottom <= s.viewport.height;
+    const noPageScroll = (s) => s.viewport.scrollWidth <= s.viewport.width;
+    const beside = (s) => s.versionBox.left >= s.creditBox.right && s.versionBox.top < s.creditBox.bottom && s.versionBox.bottom > s.creditBox.top;
+    const checks = {
+      dotShownBeforeOpening: w.first.seen === null && w.first.settingsDot && !w.first.menu && !w.first.panel && w.menu.menu && w.menu.whatsNewButton && w.menu.menuDot,
+      whatsNewListsNewestRelease: w.opened.panel && !w.opened.menu && w.opened.releases[0]?.version === newest.version && JSON.stringify(w.opened.releases[0].notes) === JSON.stringify(newest.notes),
+      dotClearsOnOpen: !w.opened.settingsDot && w.opened.seen === newest.version,
+      panelFitsEveryViewport: [w.opened, w.small, w.phone].every((s) => s.panel && inViewport(s) && noPageScroll(s)) && w.small.viewport.width === 800 && w.phone.viewport.width < 500,
+      panelClosesOnCloseAndEscape: !w.closed.panel && !w.closed.menu && !w.escape.panel && !w.escape.menu,
+      dotStaysClearedAfterReload: w.reloaded.seen === newest.version && !w.reloaded.settingsDot && w.reopened.whatsNewButton && !w.reopened.menuDot,
+      versionBesideCredit: w.first.credit === credit && w.first.version === `v${newest.version}` && beside(w.first) && w.phone.version === `v${newest.version}`,
+      noWhatsNewPageErrors: ["whats-new-page-errors.json", "whats-new-reload-page-errors.json"].map(read).every((list) => list.length === 0),
+    };
+    console.log(JSON.stringify(checks, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$notes" "$CREDIT_LINE" >"$VERIFY_DIR/whats-new-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/whats-new-checks.json"
+  [[ $verdict -eq 0 ]] || log "a What's new check failed"
+  return $verdict
+}
+
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
   ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
-  drive_settings_menu && drive_run_results || return 1
+  drive_settings_menu && drive_run_results && drive_whats_new || return 1
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \

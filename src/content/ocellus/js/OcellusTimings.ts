@@ -562,8 +562,10 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
 type ExplosionSeriesRecipe = Readonly<{
   seriesStartsAfterHit: Selected<TickSpan>;
   shards: Selected<string>;
+  look: Selected<ExplosionLook>;
   dodge: Selected<Readonly<{ radius: number; attackDelayCut: TickSpan }>>;
 }>;
+type ExplosionLook = Readonly<{ glow: string; glowOpacity: number; glowFrom: number; dust: string; dustOpacity: number }>;
 
 const EXPLOSION: ExplosionSeriesRecipe = {
   seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
@@ -574,6 +576,15 @@ const EXPLOSION: ExplosionSeriesRecipe = {
     "dark purple shards stand around the player's tile on each mark tick; median colour of the shards on four mark ticks. The spec's cache candidate, spotanims 4299 to 4302 (model 62509), renders a white disc and a white flash, which the footage does not show",
     vod("V2", "k57, k59, k61, k65"),
     STRATEGIES,
+  ),
+  look: selected(
+    { glow: "#761ba2", glowOpacity: 0.85, glowFrom: 0.5, dust: "#bcb6a2", dustOpacity: 0.55 },
+    "footage-repeated",
+    "unscaled",
+    "each mark lasts the mark tick and the impact tick. In the mark tick, purple motes and thin shards fly in to the tile, and for its second half a translucent hexagonal purple glow fills the tile; on the impact tick the glow collapses, crystals burst outward and a grey dust puff fades. Three cycles at 20 fps put the glow from 6 to 8 of the tick's 12 frames, so it starts halfway. The glow colour and opacity solve the 120, 55, 150 glow seen over the 126, 140, 115 floor; the dust is chosen by eye. The SDK cannot play spotanims 4299 to 4302 instead: it makes a spotanim translucent only from base face alphas, model 62509's alphas all come from its animation, and it draws the 588 faces textured with 215 as white",
+    owner("explosion mark in https://www.twitch.tv/videos/2907533010 from 8:38:50 to 8:38:53, frames at 20 fps", "2026-10-22"),
+    owner("friends' screenshot of the explosion mark", "2026-10-22"),
+    cache("model 62509: all 1176 faces in animated alpha groups, none with a base alpha; 588 faces textured with 215"),
   ),
   dodge: selected(
     { radius: 1, attackDelayCut: span(3) },

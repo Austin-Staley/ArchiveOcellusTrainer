@@ -340,62 +340,165 @@ export class OrbView extends Entity {
 }
 
 const SHARD_COLOUR = OCELLUS_P4.explosion.shards.value;
+const MARK = OCELLUS_P4.explosion.look.value;
 const SHARDS = 7;
-const SHARD_RING = 0.3;
-const SHARD_LEAN = 0.12;
 const SHARD_HALF_WIDTH = 0.05;
 const SHARD_HEIGHT = 0.85;
-const SPIN_PER_SECOND = 3;
-const TICK_SECONDS = 0.6;
+const GLOW_TILES = 1.2;
+const GLOW_LIFT = 0.02;
+const GLOW_RAMP = 0.2;
+const DUST_TILES = 1.4;
+const DUST_LIFT = 0.15;
+const SPRITE_PX = 64;
+const FALLOFF: readonly (readonly [distance: number, alpha: number])[] = [[0, 1], [0.6, 0.85], [1, 0]];
 
 type Blast = "marked" | "detonated";
+type Shape = (x: number, y: number) => number;
+type BurstPose = Readonly<{
+  shardRadius: number;
+  shardLean: number;
+  shardOpacity: number;
+  glowOpacity: number;
+  glowScale: number;
+  dustOpacity: number;
+  dustScale: number;
+}>;
+
+const HEXAGON: Shape = (x, y) => Math.max(Math.abs(y), 0.866 * Math.abs(x) + 0.5 * Math.abs(y)) / 0.866;
+const DISC: Shape = (x, y) => Math.hypot(x, y);
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
+
+function falloff(distance: number): number {
+  for (let stop = 1; stop < FALLOFF.length; stop++) {
+    const [near, nearAlpha] = FALLOFF[stop - 1];
+    const [far, farAlpha] = FALLOFF[stop];
+    if (distance <= far) return lerp(nearAlpha, farAlpha, (distance - near) / (far - near));
+  }
+  return 0;
+}
+
+function sprite(colour: string, shape: Shape): OffscreenCanvas {
+  const canvas = new OffscreenCanvas(SPRITE_PX, SPRITE_PX);
+  const context = canvas.getContext("2d");
+  if (!context) return canvas;
+  const rgb = parseInt(colour.slice(1), 16);
+  const image = context.createImageData(SPRITE_PX, SPRITE_PX);
+  for (let py = 0; py < SPRITE_PX; py++) {
+    for (let px = 0; px < SPRITE_PX; px++) {
+      const at = 4 * (py * SPRITE_PX + px);
+      const half = SPRITE_PX / 2;
+      image.data.set([rgb >> 16, (rgb >> 8) & 255, rgb & 255, Math.round(255 * falloff(shape((px + 0.5 - half) / half, (py + 0.5 - half) / half)))], at);
+    }
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function spriteTexture(colour: string, shape: Shape): THREE.Texture {
+  const texture = new THREE.CanvasTexture(sprite(colour, shape));
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function burstPose(blast: Blast, t: number): BurstPose {
+  switch (blast) {
+    case "marked": {
+      const converge = clamp01(t / MARK.glowFrom);
+      const glow = clamp01((t - MARK.glowFrom) / GLOW_RAMP);
+      return {
+        shardRadius: lerp(0.8, 0.25, converge),
+        shardLean: lerp(1.2, 0.3, converge),
+        shardOpacity: Math.min(clamp01(t / 0.1), 1 - glow),
+        glowOpacity: MARK.glowOpacity * glow,
+        glowScale: lerp(0.7, 1, glow),
+        dustOpacity: 0,
+        dustScale: 1,
+      };
+    }
+    case "detonated": {
+      const burst = 1 - (1 - t) ** 2;
+      return {
+        shardRadius: lerp(0.2, 1.2, burst),
+        shardLean: lerp(0, -1, burst),
+        shardOpacity: 1 - t,
+        glowOpacity: MARK.glowOpacity * clamp01(1 - t / 0.2),
+        glowScale: lerp(1, 1.2, t),
+        dustOpacity: MARK.dustOpacity * (1 - t),
+        dustScale: lerp(0.6, 1.3, burst),
+      };
+    }
+    default: {
+      const unhandled: never = blast;
+      return unhandled;
+    }
+  }
+}
 
 function shardGeometry(): THREE.BufferGeometry {
-  const positions: number[] = [];
-  for (let shard = 0; shard < SHARDS; shard++) {
-    const angle = (2 * Math.PI * shard) / SHARDS;
-    const [ox, oz] = [Math.cos(angle), Math.sin(angle)];
-    const tip = SHARD_RING + SHARD_LEAN;
-    positions.push(
-      ox * SHARD_RING - oz * SHARD_HALF_WIDTH, 0, oz * SHARD_RING + ox * SHARD_HALF_WIDTH,
-      ox * SHARD_RING + oz * SHARD_HALF_WIDTH, 0, oz * SHARD_RING - ox * SHARD_HALF_WIDTH,
-      ox * tip, SHARD_HEIGHT, oz * tip,
-    );
-  }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, -SHARD_HALF_WIDTH, 0, 0, SHARD_HALF_WIDTH, 0, SHARD_HEIGHT, 0], 3));
   return geometry;
 }
 
-class BurstModel implements Model {
-  private readonly material = new THREE.MeshBasicMaterial({ color: SHARD_COLOUR, side: THREE.DoubleSide, transparent: true });
-  private readonly mesh = new THREE.Mesh(shardGeometry(), this.material);
-  private flare = 0;
+function groundSprite(texture: THREE.Texture, tiles: number, lift: number): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
+  const geometry = new THREE.PlaneGeometry(tiles, tiles).rotateX(-Math.PI / 2).translate(0, lift, 0);
+  return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }));
+}
 
-  constructor(private readonly blast: () => Blast) {}
+class BurstModel implements Model {
+  private readonly group = new THREE.Group();
+  private readonly shardMaterial = new THREE.MeshBasicMaterial({ color: SHARD_COLOUR, side: THREE.DoubleSide, transparent: true });
+  private readonly shards: THREE.Mesh[] = [];
+  private readonly glowMap = spriteTexture(MARK.glow, HEXAGON);
+  private readonly dustMap = spriteTexture(MARK.dust, DISC);
+  private readonly glow = groundSprite(this.glowMap, GLOW_TILES, GLOW_LIFT);
+  private readonly dust = groundSprite(this.dustMap, DUST_TILES, DUST_LIFT);
+  private readonly owned: { dispose(): void }[] = [];
+
+  constructor(private readonly blast: () => Blast) {
+    const blade = shardGeometry();
+    for (let shard = 0; shard < SHARDS; shard++) {
+      const pivot = new THREE.Group();
+      pivot.rotation.y = (2 * Math.PI * shard) / SHARDS;
+      const mesh = new THREE.Mesh(blade, this.shardMaterial);
+      pivot.add(mesh);
+      this.shards.push(mesh);
+      this.group.add(pivot);
+    }
+    this.group.add(this.glow, this.dust);
+    this.owned.push(blade, this.shardMaterial, this.glowMap, this.dustMap, this.glow.geometry, this.glow.material, this.dust.geometry, this.dust.material);
+  }
 
   draw(scene: THREE.Scene, clockDelta: number, tickPercent: number, location: Location3, angleRadians: number, pitchRadians: number, visible: boolean): void {
-    if (this.mesh.parent !== scene) scene.add(this.mesh);
-    this.flare = this.blast() === "detonated" ? Math.min(1, this.flare + clockDelta / TICK_SECONDS) : 0;
-    this.mesh.visible = visible && this.flare < 1;
-    this.mesh.position.set(location.x + 0.5, GROUND_OVERLAY_Y, location.y - 0.5);
-    this.mesh.rotation.y += clockDelta * SPIN_PER_SECOND;
-    this.mesh.scale.setScalar(1 + this.flare);
-    this.material.opacity = 1 - this.flare;
+    if (this.group.parent !== scene) scene.add(this.group);
+    const pose = burstPose(this.blast(), tickPercent);
+    this.group.visible = visible;
+    this.group.position.set(location.x + 0.5, GROUND_OVERLAY_Y, location.y - 0.5);
+    for (const shard of this.shards) {
+      shard.position.x = pose.shardRadius;
+      shard.rotation.z = pose.shardLean;
+    }
+    this.shardMaterial.opacity = pose.shardOpacity;
+    this.glow.material.opacity = pose.glowOpacity;
+    this.glow.scale.setScalar(pose.glowScale);
+    this.dust.material.opacity = pose.dustOpacity;
+    this.dust.scale.setScalar(pose.dustScale);
   }
 
   destroy(scene: THREE.Scene): void {
-    scene.remove(this.mesh);
-    this.mesh.geometry.dispose();
-    this.material.dispose();
+    scene.remove(this.group);
+    this.owned.forEach((resource) => resource.dispose());
   }
 
   getWorldPosition(): THREE.Vector3 {
-    return this.mesh.getWorldPosition(new THREE.Vector3());
+    return this.group.getWorldPosition(new THREE.Vector3());
   }
 
   async preload(): Promise<void> {}
 }
+
+let markSprite: OffscreenCanvas | null = null;
 
 class ExplosionView extends Entity {
   private blast: Blast = "marked";
@@ -423,8 +526,12 @@ class ExplosionView extends Entity {
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
     if (this.blast !== "marked") return;
     const scale = Settings.tileSize;
-    context.fillStyle = SHARD_COLOUR;
-    context.fillRect((this.location.x + 0.15) * scale, (this.location.y + 0.15) * scale, 0.7 * scale, 0.7 * scale);
+    const radius = (GLOW_TILES / 2) * scale;
+    markSprite ??= sprite(MARK.glow, HEXAGON);
+    context.save();
+    context.globalAlpha = burstPose("marked", tickPercent).glowOpacity;
+    context.drawImage(markSprite, (this.location.x + 0.5) * scale - radius, (this.location.y + 0.5) * scale - radius, 2 * radius, 2 * radius);
+    context.restore();
   }
 
   protected override create3dModel(): Model {

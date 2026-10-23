@@ -95,7 +95,7 @@ describe("U3 lifeforce hit and orb", () => {
   });
 
   test("a return can pass max HP: HP regenerates at 199 between the fourth inner hit and its return", () => {
-    const drill = startDrill({ selection: ORB_DRILL });
+    const drill = startDrill({ selection: { ...ORB_DRILL, drillStart: "cycle-start" } });
     drill.playCorrectlyTo(206);
     expect(drill.events("orb-returned").map((e) => [e.at, e.receipt.requested, e.receipt.beforeHp, e.receipt.afterHp])).toEqual([
       [25, 49, 50, 99], [50, 49, 50, 99], [85, 49, 50, 99], [110, 49, 50, 99], [145, 49, 50, 99], [170, 49, 50, 99], [205, 49, 51, 100],

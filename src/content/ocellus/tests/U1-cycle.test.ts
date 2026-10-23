@@ -1,6 +1,22 @@
 import { Random } from "osrs-sdk";
+import type { DrillSelection } from "../js/OcellusTimings";
 import { parseDrillRequest } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
+
+function posesRequested(selection: DrillSelection, start: number, through: number): [number, number][] {
+  const drill = startDrill({ selection });
+  drill.region.invincible = true;
+  // playAnimation is the SDK's animation output, and jsdom renders no frames, so the spy reads each pose as the boss requests it.
+  const play = vi.spyOn(drill.boss(), "playAnimation");
+  const requested: [number, number][] = [];
+  for (let t = start; t <= through; t++) {
+    const before = play.mock.calls.length;
+    drill.tickTo(t);
+    requested.push(...play.mock.calls.slice(before).map(([id]): [number, number] => [t, id]));
+  }
+  drill.dispose();
+  return requested;
+}
 
 describe("U1 cycle skeleton", () => {
   test("floor stages, overheads and boss state follow the reconciled schedule as separate tracks", () => {
@@ -42,15 +58,53 @@ describe("U1 cycle skeleton", () => {
     ]);
   });
 
-  test("a focus keeps the whole cycle running but lets only its mechanic's beats act", () => {
+  test("a focus starts 5 ticks before its mechanic first acts, keeps the cycle running from there and lets only its mechanic's beats act", () => {
     const drill = startDrill({ selection: { focus: "transition-attacks" } });
     drill.tickTo(67);
     expect(drill.rows().flatMap((row) => row.beats.map((b) => [row.tick, b.kind]))).toEqual([
-      [5, "boss-shouts"], [29, "boss-landing-starts"], [32, "special-tell"], [32, "special-sound"], [37, "special-hit"], [37, "special-sound"], [39, "soul-split-heal"],
+      [29, "boss-landing-starts"], [32, "special-tell"], [32, "special-sound"], [37, "special-hit"], [37, "special-sound"], [39, "soul-split-heal"],
       [60, "special-tell"], [60, "special-sound"], [65, "special-hit"], [65, "special-sound"], [67, "soul-split-heal"],
     ]);
-    expect(drill.events("stage-entered").map((e) => e.at)).toEqual([0, 8, 30, 39, 59]);
+    expect(drill.events("stage-entered").map((e) => [e.at, e.stage])).toEqual([[30, "after-inner"], [39, "outer-void"], [59, "after-outer"]]);
     drill.dispose();
+  });
+
+  test.each([
+    [{ focus: "full-fight" }, 0],
+    [{ focus: "void-floor" }, 5],
+    [{ focus: "lifeforce-orb" }, 6],
+    [{ focus: "orb-retrieval" }, 5],
+    [{ focus: "explosions" }, 9],
+    [{ focus: "transition-attacks" }, 27],
+    [{ focus: "boss-heals" }, 6],
+    [{ focus: "rifts" }, 62],
+    [{ focus: "rifts", riftFirstCycle: "cycle-3" }, 122],
+    [{ focus: "floor-holes" }, 0],
+    [{ focus: "rifts", drillStart: "cycle-start" }, 0],
+  ] as const)("the run under %o starts on P4 tick %i", (selection, start) => {
+    const drill = startDrill({ selection });
+    drill.tickTo(start + 1);
+    expect(drill.rows().map((row) => row.tick)).toEqual([start, start + 1]);
+    drill.dispose();
+  });
+
+  test.each([
+    [{ focus: "explosions" }, 9, 33, [[29, 14865]]],
+    [{ focus: "transition-attacks" }, 27, 33, [[29, 14865], [32, 14844]]],
+  ] as const)("a drill under %o that joins the inner void at P4 tick %i requests through %i only the poses of its later beats, not the void's rise: %j", (selection, start, through, poses) => {
+    expect(posesRequested(selection, start, through)).toEqual(poses);
+  });
+
+  test.each([
+    [{ focus: "full-fight" }, 0, 33, [[8, 14863], [29, 14865], [32, 14844]]],
+    [{ focus: "void-floor" }, 5, 33, [[8, 14863], [29, 14865]]],
+    [{ focus: "lifeforce-orb" }, 6, 33, [[8, 14863], [29, 14865]]],
+    [{ focus: "orb-retrieval" }, 5, 33, [[8, 14863], [29, 14865]]],
+    [{ focus: "boss-heals" }, 6, 33, [[8, 14863], [29, 14865], [32, 14844]]],
+    [{ focus: "rifts" }, 62, 68, [[68, 14863]]],
+    [{ focus: "floor-holes" }, 0, 33, [[8, 14863], [29, 14865]]],
+  ] as const)("guard: under %o, from its start at P4 tick %i through %i the boss requests the pose of every stage and beat that begins there: %j", (selection, start, through, poses) => {
+    expect(posesRequested(selection, start, through)).toEqual(poses);
   });
 
   test("GET READY ticks write no row, and the first boss step is P4 tick 0", () => {
@@ -179,7 +233,7 @@ describe("U1 cycle skeleton", () => {
   test("native combat rolls replay from the seed, and the SDK's random source is restored between ticks", () => {
     const fight = (global: number) => {
       Random.setRandom(() => global);
-      const drill = startDrill({ selection: { focus: "rifts" } });
+      const drill = startDrill({ selection: { focus: "rifts", drillStart: "cycle-start" } });
       drill.tickTo(8);
       drill.player().setAggro(drill.boss());
       drill.tickTo(40);

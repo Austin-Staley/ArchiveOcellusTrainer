@@ -48,7 +48,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     { target: "the size-1 north-east rift once", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 71, hits: [35], hpAfter: 9 },
     { target: "the size-1 north-east rift once more on its next swing", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 76, hits: [9], hpAfter: 0 },
-    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", setup: "melee", deflect: "none", hoverMeleeReach: "reachable" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
+    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee", deflect: "none", hoverMeleeReach: "reachable" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
   ] as const)("one scythe swing hits $target", ({ seed, selection, aggroAt, pick, swingAt, hits, hpAfter }) => {
     const drill = startDrill({ seed, selection });
     drill.tickTo(aggroAt);
@@ -80,7 +80,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     ["slash", 67, 68, "melee", "passed", 20],
     ["range", 67, 68, "ranged", "passed", 20],
   ] as const)("Deflect judges a hit by the overhead when it was launched: a %s hit launched at %i and landing at %i", (attackStyle, launchedAt, landsAt, style, outcome, taken) => {
-    const drill = startDrill({ selection: { focus: "rifts" } });
+    const drill = startDrill({ selection: { focus: "rifts", drillStart: "cycle-start" } });
     drill.tickTo(launchedAt);
     drill.hit(drill.player(), drill.boss(), 20, attackStyle, landsAt - launchedAt);
     drill.tickTo(landsAt);
@@ -92,7 +92,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     {
       attack: "Twisted Bow shots into Deflect Range",
-      selection: { focus: "rifts" },
+      selection: { focus: "rifts", drillStart: "cycle-start" },
       seed: 4, wield: null, special: false, from: 39, to: 52,
       judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
       reflected: [[47, "ranged", { requested: 4, applied: 4, beforeHp: 99, afterHp: 95, prayer: null }], [52, "ranged", { requested: 6, applied: 6, beforeHp: 95, afterHp: 89, prayer: null }]],
@@ -101,7 +101,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     },
     {
       attack: "Ralos throws into Deflect Range",
-      selection: { focus: "rifts" },
+      selection: { focus: "rifts", drillStart: "cycle-start" },
       seed: 5, wield: 28922, special: false, from: 39, to: 52,
       judged: [[42, "ranged", "blocked", 0], [42, "ranged", "blocked", 0], [48, "ranged", "blocked", 13], [48, "ranged", "blocked", 2]],
       reflected: [[48, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
@@ -110,7 +110,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     },
     {
       attack: "a Division into Deflect Range",
-      selection: { focus: "rifts" },
+      selection: { focus: "rifts", drillStart: "cycle-start" },
       seed: 4, wield: 28922, special: true, from: 39, to: 46,
       judged: [[42, "ranged", "blocked", 2], [42, "ranged", "blocked", 13]],
       reflected: [[42, "ranged", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
@@ -119,7 +119,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     },
     {
       attack: "a scythe swing into Deflect Melee",
-      selection: { focus: "rifts", setup: "melee" },
+      selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee" },
       seed: 4, wield: null, special: false, from: 29, to: 33,
       judged: [[31, "melee", "blocked", 4], [31, "melee", "blocked", 12], [31, "melee", "blocked", 8]],
       reflected: [[31, "melee", { requested: 1, applied: 1, beforeHp: 99, afterHp: 98, prayer: null }]],
@@ -131,7 +131,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     {
       attack: "Twisted Bow shots into Deflect Melee and Soul Split, which do not turn them away",
-      selection: { focus: "rifts" },
+      selection: { focus: "rifts", drillStart: "cycle-start" },
       seed: 4, wield: null, special: false, from: 30, to: 38,
       judged: [[33, "ranged", "passed", 8], [38, "ranged", "passed", 44]],
       reflected: [],
@@ -140,7 +140,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     },
     {
       attack: "Twisted Bow shots into Deflect Range under deflect=block-at-launch",
-      selection: { focus: "rifts", deflect: "block-at-launch" },
+      selection: { focus: "rifts", drillStart: "cycle-start", deflect: "block-at-launch" },
       seed: 4, wield: null, special: false, from: 39, to: 52,
       judged: [[42, "ranged", "blocked", 8], [47, "ranged", "blocked", 44], [52, "ranged", "blocked", 62]],
       reflected: [],
@@ -150,10 +150,10 @@ describe("U6 boss overheads, heals and rifts", () => {
   ] as const)("guard, nothing reflected: $attack", attackIntoDeflect);
 
   test.each([
-    { weapon: "a scythe", selection: { focus: "rifts", setup: "melee" }, standsOn: { x: 5, y: 3 }, judged: [[31, "melee", "blocked"], [31, "melee", "blocked"], [31, "melee", "blocked"]] },
+    { weapon: "a scythe", selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee" }, standsOn: { x: 5, y: 3 }, judged: [[31, "melee", "blocked"], [31, "melee", "blocked"], [31, "melee", "blocked"]] },
     {
       weapon: "a scythe under hoverMeleeReach=reachable",
-      selection: { focus: "rifts", setup: "melee", hoverMeleeReach: "reachable" },
+      selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee", hoverMeleeReach: "reachable" },
       standsOn: { x: 5, y: 3 },
       judged: [
         [14, "melee", "blocked"], [14, "melee", "blocked"], [14, "melee", "blocked"],
@@ -162,7 +162,7 @@ describe("U6 boss overheads, heals and rifts", () => {
         [29, "melee", "blocked"], [29, "melee", "blocked"], [29, "melee", "blocked"],
       ],
     },
-    { weapon: "a bow", selection: { focus: "rifts" }, standsOn: { x: 5, y: 1 }, judged: [[16, "ranged", "passed"], [21, "ranged", "passed"], [26, "ranged", "passed"], [31, "ranged", "passed"]] },
+    { weapon: "a bow", selection: { focus: "rifts", drillStart: "cycle-start" }, standsOn: { x: 5, y: 1 }, judged: [[16, "ranged", "passed"], [21, "ranged", "passed"], [26, "ranged", "passed"], [31, "ranged", "passed"]] },
   ] as const)("melee cannot reach the boss while he hovers, from P4 tick 8 to 29, and ranged can: $weapon on him from tick 12", ({ selection, standsOn, judged }) => {
     const drill = startDrill({ selection });
     drill.tickTo(12);

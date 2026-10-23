@@ -74,22 +74,25 @@ describe("U3 lifeforce hit and orb", () => {
     ]);
   });
 
-  test("the default outer orb forms on the rim tile farthest from where the player stepped into the 5x5, or from the player who never did", () => {
-    const outerOrbAfterEntering = (entry: At | null, selection: DrillSelection = {}) => {
+  test("the default outer orb forms on the rim tile farthest from where the player stepped into the 5x5, not from where they stand at the hit, or from the player who never entered", () => {
+    const outerOrbAfterEntering = (walks: readonly At[], selection: DrillSelection = {}) => {
       const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
-      drill.tickTo(34);
-      if (entry !== null) drill.walkTo(entry);
+      walks.forEach((to, i) => {
+        drill.tickTo(34 + 3 * i);
+        drill.walkTo(to);
+      });
       drill.tickTo(43);
       const observed = drill.events("orb-spawned").filter((e) => e.void === "outer-void").map((e) => e.tile);
       drill.dispose();
       return observed;
     };
     expect([
-      outerOrbAfterEntering({ x: 3, y: 3 }),
-      outerOrbAfterEntering({ x: 7, y: 3 }),
-      outerOrbAfterEntering(null),
-      outerOrbAfterEntering({ x: 3, y: 3 }, NEAR_PLAYER_OUTER_ORB),
-    ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
+      outerOrbAfterEntering([{ x: 3, y: 3 }]),
+      outerOrbAfterEntering([{ x: 7, y: 3 }]),
+      outerOrbAfterEntering([{ x: 3, y: 3 }, { x: 7, y: 3 }]),
+      outerOrbAfterEntering([]),
+      outerOrbAfterEntering([{ x: 3, y: 3 }], NEAR_PLAYER_OUTER_ORB),
+    ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
   });
 
   test("an unclaimed outer orb heals the boss by its credit at hit + 19 (62); an unclaimed inner orb or a collected outer orb does not", () => {

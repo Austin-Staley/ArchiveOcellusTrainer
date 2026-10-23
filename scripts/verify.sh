@@ -130,6 +130,16 @@ ORB_CLICK_RIGHT_PX=-195
 ORB_CLICK_UP_PX=78
 ORB_BOX='{"minX":-60,"maxX":50,"minY":-75,"maxY":5}'
 ORB_SKIP_LAST_TICK=63
+ORB_INNER_CLEAR_TICK=30
+ORB_INNER_EXPIRY_TICK=35
+ORB_LATE_SHOT_TICK=31
+ORB_LATE_LAST_TICK=36
+ORB_ENTRY_CLICK_TICK=34
+ORB_ENTRY_CLICK_RIGHT_PX=106
+ORB_ENTRY_CLICK_UP_PX=50
+ORB_ENTRY_TILE='{"x":3,"y":3}'
+ORB_ENTRY_LAST_TICK=44
+ORB_OPPOSITE_EXPECTED='[[43,{"x":7,"y":7}]]'
 EXPLOSION_DRILL="explosions"
 EXPLOSION_INNER_MARKS="17 19 21 23 25 27"
 EXPLOSION_OUTER_MARKS="48 50 52 54 56 58"
@@ -230,7 +240,7 @@ RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
 RIFT_KILL_SOUND='[0.27,12640]'
 RIFT_BURST_SOUNDS='[[90.13,12641],[90.93,12642]]'
 RIFT_SOUND_WINDOW='[66,92]'
-CUE_QUERY="?seed=1&focus=${ORB_DRILL}&drillStart=cycle-start"
+CUE_QUERY="?seed=1&focus=${ORB_DRILL}&drillStart=cycle-start&outerOrbTile=safe-floor"
 CUE_TOGGLE_TICK=6
 CUE_CHAT_BEFORE_TICK=10
 CUE_CHAT_TICK=11
@@ -889,6 +899,22 @@ drive_orb_off_holes() {
   ab --json errors | json data.errors >"$VERIFY_DIR/orb-off-holes-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+drive_orb_late_and_entry() {
+  ab open "${URL}?seed=1&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  shot_after_tick "$ORB_LATE_SHOT_TICK" 300 orb-late.png || { log "the orb drill never reached P4 tick ${ORB_LATE_SHOT_TICK}"; return 1; }
+  click_at $((CX + ORB_CLICK_RIGHT_PX)) $((CY - ORB_CLICK_UP_PX)) || return 1
+  fight_tick_at_least "$ORB_LATE_LAST_TICK" 30000 || { log "the orb drill never stepped to P4 tick ${ORB_LATE_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/orb-late.json"
+  ab --json errors | json data.errors >"$VERIFY_DIR/orb-late-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  ab open "${URL}?seed=1&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  click_after_tick "$ORB_ENTRY_CLICK_TICK" "$ORB_ENTRY_CLICK_RIGHT_PX" "-$ORB_ENTRY_CLICK_UP_PX" || { log "the walk into the 5x5 was not clicked"; return 1; }
+  shot_after_tick "$ORB_ENTRY_LAST_TICK" 300 orb-entry.png || { log "the orb drill never reached P4 tick ${ORB_ENTRY_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/orb-entry.json"
+  ab console >"$VERIFY_DIR/orb-entry-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/orb-entry-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
 drive_void_floor() {
   choose_focus "$VOID_DRILL" || return 1
   fight_tick_at_least "$VOID_INNER_SHOT_TICK" 120000 || { log "the reloaded boss never stepped to P4 tick ${VOID_INNER_SHOT_TICK}"; return 1; }
@@ -1354,13 +1380,14 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_corner && drive_invincible && drive_cues || return 1
+  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_corner && drive_invincible && drive_cues || return 1
 
   local capture
   for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
     void-inner.png void-flood.png void-floor.json void-console.log void-page-errors.json \
     attack-click.json ring-click.json flood-ring.png void-shot.json void-shot-console.log void-shot-page-errors.json \
     orb-hit.png $(seq -f "orb-dormant-%g.png" 1 "$ORB_FRAMES") $(seq -f "orb-glow-%g.png" 1 "$ORB_FRAMES") orb-click.json orb.json orb-console.log orb-page-errors.json orb-skip.png orb-skip.json orb-skip-console.log orb-skip-page-errors.json \
+    orb-late.png orb-late.json orb-late-page-errors.json orb-entry.png orb-entry.json orb-entry-console.log orb-entry-page-errors.json \
     explosion-left.png explosion-standing.png explosions.json explosion-audio.json explosion-console.log explosion-page-errors.json explosion-under.png explosions-under.json explosion-under-console.log explosion-under-page-errors.json \
     dodge-speedup.json dodge-speedup-console.log dodge-speedup-page-errors.json \
     special-before.png special-vortex.png special-spike-disk.png special-semicircle.png special-black-disk.png special.json special-console.log special-page-errors.json special-late.json special-audio.json special-late-console.log special-late-page-errors.json \
@@ -1395,7 +1422,8 @@ drive() {
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
-      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, orbHolesExpected] = process.argv.slice(1);
+      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, orbHolesExpected,
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusAudio, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1414,6 +1442,7 @@ drive() {
     const [seedErrors, walkwayErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
     const [holesLog, holesErrors] = ["holes.json", "holes-page-errors.json"].map(read);
     const [orbHolesLog, orbHolesErrors] = ["orb-off-holes.json", "orb-off-holes-page-errors.json"].map(read);
+    const [orbLateLog, orbLateErrors, orbEntryLog, orbEntryErrors] = ["orb-late.json", "orb-late-page-errors.json", "orb-entry.json", "orb-entry-page-errors.json"].map(read);
     const [floorStart, floorFirst, floorLast, floorLog, floorErrors] = ["defence-floor-start.json", "defence-floor-first.json", "defence-floor.json", "defence-floor-log.json", "defence-floor-page-errors.json"].map(read);
     const floorGlaives = floorLog.rows.flatMap((row) => row.events.filter((event) => event.kind === "player-hit-judged")).slice(0, 4);
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
@@ -1683,6 +1712,14 @@ drive() {
           hits: row.events.filter((e) => e.kind === "hole-hit").map((e) => ({ at: e.at, tile: e.tile, requested: e.receipt.requested })),
         })),
       },
+      orbLate: {
+        returned: kindOf(orbLateLog.rows, "orb-returned").map((e) => [e.at, e.void, e.receipt]),
+        innerExpired: kindOf(orbLateLog.rows, "orb-expired").filter((e) => e.void === "inner-void").map((e) => e.at),
+      },
+      orbEntry: {
+        walks: orbEntryLog.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination)),
+        outer: kindOf(orbEntryLog.rows, "orb-spawned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.tile]),
+      },
       orbOffHoles: {
         layout: { key: orbHolesLog.header.choices.floorHoleLayout.key, tiles: orbHolesLog.header.choices.floorHoleLayout.option.value },
         spawned: orbHolesLog.rows.flatMap((row) => row.events.filter((e) => e.kind === "orb-spawned").map((e) => [e.at, e.void, e.tile])),
@@ -1875,6 +1912,10 @@ drive() {
       cornerFilled: sameJson(observed.corner.orders, `[${cornerHole},${cornerNub}]`) && sameJson(observed.corner.stood, `[${cornerHole},${cornerNub}]`),
       holesDrawnOnLayout: sameJson(observed.holes.layout, holeLayout) && observed.holes.darkShare.every((box) => onHole(box.tile) && box.drawn >= Number(holeMinDark)) &&
         observed.holes.freeDarkShare.every((box) => !onHole(box.tile) && box.drawn <= Number(holeMaxDark)),
+      orbPickedUpAfterTheClear: observed.orbLate.returned.length === 1 && observed.orbLate.returned[0][0] > Number(orbInnerClear) &&
+        observed.orbLate.returned[0][0] <= Number(orbInnerExpiry) && observed.orbLate.returned[0][1] === "inner-void" &&
+        sameJson(observed.orbLate.returned[0][2], JSON.stringify(expectedOrb.returned)) && observed.orbLate.innerExpired.length === 0,
+      outerOrbOppositeEntry: sameJson(observed.orbEntry.walks, `[${orbEntryTile}]`) && sameJson(observed.orbEntry.outer, orbOppositeExpected),
       orbFormsOffTheHoles: sameJson(observed.orbOffHoles.layout, holeLayout) && sameJson(observed.orbOffHoles.spawned, orbHolesExpected) &&
         observed.orbOffHoles.spawned.every(([, , tile]) => !onHole(tile)),
       holesHiddenUnderFlood: observed.holes.darkShare.every((box) => box.flood <= Number(holeMaxDark)),
@@ -1905,7 +1946,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1926,7 +1967,8 @@ drive() {
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
-    "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" "$ORB_HOLES_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" "$ORB_HOLES_EXPECTED" \
+    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

@@ -26,10 +26,12 @@ glob_in_variable|clean|1|${POSITION}|cp "\$FIXTURES/variants/alias-glob.test.sh"
 glob_in_here_document|clean|1|${POSITION}|cp "\$FIXTURES/variants/heredoc-glob.test.sh" scripts/build.test.sh
 interpreter_option|clean|1|${POSITION}|cp "\$FIXTURES/variants/interpreter-option.test.sh" scripts/build.test.sh
 embedded_copy|clean|1|${POSITION}|cp "\$FIXTURES/variants/embedded-copy.test.sh" scripts/build.test.sh
+unrelated_setup_error|historical-9d9143b|2|scripts/netlify-build.test.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without an ASSERTION FAILED line, so the failure does not show that the test checks the policy|cp "\$FIXTURES/variants/unrelated-setup-error.test.sh" scripts/netlify-build.test.sh
 unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.test.sh scripts/other.test.sh
 mutation_text_absent|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 0 times|sed -i.bak 's/^set -euo pipefail\$/set -eu -o pipefail/' scripts/build.sh && rm scripts/build.sh.bak
 failing_test|clean|2|scripts/build.test.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.test.sh
 passes_only_when_broken|clean|2|scripts/build.test.sh fails with exit 1 before any mutation|printf 'grep -q "^set -uo pipefail" scripts/build.sh\n' >scripts/build.test.sh
+mutation_breaks_syntax|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: the mutant fails bash -n|sed -i.bak 's/"replace": "set -uo pipefail/"replace": "fi/' review-ratchet/guarded-policies.json && rm review-ratchet/guarded-policies.json.bak
 mutation_text_twice|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 2 times|printf 'set -euo pipefail\n' >>scripts/build.sh
 missing_policy_file|clean|2|cannot read review-ratchet/guarded-policies.json|rm review-ratchet/guarded-policies.json
 EOF

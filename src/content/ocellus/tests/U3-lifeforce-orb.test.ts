@@ -9,6 +9,7 @@ const OUTER_ORB_FROM_SPAWN: At = { x: 4, y: 3 };
 const ANY_FLOOR_SEED = 31;
 const ANY_FLOOR_INNER_ORB: At = { x: 10, y: 2 };
 const OUTER_ORB_ON_FLOOD: At = { x: 1, y: 2 };
+const V1_TURN = { floorHoleLayout: "v1-turn" } as const;
 
 function returnsAfterWalkingAt(orderedAfter: number, selection: DrillSelection = {}) {
   const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
@@ -148,7 +149,7 @@ describe("U3 lifeforce hit and orb", () => {
       drill.dispose();
       return observed;
     };
-    expect([orbs(5, {}, 12), orbs(2, { outerOrbTile: "any-floor" }, 43)]).toEqual([
+    expect([orbs(5, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
       ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
       ["v1-turn", [[12, "inner-void", { x: 2, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
     ]);

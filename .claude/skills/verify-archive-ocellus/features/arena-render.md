@@ -5,7 +5,7 @@ Opening the trainer loads cache assets, counts down GET READY, and shows the P4 
 ## Sub-features
 
 - `arena-load` loads the page and reaches the ticking state without page errors.
-- `arena-floor` draws the 91 floor tiles of the 13x12 platform (`#` in `geometry.platform` in `OcellusTimings.ts`) as a checkerboard. After player feedback the walkway sits 1 tile further east than the footage puts it, so a row of floor separates the 5x5's east side from the walkway.
+- `arena-floor` draws the 91 floor tiles of the 13x12 platform (`#` in `geometry.platform` in `OcellusTimings.ts`) as a checkerboard. After player feedback the walkway sits 1 tile further east than the footage puts it, so a row of floor separates the 5x5's east side from the walkway. `WALKWAY_RIM` in `p4/floor.ts` holds the floor tiles that touch the walkway.
 - `arena-walkway` draws the brazier walkway (`w` and `b` in the same rows) as a raised olive curb with a light face toward the floor, and hangs the cache's Zarosian Censer (model 62440) over the `b` tile. The walkway is scenery: a click on it walks the player to the nearest floor tile.
 - `arena-player` draws the player model, in the selected setup's gear (ranged by default), on spawn tile (5, 1).
 - `arena-hud` shows the minimap orbs, inventory tabs and inventory panel.

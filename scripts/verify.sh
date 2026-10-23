@@ -109,21 +109,22 @@ PATHING_OUT_CLICK_DOWN_PX=90
 PATHING_OUT_TICK=40
 PATHING_OUT_EXPECTED='[[{"x":5,"y":5},{"x":5,"y":3}],[41],[["lead-in",[{"x":5,"y":3},{"x":5,"y":5}]],["outer-void",[{"x":5,"y":3}]]]]'
 HOLES_QUERY="?seed=1&focus=floor-holes"
-HOLE_LAYOUT='{"key":"v1-turn","tiles":[{"x":1,"y":5},{"x":1,"y":6},{"x":2,"y":8},{"x":2,"y":9},{"x":4,"y":9},{"x":8,"y":5}]}'
-HOLE_PIXELS='[[{"x":8,"y":5},-128,-95],[{"x":1,"y":5},170,-95],[{"x":1,"y":6},161,-115],[{"x":2,"y":8},108,-151],[{"x":2,"y":9},102,-167]]'
-HOLE_FREE_PIXELS='[[{"x":2,"y":5},127,-95],[{"x":2,"y":6},117,-116]]'
+HOLE_LAYOUT='{"key":"corner-stack","tiles":[{"x":11,"y":1},{"x":11,"y":2},{"x":11,"y":3}]}'
+HOLE_PIXELS='[[{"x":11,"y":1},-332,20],[{"x":11,"y":2},-309,-15],[{"x":11,"y":3},-290,-45]]'
+HOLE_FREE_PIXELS='[[{"x":10,"y":2},-268,-15],[{"x":10,"y":1},-292,20]]'
 HOLE_BOX_HALF_PX=8
 HOLE_MIN_DARK_SHARE=30
 HOLE_MAX_DARK_SHARE=5
 HOLE_FLOOD_SHOT_TICK=45
-HOLE_CLICK_LEFT_PX=128
-HOLE_CLICK_UP_PX=95
-HOLE_TILE='{"x":8,"y":5}'
+HOLE_CLICK_LEFT_PX=309
+HOLE_CLICK_UP_PX=15
+HOLE_TILE='{"x":11,"y":2}'
 HOLE_HITS=3
 HOLE_DAMAGE='{"min":9,"max":11}'
 ORB_HOLES_QUERY="?seed=5&floorHoleLayout=v1-turn"
 ORB_HOLES_SHOT_TICK=13
 ORB_HOLES_EXPECTED='[[12,"inner-void",{"x":2,"y":5}]]'
+ORB_HOLES_LAYOUT='{"key":"v1-turn","tiles":[{"x":1,"y":5},{"x":1,"y":6},{"x":2,"y":8},{"x":2,"y":9},{"x":4,"y":9},{"x":8,"y":5}]}'
 BOSS_CLICK_RIGHT_PX=150
 BOSS_CLICK_UP_PX=150
 RING_CLICK_RIGHT_PX=140
@@ -1546,7 +1547,7 @@ drive() {
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
-      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected,
+      dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
       orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
@@ -1857,7 +1858,7 @@ drive() {
       pathingOut: { orders: walkOrders(outLog), orderTicks: orderTicks(outLog), walks: walks(outLog) },
       pathingControl: { orders: walkOrders(controlRerouteLog), paces: walkPaces(controlRerouteLog), orderTicks: orderTicks(controlRerouteLog), walks: walks(controlRerouteLog) },
       holes: {
-        layout: { key: holesLog.header.choices.floorHoleLayout.key, tiles: holesLog.header.choices.floorHoleLayout.option.value },
+        layout: { key: holesLog.header.choices.floorHoleLayout.key, tiles: holesLog.header.choices.floorHoleLayout.option.value.tiles },
         darkShare: JSON.parse(holePixels).map((box) => ({ tile: box[0], drawn: darkAround("holes-drawn.png", box), flood: darkAround("holes-flood.png", box) })),
         freeDarkShare: JSON.parse(holeFreePixels).map((box) => ({ tile: box[0], drawn: darkAround("holes-drawn.png", box) })),
         rows: holesLog.rows.map((row) => ({
@@ -1876,7 +1877,7 @@ drive() {
         outer: kindOf(orbEntryLog.rows, "orb-spawned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.tile]),
       },
       orbOffHoles: {
-        layout: { key: orbHolesLog.header.choices.floorHoleLayout.key, tiles: orbHolesLog.header.choices.floorHoleLayout.option.value },
+        layout: { key: orbHolesLog.header.choices.floorHoleLayout.key, tiles: orbHolesLog.header.choices.floorHoleLayout.option.value.tiles },
         spawned: orbHolesLog.rows.flatMap((row) => row.events.filter((e) => e.kind === "orb-spawned").map((e) => [e.at, e.void, e.tile])),
       },
       keybinds: {
@@ -2081,8 +2082,8 @@ drive() {
         observed.orbLate.returned[0][0] <= Number(orbInnerExpiry) && observed.orbLate.returned[0][1] === "inner-void" &&
         sameJson(observed.orbLate.returned[0][2], JSON.stringify(expectedOrb.returned)) && observed.orbLate.innerExpired.length === 0,
       outerOrbOppositeEntry: sameJson(observed.orbEntry.walks, `[${orbEntryTile}]`) && sameJson(observed.orbEntry.outer, orbOppositeExpected),
-      orbFormsOffTheHoles: sameJson(observed.orbOffHoles.layout, holeLayout) && sameJson(observed.orbOffHoles.spawned, orbHolesExpected) &&
-        observed.orbOffHoles.spawned.every(([, , tile]) => !onHole(tile)),
+      orbFormsOffTheHoles: sameJson(observed.orbOffHoles.layout, orbHolesLayout) && sameJson(observed.orbOffHoles.spawned, orbHolesExpected) &&
+        observed.orbOffHoles.spawned.every(([, , tile]) => !JSON.parse(orbHolesLayout).tiles.some((hole) => same(tile, hole))),
       holesHiddenUnderFlood: observed.holes.darkShare.every((box) => box.flood <= Number(holeMaxDark)),
       holeHitsStandingOnIt: (() => {
         const { rows } = observed.holes, hits = rows.flatMap((row) => row.hits), damage = JSON.parse(holeDamage);
@@ -2133,7 +2134,7 @@ drive() {
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
-    "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" \
+    "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
     "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"

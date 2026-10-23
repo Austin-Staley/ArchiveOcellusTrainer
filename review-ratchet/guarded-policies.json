@@ -1,0 +1,86 @@
+{
+  "ignore": ["review-ratchet/fixtures"],
+  "scripts": [
+    {
+      "path": "scripts/netlify-build.sh",
+      "tests": ["scripts/netlify-build.test.sh"],
+      "policies": [
+        {
+          "policy": "errexit stops the build at the first failed command",
+          "mutation": [{ "find": "set -euo pipefail\n", "replace": "set -uo pipefail\n" }]
+        },
+        {
+          "policy": "errexit is on before prepare_reader runs",
+          "mutation": [
+            { "find": "set -euo pipefail\n", "replace": "" },
+            { "find": "\nprepare_reader\n", "replace": "\nprepare_reader\nset -euo pipefail\n" }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "scripts/check-types.mjs",
+      "tests": ["scripts/check-types.test.sh"],
+      "policies": [
+        {
+          "policy": "a finding fails the check",
+          "mutation": [{ "find": "process.exit(findings.length === 0 ? 0 : 1);", "replace": "process.exit(0);" }]
+        }
+      ]
+    },
+    {
+      "path": "review-ratchet/checks/shell-test-runs-entry.mjs",
+      "tests": ["review-ratchet/checks/shell-test-runs-entry.test.sh"],
+      "policies": [
+        {
+          "policy": "a test that passes under a mutation is a finding",
+          "mutation": [{ "find": "        findings.push(`${test}: passes when", "replace": "        undecided.push(`${test}: passes when" }]
+        },
+        {
+          "policy": "every shell test outside the ignored directories is listed",
+          "mutation": [{ "find": "!ignored(file) && !listed.has(file)", "replace": "!ignored(file) && !listed.has(file) && false" }]
+        },
+        {
+          "policy": "a failing case counts as catching a mutation only with an ASSERTION FAILED line in its output",
+          "mutation": [{ "find": "result: behaviour.some((line) => ASSERTION_FAILED.test(line)) ? \"asserted\" : \"errored\"", "replace": "result: \"asserted\"" }]
+        },
+        {
+          "policy": "a failing case counts only when it prints its ready line under the mutation",
+          "mutation": [{ "find": "const behaviour = ready === -1 ? [] : own.slice(ready + 1);", "replace": "const behaviour = own.slice(ready + 1);" }]
+        },
+        {
+          "policy": "an ASSERTION FAILED line counts only after its case's ready line",
+          "mutation": [{ "find": "const behaviour = ready === -1 ? [] : own.slice(ready + 1);", "replace": "const behaviour = ready === -1 ? [] : own;" }]
+        },
+        {
+          "policy": "a ready line counts only when it names its case",
+          "mutation": [{ "find": "line.trim() === `ready ${name}`", "replace": "line.trim().startsWith(\"ready \")" }]
+        },
+        {
+          "policy": "a failing case counts only when it also prints its ready line before any mutation",
+          "mutation": [{ "find": "found.result === \"passed\" && found.ready ?", "replace": "found.result === \"passed\" ?" }]
+        },
+        {
+          "policy": "an ASSERTION FAILED line counts only for the case whose output holds it",
+          "mutation": [{ "find": "const own = lines.slice(start + 1, starts[index + 1]);", "replace": "const own = lines;" }]
+        },
+        {
+          "policy": "an indented ASSERTION FAILED line counts",
+          "mutation": [{ "find": "const ASSERTION_FAILED = /^[ \\t]*ASSERTION FAILED: /;", "replace": "const ASSERTION_FAILED = /^ASSERTION FAILED: /;" }]
+        },
+        {
+          "policy": "a mutant run that reports other cases than the test as it is does not count as catching the mutation",
+          "mutation": [{ "find": "if (names(outcome.cases) !== names(control)) {", "replace": "if (false) {" }]
+        },
+        {
+          "policy": "a test with a failing case before any mutation is refused",
+          "mutation": [{ "find": "if (failing.length === 0) controls.set", "replace": "if (true) controls.set" }]
+        },
+        {
+          "policy": "a mutant that fails its syntax check is refused",
+          "mutation": [{ "find": "if (invalid !== null) throw new Error(invalid);", "replace": "" }]
+        }
+      ]
+    }
+  ]
+}

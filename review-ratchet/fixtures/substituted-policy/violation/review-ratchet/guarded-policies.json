@@ -1,0 +1,22 @@
+{
+  "ignore": [],
+  "scripts": [
+    {
+      "path": "scripts/build.sh",
+      "tests": ["scripts/build.fixture.sh"],
+      "policies": [
+        {
+          "policy": "errexit stops the build at the first failed command",
+          "mutation": [{ "find": "set -euo pipefail\n", "replace": "set -uo pipefail\n" }]
+        },
+        {
+          "policy": "errexit is on before prepare_reader runs",
+          "mutation": [
+            { "find": "set -euo pipefail\n", "replace": "" },
+            { "find": "\nprepare_reader\n", "replace": "\nprepare_reader\nset -euo pipefail\n" }
+          ]
+        }
+      ]
+    }
+  ]
+}

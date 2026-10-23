@@ -418,13 +418,12 @@ const GEOMETRY: GeometryRecipe = {
       ".######ww......",
       ".#####ww.......",
       ".####ww........",
-      ".###ww.........",
-      "wwwww..........",
+      ".wwwww.........",
     ],
     "community-tested",
     "unscaled",
-    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway, a band 2 tiles wide, past its diagonal edge; the brazier sits in the walkway's step off the 5x5's south-east corner; players report the walkway 1 tile too close to the boss, so it sits 1 tile further out than the footage puts it, on every side: the diagonal 1 tile east, the north end 1 tile east and the south end 1 row south, for 94 floor tiles; the footage put the walkway's inner tiles on the floor's row ends, beside the 5x5 on (8, 6), (8, 7) and (7, 8), and J1 shows floor on five of those, (11, 3), (10, 4), (9, 5), (8, 6) and (4, 11), that V2's walkway base excludes; V2's drawn void and J1's rims agree on the north and west legs, J1 adds the floor the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
-    owner("players: the brazier walkway border is 1 tile too close to the boss and needs 1 more tile of room", "2026-10-23"),
+    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway, a band 2 tiles wide, past its diagonal edge; the brazier sits in the walkway's step off the 5x5's south-east corner; players report the tiles on the east side 1 too close to the boss and drag the walkway out 1 tile east, so the whole walkway sits 1 tile east of V2's walkway base, for 91 floor tiles; in the footage the walkway touches the 5x5 on (8, 6), (8, 7) and (7, 8), and J1 shows floor on five of the tiles it gives up, (11, 3), (10, 4), (9, 5), (8, 6) and (4, 11); V2's drawn void and J1's rims agree on the north and west legs, J1 adds the floor the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
+    owner("redditor: the tiles on the east side are 1 too close to the boss and need dragging out by 1", "2026-10-23"),
     FLOOD_FRAMES,
     vod("V2", "k060 to k269, walkway base and strip rims, 18 frames"),
     vod("V2", "k080, bare floor south of the 5x5"),
@@ -503,8 +502,8 @@ const FLOOR_HOLES: FloorHoleRecipe = {
 };
 
 const FLOOR_HOLE_LAYOUT = choice("v1-turn", {
-  "v1-turn": selected<HoleLayout>([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)], "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; the only full layout that clears the spawn, the drill tiles and rift option A; (4, 9) is floor only on the 80-tile rows", HOLE_FRAMES),
-  "v1-mirror": selected<HoleLayout>([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)], "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn; (5, 8) is floor only on the 80-tile rows", HOLE_FRAMES),
+  "v1-turn": selected<HoleLayout>([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)], "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; the only full layout that clears the spawn, the drill tiles and rift option A; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
+  "v1-mirror": selected<HoleLayout>([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)], "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
   "j1-mirror": selected<HoleLayout>([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)], "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", owner("P4 platform screenshot: five black hole blobs")),
   "j1-turn": selected<HoleLayout>([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)], "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", owner("P4 platform screenshot: five black hole blobs")),
 });

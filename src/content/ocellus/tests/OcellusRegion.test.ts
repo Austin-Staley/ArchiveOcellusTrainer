@@ -113,7 +113,7 @@ describe("Ocellus arena", () => {
     drill.dispose();
   });
 
-  test("a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner, because the walkway juts in to meet it", () => {
+  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner, because the walkway juts in to meet it", () => {
     const walk = (from: At, to: At) => {
       const drill = startDrill({ selection: NON_LETHAL });
       drill.walkTo(from);

@@ -78,7 +78,7 @@ describe("Invincible", () => {
     drill.region.invincible = true;
     drill.walkTo({ x: 5, y: 5 });
     drill.tickTo(19);
-    drill.walkTo({ x: 4, y: 8 });
+    drill.walkTo({ x: 6, y: 8 });
     drill.tickTo(25);
     const observed = {
       spawned: drill.events("orb-spawned").map((e) => [e.at, e.tile, e.credit]),
@@ -88,7 +88,7 @@ describe("Invincible", () => {
     };
     drill.dispose();
     expect(observed).toEqual({
-      spawned: [[12, { x: 4, y: 8 }, 38]],
+      spawned: [[12, { x: 6, y: 8 }, 38]],
       prevented: [
         { kind: "death-prevented", at: 15, source: "floor-hit", clearedOrbCredit: 38 },
         { kind: "death-prevented", at: 24, source: "explosion-resolved", clearedOrbCredit: 0 },
@@ -103,7 +103,7 @@ describe("Invincible", () => {
       const drill = startDrill({ selection: { focus: "lifeforce-orb" } });
       drill.region.invincible = invincible;
       drill.tickTo(12);
-      drill.walkTo({ x: 9, y: 4 });
+      drill.walkTo({ x: 1, y: 5 });
       drill.tickTo(25);
       const observed = { returned: drill.events("orb-returned").map((e) => [e.at, e.receipt]), hp: drill.row(25).playerAtPostTick.hp };
       drill.dispose();

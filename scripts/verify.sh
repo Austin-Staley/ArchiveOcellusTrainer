@@ -67,9 +67,12 @@ KEYBIND_NEW_KEY=F6
 WALKWAY_QUERY="?seed=1&focus=${FOCUS_DRILL}"
 WALKWAY_CLICK_LEFT_PX=400
 WALKWAY_ORDER_TILE='{"x":13,"y":2}'
-WALKWAY_STOP_TILE='{"x":11,"y":2}'
+WALKWAY_STOP_TILE='{"x":12,"y":2}'
 WALKWAY_PIXEL="#6b6c40"
 WALKWAY_MIN_SHARE=1
+WALKWAY_ROOM_CLICK_RIGHT_PX=-128
+WALKWAY_ROOM_CLICK_UP_PX=133
+WALKWAY_ROOM_TILE='{"x":8,"y":7}'
 CORNER_QUERY="?seed=2&focus=${FOCUS_DRILL}"
 CORNER_HOLE_CLICK_RIGHT_PX=60
 CORNER_HOLE_CLICK_UP_PX=155
@@ -114,7 +117,7 @@ INVINCIBLE_EXPECTED='{"prevented":[[54,"floor-hit"]],"hp":[[53,1],[54,99]],"chat
 INVINCIBLE_ORB_QUERY="?seed=1&invincible=on"
 INVINCIBLE_ORB_UNDER_BOSS_CLICK_UP_PX=100
 INVINCIBLE_ORB_CLICK_TICK=19
-INVINCIBLE_ORB_CLICK_RIGHT_PX=50
+INVINCIBLE_ORB_CLICK_RIGHT_PX=-50
 INVINCIBLE_ORB_CLICK_UP_PX=75
 INVINCIBLE_ORB_LAST_TICK=26
 INVINCIBLE_ORB_EXPECTED='{"revived":[15,"floor-hit",38],"returned":[[25,{"requested":0,"applied":0,"beforeHp":99,"afterHp":99}]],"hp":[25,99],"maxHp":99}'
@@ -123,8 +126,8 @@ ORB_DORMANT_TICK=20
 ORB_GLOW_TICK=24
 ORB_LAST_TICK=30
 ORB_FRAMES=6
-ORB_CLICK_RIGHT_PX=-195
-ORB_CLICK_UP_PX=78
+ORB_CLICK_RIGHT_PX=170
+ORB_CLICK_UP_PX=95
 ORB_BOX='{"minX":-60,"maxX":50,"minY":-75,"maxY":5}'
 ORB_SKIP_LAST_TICK=63
 EXPLOSION_DRILL="explosions"
@@ -172,7 +175,7 @@ STYLE_SOUNDS='[[34.2,12554],[64.4,12555],[65.1,12556],[92.1,12572],[97.1,12567]]
 STYLE_WINDOWS='[[32,37.5],[60,65.5],[92,97.5]]'
 SOUND_TOLERANCE_TICKS=0.2
 SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
-ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[12,{"x":9,"y":4},49]],"matured":[[24,{"x":9,"y":4}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
+ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[12,{"x":1,"y":5},49]],"matured":[[24,{"x":1,"y":5}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[30,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
 RIFT_QUERY="?seed=1&focus=rifts&drillStart=cycle-start"
 OVERHEAD_SHOT_TICKS="5 31 35 45"
 OVERHEAD_GAP_DRAWS='{"37":["440-11"],"38":[],"39":["440-16"],"66":["440-11"],"67":[],"68":["440-15"]}'
@@ -838,6 +841,14 @@ drive_walkway() {
   ab screenshot "$VERIFY_DIR/walkway.png" >/dev/null || { log "walkway screenshot failed"; return 1; }
   ab console >"$VERIFY_DIR/walkway-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/walkway-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking || return 1
+  walk_by_click $((CX + WALKWAY_ROOM_CLICK_RIGHT_PX)) $((CY - WALKWAY_ROOM_CLICK_UP_PX)) "$WALKWAY_ROOM_TILE" || return 1
+  arrived="$(probe "snapshot()")"
+  ab wait --fn "window.__archiveOcellusProbe.snapshot().tick >= $(json tick <<<"$arrived") + ${EDGE_HOLD_TICKS}" --timeout 15000 >/dev/null
+  probe "snapshot()" >"$VERIFY_DIR/walkway-room.json"
+  probe "log()" >"$VERIFY_DIR/walkway-room-log.json"
+  ab screenshot "$VERIFY_DIR/walkway-room.png" >/dev/null || { log "walkway room screenshot failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/walkway-room-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
 drive_corner() {
@@ -1364,6 +1375,7 @@ drive() {
     seed-fresh.png seed.json seed.png seed-console.log seed-page-errors.json \
     holes-drawn.png holes-flood.png hole-click.json hole-hit.png holes.json holes-console.log holes-page-errors.json \
     walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
+    walkway-room.json walkway-room-log.json walkway-room.png walkway-room-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
     invincible-default.json invincible-linked.json invincible.png invincible-chat.json invincible.json invincible-console.log invincible-page-errors.json invincible-restarted.json \
     invincible-orb.png invincible-orb.json invincible-orb-console.log invincible-orb-page-errors.json \
@@ -1379,7 +1391,7 @@ drive() {
       tellCentreBox, transitionSamples, landingSounds, landingWindows, styleSounds, styleWindows, soundTolerance,
       supplyInventory, namedMenu, hpAfterBrew, defaultKey, newKey, trainerIcons, brewY, hoverNamePixel, overheadShots, iconBox, riftExpected, burstTick, soulSplitExpected, killChat,
       riftSoundSamples, riftSpawnSounds, riftKillSound, riftBurstSounds, riftSoundWindow, gapDraws, hoverTile, hoverTicks, firstMeleeTick,
-      walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, cornerHole, cornerNub,
+      walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, walkwayRoom, cornerHole, cornerNub,
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
@@ -1397,9 +1409,9 @@ drive() {
     const [carried, itemMenu, itemMenuClosed, brewClick, brewHp, suppliesErrors] = ["supplies-inventory.json", "item-menu.json", "item-menu-closed.json", "brew-click.json", "brew-hp.json", "supplies-page-errors.json"].map(read);
     const icons = read("icons.json");
     const seeds = read("seed.json");
-    const [walkwayArrived, walkwayHeld, walkwayLog, cornerAtHole, cornerHoleLog, cornerAtNub, cornerNubLog] =
-      ["walkway-arrived.json", "walkway.json", "walkway-log.json", "corner-hole.json", "corner-hole-log.json", "corner-nub.json", "corner-nub-log.json"].map(read);
-    const [seedErrors, walkwayErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
+    const [walkwayArrived, walkwayHeld, walkwayLog, walkwayRoomHeld, walkwayRoomLog, cornerAtHole, cornerHoleLog, cornerAtNub, cornerNubLog] =
+      ["walkway-arrived.json", "walkway.json", "walkway-log.json", "walkway-room.json", "walkway-room-log.json", "corner-hole.json", "corner-hole-log.json", "corner-nub.json", "corner-nub-log.json"].map(read);
+    const [seedErrors, walkwayErrors, walkwayRoomErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "walkway-room-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
     const [holesLog, holesErrors] = ["holes.json", "holes-page-errors.json"].map(read);
     const [floorStart, floorFirst, floorLast, floorLog, floorErrors] = ["defence-floor-start.json", "defence-floor-first.json", "defence-floor.json", "defence-floor-log.json", "defence-floor-page-errors.json"].map(read);
     const floorGlaives = floorLog.rows.flatMap((row) => row.events.filter((event) => event.kind === "player-hit-judged")).slice(0, 4);
@@ -1657,6 +1669,7 @@ drive() {
         arrived: [walkwayArrived.tick, walkwayArrived.player],
         held: [walkwayHeld.tick, walkwayHeld.player],
         share: pixelShare("walkway.png", (...rgb) => walkwayRgb.every((v, c) => Math.abs(rgb[c] - v) <= 4)),
+        room: { orders: walkOrders(walkwayRoomLog), held: [walkwayRoomHeld.tick, walkwayRoomHeld.player] },
       },
       corner: { orders: [...walkOrders(cornerHoleLog), ...walkOrders(cornerNubLog)], stood: [cornerAtHole.player, cornerAtNub.player] },
       holes: {
@@ -1855,6 +1868,7 @@ drive() {
       walkwayClickStaysOnFloor: sameJson(observed.walkway.orders, `[${walkwayOrder}]`) && same(walkwayArrived.player, JSON.parse(walkwayStop)) && same(walkwayHeld.player, JSON.parse(walkwayStop)) &&
         walkwayHeld.tick - walkwayArrived.tick >= Number(holdTicks),
       walkwayDrawn: observed.walkway.share >= Number(walkwayMinShare),
+      walkwayClearOfSquare: sameJson(observed.walkway.room.orders, `[${walkwayRoom}]`) && same(walkwayRoomHeld.player, JSON.parse(walkwayRoom)),
       cornerFilled: sameJson(observed.corner.orders, `[${cornerHole},${cornerNub}]`) && sameJson(observed.corner.stood, `[${cornerHole},${cornerNub}]`),
       holesDrawnOnLayout: sameJson(observed.holes.layout, holeLayout) && observed.holes.darkShare.every((box) => onHole(box.tile) && box.drawn >= Number(holeMinDark)) &&
         observed.holes.freeDarkShare.every((box) => !onHole(box.tile) && box.drawn <= Number(holeMaxDark)),
@@ -1886,7 +1900,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, walkwayRoomErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1903,7 +1917,7 @@ drive() {
     "$OVERHEAD_SHOT_TICKS" "$ICON_BOX" "$RIFT_EXPECTED" "$RIFT_BURST_TICK" "$SOUL_SPLIT_EXPECTED" "$KILL_CHAT" \
     "$RIFT_SOUND_SAMPLES" "$RIFT_SPAWN_SOUNDS" "$RIFT_KILL_SOUND" "$RIFT_BURST_SOUNDS" "$RIFT_SOUND_WINDOW" "$OVERHEAD_GAP_DRAWS" \
     "$DEFLECT_HOVER_TILE" "$DEFLECT_HOVER_TICKS" "$DEFLECT_FIRST_MELEE_TICK" \
-    "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
+    "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$WALKWAY_ROOM_TILE" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \

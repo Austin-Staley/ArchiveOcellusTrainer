@@ -12,7 +12,7 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
-type OwnerDate = "2026-10-21" | "2026-10-22";
+type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23";
 
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
@@ -406,23 +406,25 @@ const V1_FLOOD_FRAMES = vod("V1", "G66, G126, G130");
 const GEOMETRY: GeometryRecipe = {
   platform: selected(
     [
-      "...?........ww",
-      ".?##########ww",
-      ".###########ww",
-      ".##########ww.",
-      ".#########ww..",
-      ".########ww...",
-      ".#######ww....",
-      ".#######ww....",
-      ".######wb.....",
-      ".#####ww......",
-      ".####ww.......",
-      ".###ww........",
-      "wwwww.........",
+      "...?.........ww",
+      ".?###########ww",
+      ".############ww",
+      ".###########ww.",
+      ".##########ww..",
+      ".#########ww...",
+      ".########ww....",
+      ".########ww....",
+      ".#######wb.....",
+      ".######ww......",
+      ".#####ww.......",
+      ".####ww........",
+      ".###ww.........",
+      "wwwww..........",
     ],
-    "footage-repeated",
+    "community-tested",
     "unscaled",
-    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; the walkway is the band 2 tiles past the floor's diagonal edge, ending where J1 ends it at y 12, and it covers the six disputed diagonal tiles (11, 3), (10, 4), (11, 4), (9, 5), (8, 6) and (4, 11), J1 floor that V2's walkway base excludes; the brazier sits in the walkway's step beside the 5x5's corner; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway on the diagonal; V2's drawn void and J1's rims agree on both legs, J1 adds the 6 floor tiles the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
+    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway, a band 2 tiles wide, past its diagonal edge; the brazier sits in the walkway's step off the 5x5's south-east corner; players report the walkway 1 tile too close to the boss, so it sits 1 tile further out than the footage puts it, on every side: the diagonal 1 tile east, the north end 1 tile east and the south end 1 row south, for 94 floor tiles; the footage put the walkway's inner tiles on the floor's row ends, beside the 5x5 on (8, 6), (8, 7) and (7, 8), and J1 shows floor on five of those, (11, 3), (10, 4), (9, 5), (8, 6) and (4, 11), that V2's walkway base excludes; V2's drawn void and J1's rims agree on the north and west legs, J1 adds the floor the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
+    owner("players: the brazier walkway border is 1 tile too close to the boss and needs 1 more tile of room", "2026-10-23"),
     FLOOD_FRAMES,
     vod("V2", "k060 to k269, walkway base and strip rims, 18 frames"),
     vod("V2", "k080, bare floor south of the 5x5"),

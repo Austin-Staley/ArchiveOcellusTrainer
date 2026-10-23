@@ -203,7 +203,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test("the Soul Split and unclaimed-orb heals coexist, and a protected transition hit heals nothing", () => {
     const drill = startDrill({ selection: { focus: "boss-heals", specialSelection: "replay-v2" } });
     drill.tickTo(13);
-    drill.walkTo({ x: 9, y: 4 });
+    drill.walkTo({ x: 1, y: 5 });
     drill.tickTo(63);
     drill.pray("Protect from Range");
     drill.tickTo(68);

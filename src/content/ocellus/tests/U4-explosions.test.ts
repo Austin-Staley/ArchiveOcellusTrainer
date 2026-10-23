@@ -27,7 +27,7 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
-  test("a step that moves the player during each mark tick leaves every mark behind", () => {
+  test("a one-tile step during each mark tick leaves every mark behind and counts as a dodge", () => {
     const drill = startDrill({ selection: EXPLOSIONS });
     const steps: readonly (readonly [number, At])[] = [[16, BESIDE_SPAWN], [18, SPAWN_ON_FLOOD], [20, BESIDE_SPAWN], [22, SPAWN_ON_FLOOD], [24, BESIDE_SPAWN], [26, SPAWN_ON_FLOOD]];
     for (const [after, to] of steps) {
@@ -39,7 +39,7 @@ describe("U4 personal explosions", () => {
       [17, { x: 5, y: 1 }], [19, { x: 6, y: 1 }], [21, { x: 5, y: 1 }], [23, { x: 6, y: 1 }], [25, { x: 5, y: 1 }], [27, { x: 6, y: 1 }],
     ]);
     expect(drill.events("explosion-resolved").map((e) => [e.at, e.outcome.kind])).toEqual([
-      [18, "avoided"], [20, "avoided"], [22, "avoided"], [24, "avoided"], [26, "avoided"], [28, "avoided"],
+      [18, "dodged"], [20, "dodged"], [22, "dodged"], [24, "dodged"], [26, "dodged"], [28, "dodged"],
     ]);
     expect(drill.row(28).playerAtPostTick.hp).toBe(99);
     drill.dispose();
@@ -52,6 +52,14 @@ describe("U4 personal explosions", () => {
     drill.tickTo(18);
     expect(drill.events("explosion-resolved").map((e) => [e.at, e.outcome.kind, e.tile])).toEqual([[18, "hit", { x: 5, y: 1 }]]);
     expect(drill.row(18).playerAtPostTick.tile).toEqual({ x: 6, y: 1 });
+    drill.dispose();
+  });
+
+  test("in 2D, the mark's shards close in on the player's tile through the first half of the mark tick, then give way to the glow", () => {
+    const drill = startDrill({ selection: EXPLOSIONS });
+    drill.tickTo(17);
+    const reach = [0.1, 0.25, 0.45, 0.75].map((t) => drill.drawnShardReach(SPAWN_ON_FLOOD, t).map((tiles) => Math.round(tiles * 10) / 10));
+    expect(reach).toEqual([Array(7).fill(0.7), Array(7).fill(0.5), Array(7).fill(0.3), []]);
     drill.dispose();
   });
 

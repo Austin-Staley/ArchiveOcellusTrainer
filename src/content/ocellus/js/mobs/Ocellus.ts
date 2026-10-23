@@ -586,7 +586,15 @@ export class Ocellus extends Mob {
     if (!mark) return null;
     this.marks = this.marks.filter((pending) => pending !== mark);
     const resolved = (outcome: ExplosionOutcome): FightEvent => ({ kind: "explosion-resolved", at, void: kind, pulse, tile: mark.tile, underBoss: FOOTPRINT.contains(mark.tile), outcome });
-    if (mark.tile.x !== player.x || mark.tile.y !== player.y) return resolved({ kind: "avoided" });
+    const distance = reach(mark.tile, player);
+    const { radius, attackDelayCut } = OCELLUS_P4.explosion.dodge.value;
+    if (distance > radius) return resolved({ kind: "avoided" });
+    if (distance > 0) {
+      const before = this.target.attackDelay;
+      const after = Math.max(Math.min(before, 0), before - attackDelayCut);
+      this.target.attackDelay = after;
+      return resolved({ kind: "dodged", attackDelay: { before, after } });
+    }
     const requested = rollInt(this.config.seed, "explosionDamage", at, this.config.choices.explosions.option.value.damage, 0);
     this.target.addProjectile(new P4Hit(this, this.target, () => requested, (receipt) => this.recordEvent(resolved({ kind: "hit", receipt }))));
     return null;

@@ -111,7 +111,11 @@ export function riftId(spawnedAt: Tick, slot: number): RiftId {
 export type HitReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number; prayer: Style | null }>;
 export type HealReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number }>;
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }> | Readonly<{ kind: "soul-split"; ordinal: Ordinal }>;
-export type ExplosionOutcome = Readonly<{ kind: "hit"; receipt: HitReceipt }> | Readonly<{ kind: "avoided" }>;
+/** `attackDelay` is the player's SDK attack clock at the impact, before and after a dodge cuts it. */
+export type ExplosionOutcome =
+  | Readonly<{ kind: "hit"; receipt: HitReceipt }>
+  | Readonly<{ kind: "dodged"; attackDelay: Readonly<{ before: number; after: number }> }>
+  | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
 export type HitJudgement = "passed" | "invulnerable" | "blocked";
 export type PlayerHitSource = "deflect-reflected" | "floor-hit" | "hole-hit" | "lifeforce-drained" | "explosion-resolved" | "special-hit" | "rift-burst";

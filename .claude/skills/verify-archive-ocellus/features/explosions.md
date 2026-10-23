@@ -6,7 +6,8 @@ Five ticks after each lifeforce hit, Ocellus marks the tile the player starts th
 
 - `explosion-series-start` logs `explosion-series-started` at P4 tick 14 (inner void) and 45 (outer void), two ticks after each lifeforce hit, and plays 12638 on the player's tile.
 - `explosion-mark` logs `explosion-marked` at P4 tick 17, 19, 21, 23, 25 and 27 (inner void) and 48 to 58 (outer void), with the tile the player started that tick on, and places the shards on that tile and plays 12537 on the player's tile.
-- `explosion-impact` logs `explosion-resolved` a tick after each mark. The outcome is `hit` with a 16 receipt when the player starts the impact tick on the marked tile, and `avoided` otherwise. The shards flare and fade either way.
+- `explosion-impact` logs `explosion-resolved` a tick after each mark. The outcome is `hit` with a 16 receipt when the player starts the impact tick on the marked tile, `dodged` when the player starts it 1 tile away, and `avoided` when 2 or more tiles away. The shards flare and fade either way.
+- `explosion-dodge` cuts the player's attack delay by 3, never below 0, on each `dodged` impact, and records the delay before and after in the outcome's `attackDelay`. A Scythe or a Twisted bow on Rapid then attacks every 2 ticks while each mark is dodged. A hit or a 2-tile run leaves the delay alone.
 - `explosion-under-boss` records `underBoss: true` when the marked tile is under the boss. Such a mark still hits.
 - `explosion-choices` select the series with `explosions`: `v2-tell-then-six` (default, marks from hit + 5, 17 to 27, in step with sound 12537), `wiki-six` (marks from hit + 3, 15 to 25) or `v2-seven` (marks from hit + 3 with a seventh at 27).
 

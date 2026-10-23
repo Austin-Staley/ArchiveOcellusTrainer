@@ -3,7 +3,7 @@ import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Specia
 import { cycle, seed, soundId, span, tick, tile } from "./P4Types";
 import { roll } from "./p4/roll";
 
-type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "owner-estimated" | "inferred" | "assumption";
+type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "community-tested" | "owner-estimated" | "inferred" | "assumption";
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
 
 const VODS = {
@@ -559,9 +559,13 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", vod("V2", "k53"), vod("V2", "k64")),
 };
 
-type ExplosionCueRecipe = Readonly<{ seriesStartsAfterHit: Selected<TickSpan>; shards: Selected<string> }>;
+type ExplosionSeriesRecipe = Readonly<{
+  seriesStartsAfterHit: Selected<TickSpan>;
+  shards: Selected<string>;
+  dodge: Selected<Readonly<{ radius: number; attackDelayCut: TickSpan }>>;
+}>;
 
-const EXPLOSION: ExplosionCueRecipe = {
+const EXPLOSION: ExplosionSeriesRecipe = {
   seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
   shards: selected(
     "#5e317b",
@@ -570,6 +574,17 @@ const EXPLOSION: ExplosionCueRecipe = {
     "dark purple shards stand around the player's tile on each mark tick; median colour of the shards on four mark ticks. The spec's cache candidate, spotanims 4299 to 4302 (model 62509), renders a white disc and a white flash, which the footage does not show",
     vod("V2", "k57, k59, k61, k65"),
     STRATEGIES,
+  ),
+  dodge: selected(
+    { radius: 1, attackDelayCut: span(3) },
+    "community-tested",
+    "unscaled",
+    "community-tested, unconfirmed: stepping off the marked tile on the mark tick to a tile within 1 of it cuts the player's attack delay by 3 at the impact, never below 0, so a 5-tick Scythe or Twisted bow attacks every 2 ticks while each pulse is dodged and a 6-tick weapon every 3; a 2-tile run avoids the hit without the cut. The wiki tester's flat-3 theory, from an Elder maul that did not 2-tick; halving was the other theory",
+    wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379685),
+    wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379561),
+    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379780),
+    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379373),
+    owner("Scythe and Twisted bow on 2-tick gaps during the explosion series in the VOD", "2026-10-22"),
   ),
 };
 

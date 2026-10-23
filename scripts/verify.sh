@@ -176,6 +176,8 @@ RIFT_TIMER_BOX='{"minX":156,"maxX":185,"minY":-85,"maxY":-81}'
 RIFT_TIMER_MAX_EARLY_SHARE=10
 RIFT_TIMER_MIN_FULL_SHARE=85
 RIFT_ONE_HIT='[[72,"rift-67-1","ranged",44]]'
+RIFT_RALOS_HITS='[[72,"rift-67-1","ranged",18],[72,"rift-67-1","ranged",18]]'
+RIFT_RALOS_LAST_TICK=74
 CHAT_POLL_WAIT_MS=600
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee"
 DEFLECT_CLICK_TICK=12
@@ -565,7 +567,12 @@ drive_cycle() {
   ab --json errors | json data.errors >"$VERIFY_DIR/page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+open_settings() {
+  [[ "$(ab --json is visible "#settings_menu" | json data.visible)" == true ]] || ab click "#settings" >/dev/null || { log "the Settings button did not respond"; return 1; }
+}
+
 keep_seed() {
+  open_settings || return 1
   ab fill "#seed" "$(ab --json get value "#seed" | json data.value)" >/dev/null || { log "the seed box did not take the run's own seed"; return 1; }
 }
 
@@ -716,11 +723,11 @@ drive_supplies() {
 }
 
 bind_inventory_key() {
-  ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null && click_at "$KEYBIND_INVENTORY_BUTTON_X" "$KEYBIND_INVENTORY_BUTTON_Y" && ab press "$1" >/dev/null && ab wait 300 >/dev/null
+  open_settings && ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null && click_at "$KEYBIND_INVENTORY_BUTTON_X" "$KEYBIND_INVENTORY_BUTTON_Y" && ab press "$1" >/dev/null && ab wait 300 >/dev/null
 }
 
 drive_keybinds() {
-  ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null || { log "the Keybinds button did not respond"; return 1; }
+  open_settings && ab click "#keybinds" >/dev/null && ab wait 300 >/dev/null || { log "the Keybinds button did not respond"; return 1; }
   probe "snapshot().panel" >"$VERIFY_DIR/keybinds-open.json"
   ab screenshot "$VERIFY_DIR/keybinds.png" >/dev/null || { log "key bindings screenshot failed"; return 1; }
   bind_inventory_key "$KEYBIND_NEW_KEY" || { log "the inventory key was not bound"; return 1; }
@@ -741,6 +748,7 @@ drive_keybinds() {
 
 seed_run() {
   local box seed search
+  open_settings || return 1
   box="$(ab --json get value "#seed" | json data.value)" || return 1
   seed="$(probe "log().header.seed")" || return 1
   search="$(ab --json eval "location.search" | json data.result)" || return 1
@@ -969,6 +977,18 @@ drive_overheads_rifts() {
   ab --json errors | json data.errors >"$VERIFY_DIR/rift-page-errors.json" || { log "page error capture failed"; return 1; }
   save_sound_settings false || { log "the sound settings were not restored"; return 1; }
 
+  ab open "${URL}${RIFT_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the Ralos rifts drill never loaded"; return 1; }
+  click_at "$LOADOUT_INVENTORY_TAB_X" "$LOADOUT_INVENTORY_TAB_Y" || return 1
+  ab wait 600 >/dev/null
+  click_inventory_slot "$LOADOUT_SPECIAL_SLOT" || { log "Ralos was not wielded"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$RIFT_CLICK_TICK" "-$NORTH_EAST_RIFT_CLICK_LEFT_PX" "-$NORTH_EAST_RIFT_CLICK_UP_PX" || { log "the north-east rift was not clicked with Ralos"; return 1; }
+  fight_tick_at_least "$RIFT_RALOS_LAST_TICK" 30000 || { log "the Ralos rifts drill never stepped to P4 tick ${RIFT_RALOS_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/rift-ralos.json"
+  ab console >"$VERIFY_DIR/rift-ralos-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/rift-ralos-page-errors.json" || { log "page error capture failed"; return 1; }
+
   ab open "${URL}${DEFLECT_QUERY}" >/dev/null || return 1
   canvas_centre || { log "canvas box unreadable"; return 1; }
   click_after_tick "$DEFLECT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the risen boss was not clicked"; return 1; }
@@ -991,6 +1011,7 @@ drive_overheads_rifts() {
 }
 
 invincible_toggle() {
+  open_settings || return 1
   printf '{"visible":%s,"checked":%s}\n' "$(ab --json is visible "#invincible" | json data.visible)" "$(ab --json is checked "#invincible" | json data.checked)"
 }
 
@@ -1031,6 +1052,7 @@ audio_contexts() {
 }
 
 sound_toggles() {
+  open_settings || return 1
   printf '{"sound":{"visible":%s,"checked":%s},"areaSound":{"visible":%s,"checked":%s}}\n' \
     "$(ab --json is visible "#sound" | json data.visible)" "$(ab --json is checked "#sound" | json data.checked)" \
     "$(ab --json is visible "#area_sound" | json data.visible)" "$(ab --json is checked "#area_sound" | json data.checked)"
@@ -1056,7 +1078,7 @@ drive_cues() {
   audio_contexts >"$VERIFY_DIR/cue-contexts-fresh-clicked.json" || { log "audio context capture failed"; return 1; }
   fight_tick_at_least "$CUE_TOGGLE_TICK" 30000 || { log "the fresh cue drill never stepped to P4 tick ${CUE_TOGGLE_TICK}"; return 1; }
   ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/cue-fresh-audio.json" || { log "audio capture failed"; return 1; }
-  ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not unticked"; return 1; }
+  open_settings && ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not unticked"; return 1; }
   ab --json eval "localStorage.getItem('${SOUND_SETTINGS_KEY}')" | json data.result >"$VERIFY_DIR/cue-sound-off-saved.json" || { log "saved settings capture failed"; return 1; }
   ab console >"$VERIFY_DIR/cue-fresh-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/cue-fresh-page-errors.json" || { log "page error capture failed"; return 1; }
@@ -1067,7 +1089,7 @@ drive_cues() {
   audio_contexts >"$VERIFY_DIR/cue-contexts-loaded.json" || { log "audio context capture failed"; return 1; }
   sound_toggles >"$VERIFY_DIR/cue-toggles-off.json" || { log "sound toggle capture failed"; return 1; }
   fight_tick_at_least "$CUE_TOGGLE_TICK" 30000 || { log "the cue drill never stepped to P4 tick ${CUE_TOGGLE_TICK}"; return 1; }
-  ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not clicked"; return 1; }
+  open_settings && ab click "#area_sound" >/dev/null && ab click "#sound" >/dev/null || { log "the sound toggles were not clicked"; return 1; }
   probe "snapshot().fight.run.tick" >"$VERIFY_DIR/cue-toggle-click.json"
   audio_resumed || log "the audio context did not resume after the toggle click"
   audio_contexts >"$VERIFY_DIR/cue-contexts-toggled.json" || { log "audio context capture failed"; return 1; }
@@ -1121,7 +1143,7 @@ drive() {
     defence-floor-start.json defence-floor-first.json defence-floor.json defence-floor-log.json defence-floor.png defence-floor-console.log defence-floor-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
-    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json \
+    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json rift-ralos.json rift-ralos-console.log rift-ralos-page-errors.json \
     hover-out-of-reach.png deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json \
     rift-charged.png reflect-none.png reflect-hit.png reflect.json reflect-console.log reflect-page-errors.json \
     seed-fresh.png seed.json seed.png seed-console.log seed-page-errors.json \
@@ -1145,7 +1167,7 @@ drive() {
       walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, cornerHole, cornerNub,
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
-      riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear] = process.argv.slice(1);
+      riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusErrors, voidLog, voidErrors, shot, shotErrors] =
@@ -1167,6 +1189,7 @@ drive() {
     const [keysOpen, keysBound, keysSaved, keysOldKey, keysReloaded, keysRestored, keybindsErrors] = ["keybinds-open.json", "keybinds-bound.json", "keybinds-saved.json", "keybinds-old-key.json", "keybinds-reloaded.json", "keybinds-restored.json", "keybinds-page-errors.json"].map(read);
     const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors, overheadDraws] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json", "overhead-draws.json"].map(read);
     const [reflectLog, reflectErrors] = ["reflect.json", "reflect-page-errors.json"].map(read);
+    const [ralosLog, ralosErrors] = ["rift-ralos.json", "rift-ralos-page-errors.json"].map(read);
     const [cueLog, cueToggleAudio, cueAudio, cueToggleErrors, cueErrors, cueSaved, cueChatBefore, cueChatAfter] =
       ["cues.json", "cue-toggle-audio.json", "cue-audio.json", "cue-toggle-page-errors.json", "cue-page-errors.json", "cue-sound-saved.json", "cue-chat-before.json", "cue-chat.json"].map(read);
     const [recordingFrom, toggledAt, freshClickedAt, freshAudio, freshErrors, savedOff] =
@@ -1448,6 +1471,7 @@ drive() {
         destroyed: kindOf(riftLog.rows, "rift-destroyed").map((e) => [e.at, e.rift]),
         bursts: kindOf(riftLog.rows, "rift-burst").map((e) => [e.at, e.rift, e.receipt]),
         hits: kindOf(riftLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
+        ralosHits: kindOf(ralosLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
         timerShares: { beforeSpawn: timerShare("overhead-45.png"), spawned: timerShare("rift-spawned.png"), charged: timerShare("rift-charged.png") },
         chat: riftChat.data?.text ?? null,
         sounds: {
@@ -1587,7 +1611,7 @@ drive() {
       riftKilledByClick: rifts.destroyed.length === 1 && rifts.destroyed[0][1] === expectedRifts.destroyed && rifts.destroyed[0][0] <= Number(burstTick),
       killChatShown: rifts.chat === killChat,
       standingRiftBursts: sameJson(rifts.bursts, JSON.stringify(expectedRifts.bursts)),
-      riftKilledInOneRangedHit: sameJson(rifts.hits, riftOneHit),
+      riftsTakeStandardRangedMaxHits: sameJson(rifts.hits, riftOneHit) && sameJson(rifts.ralosHits, riftRalosHits),
       riftTimerBarFills: rifts.timerShares.beforeSpawn === 0 && rifts.timerShares.spawned > 0 && rifts.timerShares.spawned <= Number(riftTimerMaxEarly) && rifts.timerShares.charged >= Number(riftTimerMinFull),
       deflectReflectsATenth: sameJson({ judged: observed.reflect.judged, reflected: observed.reflect.reflected, hpAfter: observed.reflect.hpAfter }, reflectExpected) &&
         observed.reflect.judged.every(([at, style, outcome, requested]) => observed.reflect.reflected.filter((r) => r[0] === at).length === (outcome === "blocked" && Math.floor(requested / 10) > 0 ? 1 : 0)),
@@ -1632,7 +1656,7 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, walkwayErrors, cornerErrors, cornerViewErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -1652,7 +1676,7 @@ drive() {
     "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
-    "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" >"$VERIFY_DIR/observed.json"
+    "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

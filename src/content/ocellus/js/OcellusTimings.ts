@@ -18,7 +18,8 @@ type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
   | Readonly<{ kind: "wiki"; page: string; oldid: number | null }>
   | Readonly<{ kind: "cache"; build: 2746; record: string }>
-  | Readonly<{ kind: "owner"; date: OwnerDate; topic: string }>;
+  | Readonly<{ kind: "owner"; date: OwnerDate; topic: string }>
+  | Readonly<{ kind: "guide"; url: string; at: string }>;
 
 type Evidence = Readonly<{
   status: "unverified";
@@ -44,6 +45,7 @@ const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at }
 const wiki = (page: string, oldid: number | null): Source => ({ kind: "wiki", page, oldid });
 const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
 const owner = (topic: string, date: OwnerDate = "2026-10-21"): Source => ({ kind: "owner", date, topic });
+const guide = (url: string, at: string): Source => ({ kind: "guide", url, at });
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
 const DEFLECT_MELEE_SEEN = [vod("V1", "G53, G55 to G57, G109, G115 to G117, G153, G154, G175 to G177"), vod("V2", "k48, k60, k70 to k72, k131, k132, k168, k170, k250 to k252")] as const;
@@ -53,6 +55,7 @@ const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archiv
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379038);
 const ORB_OFF_HOLES = owner("healing orbs never spawn on a floor hole; community feedback", "2026-10-23");
 const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
+const STRATEGIES_VOID_POOLS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15380016);
 const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
 const HOTFIX_NEWS = wiki("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1", null);
@@ -506,7 +509,7 @@ const INNER_VOID_FLOOR = choice("one-tick-grace", {
 });
 
 export type HoleRule = Readonly<{ kind: "damages"; perTick: DamageRange }> | Readonly<{ kind: "harmless" }>;
-type HoleLayout = readonly Tile[];
+type HoleLayout = Readonly<{ placement: "corner-stack" | "scattered"; tiles: readonly Tile[] }>;
 
 type FloorHoleRecipe = Readonly<{
   lifetime: Selected<"whole-phase">;
@@ -525,11 +528,30 @@ const FLOOR_HOLES: FloorHoleRecipe = {
   },
 };
 
-const FLOOR_HOLE_LAYOUT = choice("v1-turn", {
-  "v1-turn": selected<HoleLayout>([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)], "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; the only full layout that clears the spawn, the drill tiles and rift option A; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
-  "v1-mirror": selected<HoleLayout>([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)], "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
-  "j1-mirror": selected<HoleLayout>([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)], "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", owner("P4 platform screenshot: five black hole blobs")),
-  "j1-turn": selected<HoleLayout>([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)], "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", owner("P4 platform screenshot: five black hole blobs")),
+const HOLE_STACK_GUIDE = "https://www.youtube.com/watch?v=hR71l7hzuKM";
+const scattered = (tiles: readonly Tile[]): HoleLayout => ({ placement: "scattered", tiles });
+
+function cornerStack(platform: readonly string[], count: number): HoleLayout {
+  const north = platform.findIndex((row) => row.includes("#"));
+  const rows = platform.slice(north, north + count);
+  const east = Math.min(...rows.map((row) => row.lastIndexOf("#")));
+  return { placement: "corner-stack", tiles: rows.map((_, i) => tile(east, north + i)) };
+}
+
+const FLOOR_HOLE_LAYOUT = choice("corner-stack", {
+  "corner-stack": selected<HoleLayout>(
+    cornerStack(GEOMETRY.platform.value, 3),
+    "community-tested",
+    "unscaled",
+    "void pools spawn under every player but the tank at the start of the third phase's first three quadrants, and a team that stacks on one corner tile in each quadrant leaves 3 pools in all; the guide's markers rag one tile of a 3-tile row in each quadrant, and the quarter turns carry all three onto the P4 quadrant's row, region 16472 x 43, y 37 to 39: a north-south line against the east wall, 6 tiles east of the boss's centre and 2 to 4 north; here that is the first 3 floor rows from the platform's north edge, on the easternmost column all three share, so the line follows the brazier walkway and touches it on its last row",
+    STRATEGIES_VOID_POOLS,
+    guide(HOLE_STACK_GUIDE, "0:00 to 1:05 the method, 1:59 to 2:09 the 3 holes on the marked row in P4; the description's tile markers"),
+    owner("picture: 3 holes in a row tucked in the corner against the brazier border", "2026-10-23"),
+  ),
+  "v1-turn": selected<HoleLayout>(scattered([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)]), "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
+  "v1-mirror": selected<HoleLayout>(scattered([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)]), "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn, where a hole forms under a player standing there as P4 starts; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
+  "j1-mirror": selected<HoleLayout>(scattered([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)]), "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", owner("P4 platform screenshot: five black hole blobs")),
+  "j1-turn": selected<HoleLayout>(scattered([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)]), "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", owner("P4 platform screenshot: five black hole blobs")),
 });
 
 const FLOOR_HOLE_DAMAGE = choice("flood-rate", {
@@ -894,7 +916,8 @@ type Choices = typeof OCELLUS_P4.choices;
 type ChoiceName = keyof Choices;
 type OptionsOf<K extends ChoiceName> = Choices[K]["options"];
 type OptionKey<K extends ChoiceName> = keyof OptionsOf<K> & string;
-export type DrillSelection = { readonly [K in ChoiceName]?: OptionKey<K> };
+const SCATTERED = "scattered";
+export type DrillSelection = { readonly [K in Exclude<ChoiceName, "floorHoleLayout">]?: OptionKey<K> } & Readonly<{ floorHoleLayout?: OptionKey<"floorHoleLayout"> | typeof SCATTERED }>;
 const CHOICES: { readonly [K in ChoiceName]: Readonly<{ default: OptionKey<K>; options: OptionsOf<K> }> } = OCELLUS_P4.choices;
 
 class ResolvedChoice<K extends ChoiceName> {
@@ -917,25 +940,21 @@ function hasKey<O extends object>(record: O, key: string): key is keyof O & stri
 }
 
 const HOLE_LAYOUTS = CHOICES.floorHoleLayout.options;
-const HOLE_FREE_TILES: readonly Tile[] = [
-  GEOMETRY.playerSpawn.value,
-  ...RIFTS.offsetsFromBoss.value.map(({ dx, dy }) => tile(GEOMETRY.bossAnchor.value.x + dx, GEOMETRY.bossAnchor.value.y + dy)),
-];
-const SEEDED_HOLE_LAYOUTS = Object.keys(HOLE_LAYOUTS).filter(
-  (key): key is OptionKey<"floorHoleLayout"> => hasKey(HOLE_LAYOUTS, key) && HOLE_LAYOUTS[key].value.every((hole) => !HOLE_FREE_TILES.some((free) => free.x === hole.x && free.y === hole.y)),
+const SCATTERED_HOLE_LAYOUTS = Object.keys(HOLE_LAYOUTS).filter(
+  (key): key is OptionKey<"floorHoleLayout"> => hasKey(HOLE_LAYOUTS, key) && HOLE_LAYOUTS[key].value.placement === SCATTERED,
 );
 
-function seededHoleLayout(runSeed: Seed): OptionKey<"floorHoleLayout"> {
-  return SEEDED_HOLE_LAYOUTS[Math.floor(roll(runSeed, "holeLayout", tick(0), 0) * SEEDED_HOLE_LAYOUTS.length)] ?? CHOICES.floorHoleLayout.default;
+function scatteredHoleLayout(runSeed: Seed): OptionKey<"floorHoleLayout"> {
+  return SCATTERED_HOLE_LAYOUTS[Math.floor(roll(runSeed, "holeLayout", tick(0), 0) * SCATTERED_HOLE_LAYOUTS.length)] ?? CHOICES.floorHoleLayout.default;
 }
 
 function resolveChoices(lookup: (name: ChoiceName) => string | undefined, rejected: string[], runSeed: Seed): ResolvedChoices {
-  const pick = <K extends ChoiceName>(name: K, fallback: OptionKey<K> = CHOICES[name].default): ResolvedChoice<K> => {
+  const pick = <K extends ChoiceName>(name: K): ResolvedChoice<K> => {
     const raw = lookup(name);
     const { options } = CHOICES[name];
     if (raw !== undefined && hasKey(options, raw)) return new ResolvedChoice(name, raw);
     if (raw !== undefined) rejected.push(`${name}=${raw}`);
-    return new ResolvedChoice(name, fallback);
+    return new ResolvedChoice(name, CHOICES[name].default);
   };
   return {
     setup: pick("setup"),
@@ -946,7 +965,7 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     unclaimedOuterOrb: pick("unclaimedOuterOrb"),
     riftFirstCycle: pick("riftFirstCycle"),
     innerVoidFloor: pick("innerVoidFloor"),
-    floorHoleLayout: pick("floorHoleLayout", seededHoleLayout(runSeed)),
+    floorHoleLayout: lookup("floorHoleLayout") === SCATTERED ? new ResolvedChoice("floorHoleLayout", scatteredHoleLayout(runSeed)) : pick("floorHoleLayout"),
     floorHoleDamage: pick("floorHoleDamage"),
     deflect: pick("deflect"),
     hoverMeleeReach: pick("hoverMeleeReach"),

@@ -202,7 +202,7 @@ export class Ocellus extends Mob {
   constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer, private readonly invincible: () => boolean) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
     this.schedule = Schedule.compile(config.seed, config.choices);
-    this.holes = TileMask.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value : []);
+    this.holes = TileMask.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value.tiles : []);
   }
 
   enterP4(): void {

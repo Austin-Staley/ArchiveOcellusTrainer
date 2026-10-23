@@ -33,7 +33,6 @@ export class OcellusPlayer extends Player {
     return { tile: tile(this.location.x, this.location.y), hp: this.currentStats.hitpoint, prayer: this.protection };
   }
 
-  /** The tiles this tick's movement stepped onto, in order: one for a walk, two for a run. */
   get stepsThisTick(): readonly Tile[] {
     return this.steps;
   }

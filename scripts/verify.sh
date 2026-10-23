@@ -434,6 +434,18 @@ shot_after_tick() {
     "$1" "$2" "$VERIFY_DIR/$3" | ab batch --bail >/dev/null
 }
 
+record_tick_starts() {
+  ab eval '(() => {
+    const starts = window.__tickStarts = {};
+    const watch = () => {
+      const run = window.__archiveOcellusProbe?.snapshot().fight?.run;
+      if (run?.kind === "running" && starts[run.tick] === undefined) starts[run.tick] = performance.now();
+      requestAnimationFrame(watch);
+    };
+    watch();
+  })()' >/dev/null
+}
+
 save_sound_settings() {
   ab eval "(() => { const key = '${SOUND_SETTINGS_KEY}', saved = JSON.parse(localStorage.getItem(key) ?? '{\"version\":1,\"values\":{}}'); saved.values = { ...saved.values, playsAudio: $1, playsAreaAudio: $1 }; localStorage.setItem(key, JSON.stringify(saved)); })()" >/dev/null
 }
@@ -913,17 +925,22 @@ drive_lifeforce_orb() {
 }
 
 drive_explosions() {
-  local inner=($EXPLOSION_INNER_MARKS) outer=($EXPLOSION_OUTER_MARKS)
+  local inner=($EXPLOSION_INNER_MARKS) outer=($EXPLOSION_OUTER_MARKS) shards_shown
+  shards_shown="$(node --import tsx --input-type=module -e 'const { OCELLUS_P4 } = await import("./src/content/ocellus/js/OcellusTimings.ts"); console.log(OCELLUS_P4.explosion.look.value.mark.shardsFadeIn)')" ||
+    { log "the explosion mark's look was unreadable"; return 1; }
   save_sound_settings true || { log "the sound settings were not saved"; return 1; }
   choose_focus "$EXPLOSION_DRILL" || return 1
   fight_tick_at_least 0 120000 || { log "the explosions drill never started"; return 1; }
   record_audio_starts || { log "the audio probe was not installed"; return 1; }
+  record_tick_starts || { log "the tick watch was not installed"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }
   click_after_tick $((inner[0] - 1)) "$DODGE_CLICK_SIDE_PX" "$STEP_CLICK_DOWN_PX" || { log "the first dodge was not clicked"; return 1; }
   shot_after_tick "${inner[0]}" "$MARKER_SHOT_DELAY_MS" explosion-left.png || { log "left marker screenshot failed"; return 1; }
   step_on_marks "-$DODGE_CLICK_SIDE_PX" "${inner[@]:1}" || { log "the other dodges were not clicked"; return 1; }
-  printf '[["wait","--fn","(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= %d","--timeout","60000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"],["wait","200"],["screenshot","%s"]]' \
-    "${outer[0]}" $((CX + DODGE_CLICK_SIDE_PX)) $((CY + STEP_CLICK_DOWN_PX)) "$VERIFY_DIR/explosion-standing.png" | ab batch --bail >/dev/null || { log "the late step was not clicked"; return 1; }
+  # The mark's shards give way to its glow from look.mark.glowFrom, so the shot waits only until they have faded in on the same mark tick.
+  printf '[["wait","--fn","(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1) >= %d","--timeout","60000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"],["wait","--fn","window.__archiveOcellusProbe?.snapshot().fight?.run.tick === %d && (performance.now() - (window.__tickStarts[%d] ?? Infinity)) / 600 >= %s","--timeout","5000"],["screenshot","%s"]]' \
+    "${outer[0]}" $((CX + DODGE_CLICK_SIDE_PX)) $((CY + STEP_CLICK_DOWN_PX)) "${outer[0]}" "${outer[0]}" "$shards_shown" "$VERIFY_DIR/explosion-standing.png" | ab batch --bail >/dev/null ||
+    { log "the late step was not clicked or its mark tick passed before the shot"; return 1; }
   fight_tick_at_least "$EXPLOSION_LAST_TICK" 30000 || { log "the explosions drill never stepped to P4 tick ${EXPLOSION_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/explosions.json"
   ab --json eval "window.__cueAudio" | json data.result >"$VERIFY_DIR/explosion-audio.json" || { log "audio capture failed"; return 1; }

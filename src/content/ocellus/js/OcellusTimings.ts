@@ -1,5 +1,5 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Special, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
+import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Special, Stage, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
 import { cycle, seed, soundId, span, tick, tile } from "./P4Types";
 import { roll } from "./p4/roll";
 
@@ -12,7 +12,7 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
-type OwnerDate = "2026-10-21" | "2026-10-22";
+type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23";
 
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
@@ -58,6 +58,7 @@ const HOTFIX_NEWS = wiki("https://secure.runescape.com/m=news/the-fractured-arch
 const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
 
 type AmmunitionClass = "light" | "standard" | "heavy";
+type Footprint = "blocks-movement" | "walkable";
 
 type BossRecipe = Readonly<{
   npcId: Selected<number>;
@@ -67,6 +68,7 @@ type BossRecipe = Readonly<{
   defenceBonuses: Selected<Readonly<{ stab: number; slash: number; crush: number; magic: number }>>;
   rangedDefence: Selected<Readonly<Record<AmmunitionClass, number>>>;
   lowestDefencePercent: Selected<number>;
+  footprint: Selected<Readonly<Record<Stage, Footprint>>>;
 }>;
 
 type LeadInRecipe = Readonly<{
@@ -256,6 +258,13 @@ const BOSS: BossRecipe = {
   defenceBonuses: selected({ stab: 150, slash: 100, crush: 30, magic: 200 }, "spec-confirmed", "unscaled", "cache params 5 to 8 match the wiki's phase 3 infobox", cache("npc 16677 params 5, 6, 7, 8"), BOSS_PAGE),
   rangedDefence: selected({ light: 250, standard: 250, heavy: 250 }, "spec-single", "unscaled", "the wiki's phase 3 infobox; the cache decode has no ranged defence param", BOSS_PAGE),
   lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred)", HOTFIX_NEWS, BOSS_PAGE, DEFENCE_REDUCTION_TABLE),
+  footprint: selected(
+    { "lead-in": "walkable", "inner-void": "walkable", "after-inner": "walkable", "outer-void": "blocks-movement", "after-outer": "walkable" },
+    "community-tested",
+    "unscaled",
+    "community feedback 2026-10-23, unconfirmed: in the outer void, the melee phase, the boss's 3x3 blocks the player, who paths around his edge instead of under him; no report covers the other stages, so they keep the trainer's walkable footprint",
+    owner("a redditor's comment relayed by the owner: you can run under the boss during the melee phase whereas in game it will path you around the edge of the boss", "2026-10-23"),
+  ),
 };
 
 const LEAD_IN: LeadInRecipe = {

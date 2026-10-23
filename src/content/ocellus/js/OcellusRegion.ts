@@ -7,7 +7,7 @@ import { OcellusPlayer } from "./OcellusPlayer";
 import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, SoundId, Tile, TickRow, VoidKind } from "./P4Types";
 import { BossLook, ExplosionViews, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
-import { Ocellus } from "./mobs/Ocellus";
+import { BossFootprint, Ocellus } from "./mobs/Ocellus";
 import { BRAZIERS, PLATFORM, WALKWAY, voidUnder } from "./p4/floor";
 import { CombatStream } from "./p4/roll";
 
@@ -177,6 +177,7 @@ export class OcellusRegion extends Region {
     [views.field, ...views.holes, views.orbs["inner-void"], views.orbs["outer-void"], views.fragment].forEach((view) => this.addEntity(view));
     [new Walkway(this), ...BRAZIERS.tiles().map((at) => new Brazier(this, at))].forEach((scenery) => this.addEntity(scenery));
     for (const edge of PLATFORM.surround().tiles()) this.addEntity(new InvisibleMovementBlocker(this, { ...edge }));
+    this.addEntity(new BossFootprint(this, ocellus));
     this.addPlayer(player);
     this.addMob(ocellus);
     this.setBoss(ocellus);

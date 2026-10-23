@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
-const usage = `usage: replay-controls.mjs --base REV [--head REV] [--repo DIR]
+const usage = `usage: replay-controls.mjs --base REV [--head REV] [--repo DIR] [--timeout SECS]
 
 Replays the head's test changes over the base, the way a base-replay gate
 does: it checks out REV --base, runs every test file that exists at both
@@ -16,6 +16,7 @@ passed on the base before the overlay. A control that fails after the
 overlay shows that the head's test code itself does not run on the base, so
 no failure in that replay is evidence about the base's behaviour. Vitest files
 report through their JSON reporter; *.test.sh files print PASS name or FAIL name.
+Each test run may take up to --timeout seconds (default 600).
 
 Exits 0 when every control still passes, 1 when one breaks, and 2 when a
 revision, the worktree or a test runner cannot be used.
@@ -23,27 +24,30 @@ revision, the worktree or a test runner cannot be used.
 
 const TEST_FILE = /\.test\.(?:[cm]?[jt]sx?|sh)$/;
 const SUPPORT = /(^|\/)tests?\//;
-const RUN_TIMEOUT_MS = 600_000;
 
 class Undecidable extends Error {}
 
+let runTimeoutMs = 600_000;
+
 function parseArguments(argv) {
-  const options = { base: null, head: "HEAD", repo: process.cwd() };
+  const options = { base: null, head: "HEAD", repo: process.cwd(), timeout: "600" };
   for (let index = 0; index < argv.length; index += 2) {
     const [flag, value] = [argv[index], argv[index + 1]];
     if (flag === "-h" || flag === "--help") {
       process.stdout.write(usage);
       process.exit(0);
     }
-    if (value === undefined || !["--base", "--head", "--repo"].includes(flag)) throw new Undecidable(`unexpected argument ${flag}\n${usage}`);
+    if (value === undefined || !["--base", "--head", "--repo", "--timeout"].includes(flag)) throw new Undecidable(`unexpected argument ${flag}\n${usage}`);
     options[flag.slice(2)] = value;
   }
   if (options.base === null) throw new Undecidable(`--base is required\n${usage}`);
+  if (!/^[1-9]\d*$/.test(options.timeout)) throw new Undecidable(`--timeout must be a positive number of seconds\n${usage}`);
+  runTimeoutMs = Number(options.timeout) * 1000;
   return { ...options, repo: path.resolve(options.repo) };
 }
 
 function run(command, args, cwd) {
-  return spawnSync(command, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: RUN_TIMEOUT_MS, killSignal: "SIGKILL" });
+  return spawnSync(command, args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: runTimeoutMs, killSignal: "SIGKILL" });
 }
 
 function git(repo, args) {

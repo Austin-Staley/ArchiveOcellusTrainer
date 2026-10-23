@@ -8,8 +8,8 @@ const TRANSITIONS = { focus: "transition-attacks", specialSelection: "replay-v2"
 type Drill = ReturnType<typeof startDrill>;
 
 function northEastRift(drill: Drill) {
-  const rift = drill.region.mobs.find((mob) => mob.location.x === 11 && mob.location.y === 2);
-  if (!rift) throw new Error("no rift on (11, 2)");
+  const rift = drill.region.mobs.find((mob) => mob.location.x === 10 && mob.location.y === 2);
+  if (!rift) throw new Error("no rift on (10, 2)");
   return rift;
 }
 
@@ -178,7 +178,7 @@ describe("U6 boss overheads, heals and rifts", () => {
     { attack: "the ranged setup's Ralos", seed: 2, setup: "ranged", wield: 28922, special: false, landed: [[72, 18], [72, 18], [78, 8], [78, 8]], destroyedAt: [79] },
     { attack: "the melee setup's Ralos", seed: 2, setup: "melee", wield: 28922, special: false, landed: [[72, 15], [72, 15], [78, 14], [78, 14]], destroyedAt: [79] },
     { attack: "a Division special, which rolls", seed: 3, setup: "ranged", wield: 28922, special: true, landed: [[72, 15], [72, 5], [78, 18], [78, 18]], destroyedAt: [79] },
-    { attack: "a scythe swing, which rolls", seed: 4, setup: "melee", wield: null, special: false, landed: [[72, 4], [77, 25]], destroyedAt: [] },
+    { attack: "a scythe swing, which rolls", seed: 4, setup: "melee", wield: null, special: false, landed: [[71, 4], [76, 25]], destroyedAt: [] },
   ] as const)("a standard ranged attack always lands its max hit on a Void Rift: $attack", ({ seed, setup, wield, special, landed, destroyedAt }) => {
     const drill = startDrill({ seed, selection: { focus: "rifts", setup } });
     drill.tickTo(68);
@@ -224,8 +224,8 @@ describe("U6 boss overheads, heals and rifts", () => {
       return observed;
     };
     expect([spawned({}), spawned({ riftFirstCycle: "cycle-3" })]).toEqual([
-      [[67, "rift-67-0", { x: 2, y: 2 }], [67, "rift-67-1", { x: 11, y: 2 }], [127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 11, y: 2 }]],
-      [[127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 11, y: 2 }]],
+      [[67, "rift-67-0", { x: 2, y: 2 }], [67, "rift-67-1", { x: 10, y: 2 }], [127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 10, y: 2 }]],
+      [[127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 10, y: 2 }]],
     ]);
   });
 

@@ -18,7 +18,7 @@ describe("Ocellus arena", () => {
     drill.dispose();
   });
 
-  test("the arena paints the measured floor and the brazier walkway, and the player can stand on the floor and nowhere else", () => {
+  test("the arena paints the floor and the brazier walkway, and the player can stand on the floor and nowhere else", () => {
     const drill = startDrill({ selection: NON_LETHAL });
     const painted = paintedTiles((context, scale) => drill.region.drawWorldBackground(context, scale));
     const standsOn = (to: At) => {
@@ -45,8 +45,8 @@ describe("Ocellus arena", () => {
       ".............ww.",
       "...##########ww.",
       "..###########ww.",
-      "..##########ww..",
-      "..#########ww...",
+      "..###########ww.",
+      "..#########www..",
       "..########ww....",
       "..#######ww.....",
       "..#######ww.....",
@@ -88,5 +88,49 @@ describe("Ocellus arena", () => {
     }
     expect(trail).toEqual([{ x: 9, y: 3 }, { x: 7, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
     drill.dispose();
+  });
+
+  test("the east edge runs straight on x 11 for 3 rows, then steps through 2 diagonal tiles to the 5x5", () => {
+    const drill = startDrill({ selection: NON_LETHAL });
+    const lastFloor = (y: number) => {
+      for (let x = 13; x >= 0; x--) {
+        drill.restart();
+        drill.walkTo({ x, y });
+        drill.region.world.tickWorld(10);
+        if (drill.player().location.x === x && drill.player().location.y === y) return { x, y };
+      }
+      return null;
+    };
+    expect([1, 2, 3, 4, 5, 6, 7].map(lastFloor)).toEqual([
+      { x: 11, y: 1 },
+      { x: 11, y: 2 },
+      { x: 11, y: 3 },
+      { x: 9, y: 4 },
+      { x: 8, y: 5 },
+      { x: 7, y: 6 },
+      { x: 7, y: 7 },
+    ]);
+    drill.dispose();
+  });
+
+  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner, because the walkway juts in to meet it", () => {
+    const walk = (from: At, to: At) => {
+      const drill = startDrill({ selection: NON_LETHAL });
+      drill.walkTo(from);
+      drill.region.world.tickWorld(8);
+      drill.player().moveTo(to.x, to.y, "walk");
+      const trail: At[] = [];
+      for (let tick = 0; tick < 5; tick++) {
+        drill.region.world.tickWorld();
+        trail.push({ ...drill.player().location });
+      }
+      drill.dispose();
+      return trail;
+    };
+    expect([walk({ x: 9, y: 4 }, { x: 8, y: 8 }), walk({ x: 9, y: 4 }, { x: 7, y: 8 }), walk({ x: 8, y: 5 }, { x: 8, y: 7 })]).toEqual([
+      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+    ]);
   });
 });

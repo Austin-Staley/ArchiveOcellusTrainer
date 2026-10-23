@@ -174,7 +174,7 @@ describe("U3 lifeforce hit and orb", () => {
     };
     expect([orbs(5, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
       ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
-      ["v1-turn", [[12, "inner-void", { x: 2, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
+      ["v1-turn", [[12, "inner-void", { x: 1, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
     ]);
   });
 });

@@ -397,10 +397,10 @@ const RIFTS: RiftRecipe = {
   stats: selected({ attack: 1, strength: 1, defence: 175, range: 1, magic: 300, hitpoint: 44 }, "spec-confirmed", "unscaled", "the rift never attacks", cache("npc 16678 stats [1, 175, 1, 44, 1, 300]")),
   defenceBonuses: selected({ stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, "spec-confirmed", "unscaled", "params 5 to 8 are 0; the decode has no ranged defence param, taken as 0 (inferred)", cache("npc 16678 params 5, 6, 7, 8")),
   offsetsFromBoss: selected(
-    [{ dx: -2, dy: -4 }, { dx: 7, dy: -4 }],
+    [{ dx: -2, dy: -4 }, { dx: 6, dy: -4 }],
     "footage-once",
     "team-4-and-5",
-    "(2, 2) and (11, 2), north of the 5x5: V1's two rifts, placed from their HP bars and carried onto the V2 platform by the east-west mirror; (2, 2) is the same tile under the 270-degree turn, and (11, 2) is also a V2 second-spawn rift; every observed rift is north of the 5x5, and V2's other rift tiles lie on the undrawn strip north of this grid",
+    "(2, 2) and (10, 2), north of the 5x5: V1's two rifts, placed from their HP bars and carried onto the V2 platform by the east-west mirror; (2, 2) is the same tile under the 270-degree turn; the second carries to (11, 2), also a V2 second-spawn rift, and sits 1 tile west on (10, 2) so it stays off the middle of the 3 holes players stack against the east wall on x 11 (inferred, 2026-10-23); every observed rift is north of the 5x5, and V2's other rift tiles lie on the undrawn strip north of this grid",
     vod("V1", "G152-G164"),
     vod("V2", "k167-k173"),
   ),
@@ -432,8 +432,8 @@ const GEOMETRY: GeometryRecipe = {
       "...?........ww",
       ".?##########ww",
       ".###########ww",
-      ".##########ww.",
-      ".#########ww..",
+      ".###########ww",
+      ".#########www.",
       ".########ww...",
       ".#######ww....",
       ".#######ww....",
@@ -443,9 +443,11 @@ const GEOMETRY: GeometryRecipe = {
       ".###ww........",
       "wwwww.........",
     ],
-    "footage-repeated",
+    "community-tested",
     "unscaled",
-    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; the walkway is the band 2 tiles past the floor's diagonal edge, ending where J1 ends it at y 12, and it covers the six disputed diagonal tiles (11, 3), (10, 4), (11, 4), (9, 5), (8, 6) and (4, 11), J1 floor that V2's walkway base excludes; the brazier sits in the walkway's step beside the 5x5's corner; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway on the diagonal; V2's drawn void and J1's rims agree on both legs, J1 adds the 6 floor tiles the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
+    "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; the walkway is the band 2 tiles past the floor's diagonal edge, ending where J1 ends it at y 12, and it covers five of the six disputed diagonal tiles, (10, 4), (11, 4), (9, 5), (8, 6) and (4, 11), J1 floor that V2's walkway base excludes; the sixth, (11, 3), is floor, and the walkway takes (13, 3) and (12, 4) instead so its band stays unbroken: players report the east side 1 tile too close to the boss, and the owner's in-game picture shows the wall straight for the 3 tiles on x 11, rows 1 to 3, where players stack the holes, then 2 floor tiles on the diagonal, (9, 4) and (8, 5), before the walkway juts in to the 5x5 on (8, 6), (8, 7) and (7, 8) so no path runs behind the boss; the brazier sits in the walkway's step beside the 5x5's corner; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway on the diagonal; V2's drawn void and J1's rims agree on both legs, J1 adds the 6 floor tiles the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; 81 floor tiles; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
+    owner("redditor: the tiles on the east side are 1 too close to the boss and need dragging out by 1", "2026-10-23"),
+    owner("in-game picture: the wall runs straight 3 tiles in, then a smooth diagonal with 2 full tiles until the jut", "2026-10-23"),
     FLOOD_FRAMES,
     vod("V2", "k060 to k269, walkway base and strip rims, 18 frames"),
     vod("V2", "k080, bare floor south of the 5x5"),
@@ -524,8 +526,8 @@ const FLOOR_HOLES: FloorHoleRecipe = {
 };
 
 const FLOOR_HOLE_LAYOUT = choice("v1-turn", {
-  "v1-turn": selected<HoleLayout>([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)], "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; the only full layout that clears the spawn, the drill tiles and rift option A; (4, 9) is floor only on the 80-tile rows", HOLE_FRAMES),
-  "v1-mirror": selected<HoleLayout>([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)], "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn; (5, 8) is floor only on the 80-tile rows", HOLE_FRAMES),
+  "v1-turn": selected<HoleLayout>([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)], "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; the only full layout that clears the spawn, the drill tiles and rift option A; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
+  "v1-mirror": selected<HoleLayout>([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)], "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
   "j1-mirror": selected<HoleLayout>([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)], "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", owner("P4 platform screenshot: five black hole blobs")),
   "j1-turn": selected<HoleLayout>([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)], "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", owner("P4 platform screenshot: five black hole blobs")),
 });

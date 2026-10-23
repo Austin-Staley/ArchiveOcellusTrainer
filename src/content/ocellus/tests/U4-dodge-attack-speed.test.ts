@@ -55,7 +55,7 @@ describe("U4 a one-tile dodge on the mark tick cuts the attack delay by 3", () =
   test.each([
     { dodge: "standing on every mark", steps: [], attacks: [13, 18, 23, 28, 33, 38], outcome: "hit" },
     { dodge: "a two-tile run off each mark", steps: INNER_MARKS, attacks: [13, 18, 24, 29, 34, 39], outcome: "avoided" },
-  ] as const)("$dodge leaves the Twisted bow on 5-tick gaps or slower", ({ steps, attacks, outcome }) => {
+  ] as const)("guard: $dodge leaves the Twisted bow on 5-tick gaps or slower", ({ steps, attacks, outcome }) => {
     const drill = attackFrom("ranged", SPAWN_ON_FLOOD);
     stepOnEachMark(drill, steps, SPAWN_ON_FLOOD, TWO_EAST_OF_SPAWN);
     drill.tickTo(40);

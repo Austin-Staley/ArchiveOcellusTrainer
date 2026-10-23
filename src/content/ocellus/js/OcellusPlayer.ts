@@ -1,11 +1,13 @@
 import { Player, Random } from "osrs-sdk";
 import type { Location, Region } from "osrs-sdk";
-import type { InputObservation, PlayerObservation, Style } from "./P4Types";
+import type { InputObservation, PlayerObservation, Style, Tile } from "./P4Types";
 import { tile } from "./P4Types";
 import { Ocellus } from "./mobs/Ocellus";
 import type { CombatStream } from "./p4/roll";
 
 export class OcellusPlayer extends Player {
+  private steps: readonly Tile[] = [];
+
   constructor(
     region: Region,
     location: Location,
@@ -29,6 +31,18 @@ export class OcellusPlayer extends Player {
 
   observe(): PlayerObservation {
     return { tile: tile(this.location.x, this.location.y), hp: this.currentStats.hitpoint, prayer: this.protection };
+  }
+
+  /** The tiles this tick's movement stepped onto, in order: one for a walk, two for a run. */
+  get stepsThisTick(): readonly Tile[] {
+    return this.steps;
+  }
+
+  override movementStep(): void {
+    const queued = this.visualPath.length;
+    super.movementStep();
+    // The SDK exposes a run's first step only as the tile it queues for rendering.
+    this.steps = this.visualPath.slice(queued).map(({ x, y }) => tile(x, y));
   }
 
   override moveTo(x: number, y: number): void {

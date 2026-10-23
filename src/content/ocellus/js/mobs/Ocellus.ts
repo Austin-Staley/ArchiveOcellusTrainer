@@ -334,7 +334,7 @@ export class Ocellus extends Mob {
         const reason: RunEnd | null = run.kind === "killed" ? "kill" : died ? "death" : null;
         if (reason === null) {
           this.claimOrbs(row.tick, playerAtPostTick.tile);
-          this.entered = enteredSquare(this.entered, playerAtPostTick.tile);
+          this.entered = this.target.stepsThisTick.reduce(enteredSquare, this.entered);
           this.rifts = this.rifts.map((rift) => ({ ...rift, hpAtPostTick: rift.mob.currentStats.hitpoint }));
         }
         this.run = reason === null

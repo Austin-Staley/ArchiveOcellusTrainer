@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OSRS_SDK_REPO="${OSRS_SDK_REPO:-https://github.com/OldSchoolSDK/osrs-sdk.git}"
-OSRS_SDK_COMMIT="${OSRS_SDK_COMMIT:-c7d9693ab2d6dacb533506700b46987525869410}"
+OSRS_SDK_REPO="${OSRS_SDK_REPO:-https://github.com/Julian-Dasilva/osrs-sdk.git}"
+OSRS_SDK_COMMIT="${OSRS_SDK_COMMIT:-68b8f4e8ba8c7476907bcb8d803857f96b465b46}"
 OSRS_SDK_PACKS="${OSRS_SDK_PACKS:-}"
 
 cd "$(dirname "$0")/.."

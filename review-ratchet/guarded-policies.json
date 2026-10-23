@@ -45,6 +45,14 @@
           "mutation": [{ "find": "result: own.some((line) => ASSERTION_FAILED.test(line)) ? \"asserted\" : \"errored\"", "replace": "result: \"asserted\"" }]
         },
         {
+          "policy": "an ASSERTION FAILED line counts only for the case whose output holds it",
+          "mutation": [{ "find": "const own = lines.slice(start + 1, starts[index + 1]);", "replace": "const own = lines;" }]
+        },
+        {
+          "policy": "an indented ASSERTION FAILED line counts",
+          "mutation": [{ "find": "const ASSERTION_FAILED = /^[ \\t]*ASSERTION FAILED: /;", "replace": "const ASSERTION_FAILED = /^ASSERTION FAILED: /;" }]
+        },
+        {
           "policy": "a mutant run that reports other cases than the test as it is does not count as catching the mutation",
           "mutation": [{ "find": "if (names(outcome.cases) !== names(control)) {", "replace": "if (false) {" }]
         },

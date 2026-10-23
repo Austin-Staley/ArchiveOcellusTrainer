@@ -6,13 +6,15 @@ FIXTURES="$(cd "$(dirname "$0")/../fixtures/substituted-policy" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# shell-test-runs-entry.mjs counts a failure under a mutation only when this line is printed.
+# shell-test-runs-entry.mjs counts a failure under a mutation only when a case prints this line after its FAIL line.
 fail() {
   printf 'ASSERTION FAILED: %s\n' "$*"
   exit 1
 }
 
 POSITION='scripts/build.fixture.sh: passes when scripts/build.sh breaks "errexit is on before prepare_reader runs", so the test does not run the policy it guards'
+OTHER_CASES='scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without reporting the cases it reports as it is, so no case shows that the test checks the policy'
+CRASH='scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without a case that fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy'
 
 # Each row is name|fixture|exit|line|setup. setup runs inside a copy of the fixture before the check, and line must appear in the check's output.
 CASES="$(cat <<EOF
@@ -26,10 +28,14 @@ glob_in_variable|clean|1|${POSITION}|cp "\$FIXTURES/variants/alias-glob.fixture.
 glob_in_here_document|clean|1|${POSITION}|cp "\$FIXTURES/variants/heredoc-glob.fixture.sh" scripts/build.fixture.sh
 interpreter_option|clean|1|${POSITION}|cp "\$FIXTURES/variants/interpreter-option.fixture.sh" scripts/build.fixture.sh
 embedded_copy|clean|1|${POSITION}|cp "\$FIXTURES/variants/embedded-copy.fixture.sh" scripts/build.fixture.sh
-unrelated_setup_error|historical-9d9143b|2|scripts/netlify-build.fixture.sh fails with exit 1 when scripts/netlify-build.sh breaks "errexit stops the build at the first failed command" without an ASSERTION FAILED line, so the failure does not show that the test checks the policy|cp "\$FIXTURES/variants/unrelated-setup-error.fixture.sh" scripts/netlify-build.fixture.sh
+unrelated_setup_error|historical-9d9143b|2|${OTHER_CASES}|cp "\$FIXTURES/variants/unrelated-setup-error.fixture.sh" scripts/netlify-build.fixture.sh
+setup_assertion|historical-9d9143b|2|${OTHER_CASES}|cp "\$FIXTURES/variants/setup-assertion.fixture.sh" scripts/netlify-build.fixture.sh
+setup_reported_as_case|historical-9d9143b|2|${OTHER_CASES}|cp "\$FIXTURES/variants/setup-reported-as-case.fixture.sh" scripts/netlify-build.fixture.sh
+crash_inside_case|historical-9d9143b|2|${CRASH}|cp "\$FIXTURES/variants/crash-inside-case.fixture.sh" scripts/netlify-build.fixture.sh
 unlisted_test|clean|2|scripts/other.test.sh is not listed in review-ratchet/guarded-policies.json, so no mutation checks it|cp scripts/build.fixture.sh scripts/other.test.sh
 mutation_text_absent|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 0 times|sed -i.bak 's/^set -euo pipefail\$/set -eu -o pipefail/' scripts/build.sh && rm scripts/build.sh.bak
 failing_test|clean|2|scripts/build.fixture.sh fails with exit 3 before any mutation|printf 'exit 3\n' >scripts/build.fixture.sh
+failing_case_as_is|clean|2|scripts/build.fixture.sh reports FAIL failed_install_is_not_reused before any mutation|printf 'echo "FAIL failed_install_is_not_reused"\n' >scripts/build.fixture.sh
 passes_only_when_broken|clean|2|scripts/build.fixture.sh fails with exit 1 before any mutation|printf 'grep -q "^set -uo pipefail" scripts/build.sh\n' >scripts/build.fixture.sh
 mutation_breaks_syntax|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: the mutant fails bash -n|sed -i.bak 's/"replace": "set -uo pipefail/"replace": "fi/' review-ratchet/guarded-policies.json && rm review-ratchet/guarded-policies.json.bak
 mutation_text_twice|clean|2|cannot break "errexit stops the build at the first failed command" in scripts/build.sh: "set -euo pipefail\\n" occurs 2 times|printf 'set -euo pipefail\n' >>scripts/build.sh

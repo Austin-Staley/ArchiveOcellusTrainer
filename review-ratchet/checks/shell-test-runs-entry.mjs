@@ -21,21 +21,26 @@ not exercise the policy it guards, for example because it runs its own copy
 of the script's code under its own shell options.
 
 A mutant must pass its syntax check (bash -n for .sh, node --check for .mjs),
-so a test that runs the real script reaches its assertions. A test reports a
-failed assertion with a line that starts "ASSERTION FAILED: ", optionally
-indented. A failure under a mutation counts only with that line; any other
-failure, such as a setup error, cannot show that the test checks the policy.
+so a test that runs the real script reaches its assertions. A test reports
+each case on a line "PASS NAME" or "FAIL NAME", followed by that case's
+output; output before the first case, such as setup, belongs to no case. A
+failed assertion prints a line that starts "ASSERTION FAILED: ", optionally
+indented. A failure under a mutation counts only when the test reports the
+same cases as it does as it is, and one of them fails with that line in its
+output; a setup error, a crash or a different set of cases cannot show that
+the test checks the policy.
 
-Exits 0 when every test passes as it is and fails an assertion under every
-mutation, and 1 when a test passes under one. Without such a finding it exits
-2 when the policy file is missing or malformed, a mutation's text does not
-occur exactly once, a mutant fails its syntax check, a shell test is not
-listed, a test fails as it is, or a test times out, cannot start or fails
-under a mutation without a failed assertion. Each run may take up to
---timeout seconds (default 300).
+Exits 0 when every test passes as it is with every case passing and fails an
+assertion in a case under every mutation, and 1 when a test passes under one.
+Without such a finding it exits 2 when the policy file is missing or
+malformed, a mutation's text does not occur exactly once, a mutant fails its
+syntax check, a shell test is not listed, a test or one of its cases fails as
+it is, or a test times out, cannot start or fails under a mutation without
+such a case. Each run may take up to --timeout seconds (default 300).
 `;
 
-const ASSERTION_FAILED = /^[ \t]*ASSERTION FAILED: /m;
+const CASE = /^(PASS|FAIL) (\S+)$/;
+const ASSERTION_FAILED = /^[ \t]*ASSERTION FAILED: /;
 const SYNTAX_CHECKS = { ".sh": ["bash", "-n"], ".mjs": [process.execPath, "--check"] };
 
 class Undecidable extends Error {}
@@ -46,7 +51,8 @@ class Undecidable extends Error {}
  * @typedef {Readonly<{ path: string; tests: readonly string[]; policies: readonly Policy[] }>} Guarded
  * @typedef {Readonly<{ ignore: readonly string[]; scripts: readonly Guarded[] }>} Registry
  * @typedef {Readonly<{ script: string; text: string }>} Mutant
- * @typedef {Readonly<{ kind: "passed" } | { kind: "failed" | "errored"; ending: string; output: string } | { kind: "unrunnable"; reason: string }>} Outcome
+ * @typedef {Readonly<{ name: string; result: "passed" | "asserted" | "errored" }>} Case
+ * @typedef {Readonly<{ kind: "passed"; cases: readonly Case[] } | { kind: "failed"; ending: string; output: string; cases: readonly Case[] } | { kind: "unrunnable"; reason: string }>} Outcome
  */
 
 function parseArguments(argv) {
@@ -122,6 +128,23 @@ function mutate(text, edits) {
 
 function withTail(message, output) {
   return message + output.split("\n").filter(Boolean).slice(-6).map((line) => `\n  ${line}`).join("");
+}
+
+/** @returns {Case[]} */
+function cases(output) {
+  const lines = output.split("\n");
+  const starts = lines.flatMap((line, index) => (CASE.test(line) ? [index] : []));
+  return starts.map((start, index) => {
+    const [, word, name] = CASE.exec(lines[start]);
+    if (word === "PASS") return { name, result: "passed" };
+    const own = lines.slice(start + 1, starts[index + 1]);
+    return { name, result: own.some((line) => ASSERTION_FAILED.test(line)) ? "asserted" : "errored" };
+  });
+}
+
+/** @param {readonly Case[]} found */
+function names(found) {
+  return found.map(({ name }) => name).sort().join(" ");
 }
 
 /** @returns {string | null} */
@@ -221,10 +244,10 @@ async function runTest(root, files, test, mutant, timeoutMs) {
     killGroup(child.pid);
     if (exit.error !== null) return { kind: "unrunnable", reason: `cannot start bash: ${exit.error.message}` };
     if (timedOut) return { kind: "unrunnable", reason: `timed out after ${timeoutMs / 1000}s` };
-    if (exit.status === 0) return { kind: "passed" };
-    const ending = exit.status === null ? `signal ${exit.signal}` : `exit ${exit.status}`;
     const printed = fs.readFileSync(log, "utf8").trimEnd();
-    return { kind: ASSERTION_FAILED.test(printed) ? "failed" : "errored", ending, output: printed };
+    if (exit.status === 0) return { kind: "passed", cases: cases(printed) };
+    const ending = exit.status === null ? `signal ${exit.signal}` : `exit ${exit.status}`;
+    return { kind: "failed", ending, output: printed, cases: cases(printed) };
   } finally {
     fs.rmSync(run, { recursive: true, force: true });
   }
@@ -245,24 +268,46 @@ async function inParallel(tasks, limit) {
 
 /** @param {readonly Outcome[]} outcomes */
 function verdict(tests, mutants, outcomes) {
-  const baseline = new Map(tests.map((test, index) => [test, outcomes[index]]));
+  /** @type {Map<string, readonly Case[]>} */
+  const controls = new Map();
   const findings = [];
   const undecided = [];
-  for (const [test, outcome] of baseline) {
-    if (outcome.kind === "failed" || outcome.kind === "errored") undecided.push(withTail(`${test} fails with ${outcome.ending} before any mutation`, outcome.output));
-    if (outcome.kind === "unrunnable") undecided.push(`${test} ${outcome.reason} before any mutation`);
+  for (const [index, test] of tests.entries()) {
+    const outcome = outcomes[index];
+    switch (outcome.kind) {
+      case "passed": {
+        const failing = outcome.cases.filter(({ result }) => result !== "passed");
+        if (failing.length === 0) controls.set(test, outcome.cases);
+        else undecided.push(`${test} reports ${failing.map(({ name }) => `FAIL ${name}`).join(", ")} before any mutation`);
+        break;
+      }
+      case "failed":
+        undecided.push(withTail(`${test} fails with ${outcome.ending} before any mutation`, outcome.output));
+        break;
+      case "unrunnable":
+        undecided.push(`${test} ${outcome.reason} before any mutation`);
+        break;
+      default: {
+        /** @type {never} */
+        const unhandled = outcome;
+        throw new Error(`unhandled outcome ${JSON.stringify(unhandled)}`);
+      }
+    }
   }
   for (const [index, { test, policy, mutant }] of mutants.entries()) {
-    if (baseline.get(test)?.kind !== "passed") continue;
+    const control = controls.get(test);
+    if (control === undefined) continue;
     const outcome = outcomes[tests.length + index];
     switch (outcome.kind) {
       case "passed":
         findings.push(`${test}: passes when ${mutant.script} breaks "${policy}", so the test does not run the policy it guards`);
         break;
       case "failed":
-        break;
-      case "errored":
-        undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without an ASSERTION FAILED line, so the failure does not show that the test checks the policy`, outcome.output));
+        if (names(outcome.cases) !== names(control)) {
+          undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without reporting the cases it reports as it is, so no case shows that the test checks the policy`, outcome.output));
+        } else if (!outcome.cases.some(({ result }) => result === "asserted")) {
+          undecided.push(withTail(`${test} fails with ${outcome.ending} when ${mutant.script} breaks "${policy}" without a case that fails with an ASSERTION FAILED line, so the failure does not show that the test checks the policy`, outcome.output));
+        }
         break;
       case "unrunnable":
         undecided.push(`${test} ${outcome.reason} when ${mutant.script} breaks "${policy}"`);

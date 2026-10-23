@@ -41,8 +41,16 @@
           "mutation": [{ "find": "!ignored(file) && !listed.has(file)", "replace": "!ignored(file) && !listed.has(file) && false" }]
         },
         {
-          "policy": "a failure without an ASSERTION FAILED line does not count as catching a mutation",
-          "mutation": [{ "find": "kind: ASSERTION_FAILED.test(printed) ? \"failed\" : \"errored\"", "replace": "kind: \"failed\"" }]
+          "policy": "a failing case counts as catching a mutation only with an ASSERTION FAILED line in its output",
+          "mutation": [{ "find": "result: own.some((line) => ASSERTION_FAILED.test(line)) ? \"asserted\" : \"errored\"", "replace": "result: \"asserted\"" }]
+        },
+        {
+          "policy": "a mutant run that reports other cases than the test as it is does not count as catching the mutation",
+          "mutation": [{ "find": "if (names(outcome.cases) !== names(control)) {", "replace": "if (false) {" }]
+        },
+        {
+          "policy": "a test with a failing case before any mutation is refused",
+          "mutation": [{ "find": "if (failing.length === 0) controls.set", "replace": "if (true) controls.set" }]
         },
         {
           "policy": "a mutant that fails its syntax check is refused",

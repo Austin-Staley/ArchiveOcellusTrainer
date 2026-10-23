@@ -5,7 +5,7 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/netlify-build.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# shell-test-runs-entry.mjs counts a failure under a mutation only when this line is printed.
+# shell-test-runs-entry.mjs counts a failure under a mutation only when a case prints this line after its FAIL line.
 fail() {
   printf 'ASSERTION FAILED: %s\n' "$*"
   exit 1

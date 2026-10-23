@@ -1,0 +1,13 @@
+{
+  "contract": {"hidden":{"visible":false,"targetable":false},"present-invulnerable":{"visible":true,"targetable":true},"present-out-of-melee-reach":{"visible":true,"targetable":true},"present-damageable":{"visible":true,"targetable":true}},
+  "observations": [
+    {"tick":0,"state":"hidden","observed":{"visible":false,"targetable":false}},
+    {"tick":3,"state":"hidden","observed":{"visible":false,"targetable":false}},
+    {"tick":4,"state":"present-invulnerable","observed":{"visible":true,"targetable":true}},
+    {"tick":7,"state":"present-invulnerable","observed":{"visible":true,"targetable":true}},
+    {"tick":8,"state":"present-out-of-melee-reach","observed":{"visible":true,"targetable":true}},
+    {"tick":29,"state":"present-out-of-melee-reach","observed":{"visible":true,"targetable":true}},
+    {"tick":30,"state":"present-damageable","observed":{"visible":true,"targetable":true}},
+    {"tick":31,"state":"present-damageable","observed":{"visible":true,"targetable":true}}
+  ]
+}

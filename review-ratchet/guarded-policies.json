@@ -29,6 +29,28 @@
       ]
     },
     {
+      "path": "scripts/release-notes.mjs",
+      "tests": ["scripts/release-notes.test.sh"],
+      "policies": [
+        {
+          "policy": "a newest version that is not YYYY.MM.DD or YYYY.MM.DD.N fails",
+          "mutation": [{ "find": "const problem = !VERSION.test(newest.version)", "replace": "const problem = false" }]
+        },
+        {
+          "policy": "a newest version that repeats an earlier release fails",
+          "mutation": [{ "find": ": earlier.some((release) => release.version === newest.version)", "replace": ": false" }]
+        },
+        {
+          "policy": "the notes are the first release in the changelog",
+          "mutation": [{ "find": "const [newest, ...earlier] = CHANGELOG;", "replace": "const [newest, ...earlier] = [...CHANGELOG].reverse();" }]
+        },
+        {
+          "policy": "each note prints as a Markdown list item under the version heading",
+          "mutation": [{ "find": "`- ${note}`", "replace": "`* ${note}`" }]
+        }
+      ]
+    },
+    {
       "path": "review-ratchet/checks/shell-test-runs-entry.mjs",
       "tests": ["review-ratchet/checks/shell-test-runs-entry.test.sh"],
       "policies": [

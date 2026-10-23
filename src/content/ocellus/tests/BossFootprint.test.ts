@@ -1,5 +1,5 @@
 import type { At } from "./drill";
-import { startDrill } from "./drill";
+import { RING_NORTH, SPAWN_ON_FLOOD, UNDER_BOSS, startDrill } from "./drill";
 
 const QUIET = { focus: "void-floor", drillStart: "cycle-start" } as const;
 const WEST_OF_BOSS: At = { x: 3, y: 5 };
@@ -40,5 +40,40 @@ describe("boss footprint", () => {
 
   test("in the outer void a walk onto a tile under the boss stops on the nearest tile beside him", () => {
     expect(walkFromWest(40, UNDER_EAST_EDGE, 45).map(([, , at]) => at)).toEqual([WEST_OF_BOSS, { x: 3, y: 7 }, { x: 5, y: 7 }, { x: 7, y: 7 }, EAST_OF_BOSS, EAST_OF_BOSS]);
+  });
+
+  test("a walk onto the boss ordered the tick before the outer void reroutes to the nearest tile beside him", () => {
+    const drill = startDrill({ selection: QUIET });
+    drill.tickTo(38);
+    drill.walkTo(UNDER_BOSS);
+    drill.tickTo(44);
+    const walked = drill.rows().filter((row) => row.tick >= 38).map((row) => [row.tick, row.phase.stage, row.playerAtPostTick.tile, row.playerAtPostTick.hp]);
+    drill.dispose();
+    expect(walked).toEqual([
+      [38, "after-inner", SPAWN_ON_FLOOD, 99],
+      [39, "outer-void", RING_NORTH, 99],
+      [40, "outer-void", RING_NORTH, 99],
+      [41, "outer-void", RING_NORTH, 99],
+      [42, "outer-void", RING_NORTH, 99],
+      [43, "outer-void", RING_NORTH, 99],
+      [44, "outer-void", RING_NORTH, 99],
+    ]);
+  });
+
+  test("guard, main has no blocking: a player under the boss when the outer void starts walks out before an explosion mark bursts", () => {
+    const drill = startDrill({ selection: { focus: "explosions", drillStart: "cycle-start" } });
+    drill.playCorrectlyTo(30);
+    drill.walkTo(UNDER_BOSS);
+    drill.tickTo(47);
+    drill.walkTo(RING_NORTH);
+    drill.tickTo(49);
+    const walked = drill.rows().filter((row) => row.tick >= 38).map((row) => [row.tick, row.phase.stage, row.playerAtPostTick.tile, row.playerAtPostTick.hp]);
+    drill.dispose();
+    expect(walked).toEqual([
+      [38, "after-inner", UNDER_BOSS, 99],
+      ...[39, 40, 41, 42, 43, 44, 45, 46, 47].map((tick) => [tick, "outer-void", UNDER_BOSS, 99]),
+      [48, "outer-void", RING_NORTH, 99],
+      [49, "outer-void", RING_NORTH, 99],
+    ]);
   });
 });

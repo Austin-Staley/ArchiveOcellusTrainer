@@ -76,4 +76,43 @@ describe("boss footprint", () => {
       [49, "outer-void", RING_NORTH, 99],
     ]);
   });
+
+  test("a Control-click onto the boss ordered the tick before the outer void walks one tile a tick to the nearest tile beside him", () => {
+    const drill = startDrill({ selection: QUIET });
+    drill.tickTo(38);
+    drill.player().moveTo(UNDER_BOSS.x, UNDER_BOSS.y, "walk");
+    drill.tickTo(41);
+    const walked = drill.rows().filter((row) => row.tick >= 38).map((row) => [row.tick, row.playerAtPostTick.tile]);
+    drill.dispose();
+    expect(walked).toEqual([
+      [38, SPAWN_ON_FLOOD],
+      [39, { x: 5, y: 2 }],
+      [40, RING_NORTH],
+      [41, RING_NORTH],
+    ]);
+  });
+
+  test("in the outer void a Control-click walks around the boss one tile a tick", () => {
+    const around = startDrill({ selection: QUIET });
+    around.tickTo(36);
+    around.walkTo(WEST_OF_BOSS);
+    around.tickTo(40);
+    around.player().moveTo(EAST_OF_BOSS.x, EAST_OF_BOSS.y, "walk");
+    around.tickTo(48);
+    const aroundTiles = around.rows().filter((row) => row.tick >= 40).map((row) => row.playerAtPostTick.tile);
+    around.dispose();
+    expect(aroundTiles).toEqual([WEST_OF_BOSS, { x: 3, y: 6 }, { x: 3, y: 7 }, { x: 4, y: 7 }, { x: 5, y: 7 }, { x: 6, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 6 }, EAST_OF_BOSS]);
+  });
+
+  test("guard, main has no blocking: in the outer void a Control-click walks out from under the boss one tile a tick", () => {
+    const out = startDrill({ selection: QUIET });
+    out.tickTo(30);
+    out.walkTo(UNDER_BOSS);
+    out.tickTo(40);
+    out.player().moveTo(RING_NORTH.x, RING_NORTH.y, "walk");
+    out.tickTo(43);
+    const outTiles = out.rows().filter((row) => row.tick >= 40).map((row) => row.playerAtPostTick.tile);
+    out.dispose();
+    expect(outTiles).toEqual([UNDER_BOSS, { x: 5, y: 4 }, RING_NORTH, RING_NORTH]);
+  });
 });

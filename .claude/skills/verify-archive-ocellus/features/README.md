@@ -39,7 +39,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 - [Arena render](./arena-render.md) covers page load, the floor, the player model and the HUD.
 - [Settings menu and run results](./settings-and-results.md) covers the Settings menu, the kill and death result panel and the `bosshp` link option.
-- [Click to walk](./click-to-walk.md) covers walking the player to a clicked floor tile and stopping at the platform's edge.
+- [Click to walk](./click-to-walk.md) covers walking the player to a clicked floor tile, walking one tile a tick on a Control-click, and stopping at the platform's edge.
 - [Credit line](./credit-line.md) covers the Fan Content Policy credit that must stay visible.
 - [Seed per run](./seed.md) covers the fresh seed for each run, the seed box, and replaying a typed seed.
 - [P4 cycle](./p4-cycle.md) covers the boss, the lead-in, the 60-tick cycle's stages and overheads, the fight log and the drill focus control.

@@ -31,7 +31,7 @@ function holeHitsStandingOn(at: At, selection: DrillSelection = {}, until = 8) {
 }
 
 describe("U8 floor holes", () => {
-  test("every seed stacks three holes in a north-south line in the platform's north-east corner, the last against the brazier walkway", () => {
+  test("every seed stacks three holes in a north-south line in the platform's north-east corner, against the brazier walkway", () => {
     expect([layoutOf(1), layoutOf(11)]).toEqual([
       ["corner-stack", CORNER_STACK],
       ["corner-stack", CORNER_STACK],

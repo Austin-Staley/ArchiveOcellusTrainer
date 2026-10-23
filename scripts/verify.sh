@@ -111,7 +111,7 @@ PATHING_OUT_EXPECTED='[[{"x":5,"y":5},{"x":5,"y":3}],[41],[["lead-in",[{"x":5,"y
 HOLES_QUERY="?seed=1&focus=floor-holes"
 HOLE_LAYOUT='{"key":"corner-stack","tiles":[{"x":11,"y":1},{"x":11,"y":2},{"x":11,"y":3}]}'
 HOLE_PIXELS='[[{"x":11,"y":1},-332,20],[{"x":11,"y":2},-309,-15],[{"x":11,"y":3},-290,-45]]'
-HOLE_FREE_PIXELS='[[{"x":10,"y":2},-268,-15],[{"x":12,"y":2},-350,-15]]'
+HOLE_FREE_PIXELS='[[{"x":10,"y":2},-268,-15],[{"x":10,"y":1},-292,20]]'
 HOLE_BOX_HALF_PX=8
 HOLE_MIN_DARK_SHARE=30
 HOLE_MAX_DARK_SHARE=5

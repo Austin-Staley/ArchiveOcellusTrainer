@@ -543,7 +543,7 @@ const FLOOR_HOLE_LAYOUT = choice("corner-stack", {
     cornerStack(GEOMETRY.platform.value, 3),
     "community-tested",
     "unscaled",
-    "void pools spawn under every player but the tank at the start of the third phase's first three quadrants, and a team that stacks on one corner tile in each quadrant leaves 3 pools in all; the guide's markers rag one tile of a 3-tile row in each quadrant, and the quarter turns carry all three onto the P4 quadrant's row, region 16472 x 43, y 37 to 39: a north-south line against the east wall, 6 tiles east of the boss's centre and 2 to 4 north; here that is the first 3 floor rows from the platform's north edge, on the easternmost column all three share, so the line follows the brazier walkway and touches it on its last row",
+    "void pools spawn under every player but the tank at the start of the third phase's first three quadrants, and a team that stacks on one corner tile in each quadrant leaves 3 pools in all; the guide's markers rag one tile of a 3-tile row in each quadrant, and the quarter turns carry all three onto the P4 quadrant's row, region 16472 x 43, y 37 to 39: a north-south line against the east wall, 6 tiles east of the boss's centre and 2 to 4 north; here that is the first 3 floor rows from the platform's north edge, on the easternmost column all three share, so the line sits against the brazier walkway and follows it when it moves",
     STRATEGIES_VOID_POOLS,
     guide(HOLE_STACK_GUIDE, "0:00 to 1:05 the method, 1:59 to 2:09 the 3 holes on the marked row in P4; the description's tile markers"),
     owner("picture: 3 holes in a row tucked in the corner against the brazier border", "2026-10-23"),

@@ -1,6 +1,7 @@
 import type { OrbFloor, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Seed, Tick, Tile, VoidKind } from "../P4Types";
+import type { TileMask } from "./floor";
 import { FOOTPRINT, PLATFORM, VOID_MASKS } from "./floor";
 import { roll } from "./roll";
 
@@ -23,12 +24,13 @@ function orbFloor(kind: VoidKind, choices: ResolvedChoices): OrbFloor {
   }
 }
 
-export function orbTile(seed: Seed, at: Tick, player: Tile, kind: VoidKind, choices: ResolvedChoices): Tile {
+export function orbTile(seed: Seed, at: Tick, player: Tile, kind: VoidKind, choices: ResolvedChoices, holes: TileMask): Tile {
   const { min, max } = orbDistance.value;
   const safeOnly = orbFloor(kind, choices) === "safe-floor";
   const allowed = PLATFORM.tiles().filter(
-    (candidate) => !FOOTPRINT.contains(candidate) && !(safeOnly && VOID_MASKS[kind].contains(candidate)) && reach(candidate, player) >= min,
+    (candidate) => !FOOTPRINT.contains(candidate) && !holes.contains(candidate) && !(safeOnly && VOID_MASKS[kind].contains(candidate)) && reach(candidate, player) >= min,
   );
+  if (allowed.length === 0) throw new RangeError(`no ${kind} orb tile is left ${min} or more tiles from ${player.x}, ${player.y}`);
   const nearest = Math.min(...allowed.map((candidate) => reach(candidate, player)));
   const candidates = allowed.filter((candidate) => reach(candidate, player) <= Math.max(max, nearest)).sort((a, b) => a.y - b.y || a.x - b.x);
   return candidates[Math.floor(roll(seed, "orbTile", at, 0) * candidates.length)];

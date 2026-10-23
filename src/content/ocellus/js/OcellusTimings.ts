@@ -12,7 +12,7 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
-type OwnerDate = "2026-10-21" | "2026-10-22";
+type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23";
 
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
@@ -51,6 +51,7 @@ const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133
 const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
 const STRATEGIES = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15378365);
 const BOSS_PAGE = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379038);
+const ORB_OFF_HOLES = owner("healing orbs never spawn on a floor hole; community feedback", "2026-10-23");
 const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
 const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
@@ -529,8 +530,8 @@ const spotAnim = (id: number, name: string, basis: Basis, note: string): Selecte
 
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles"), STRATEGIES),
-  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES),
-  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "inner orbs appear off the void", vod("V1", "G39"), vod("V2", "k53")),
+  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES, ORB_OFF_HOLES),
+  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "safe floor: inner orbs appear off the void and off the holes", vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
   returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
   look: {
     innerSpawn: selected(
@@ -837,8 +838,8 @@ export const OCELLUS_P4 = {
       adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", vod("V1", "G51, G135, G175")),
     }),
     outerOrbTile: choice("safe-floor", {
-      "safe-floor": selected<OrbFloor>("safe-floor", "footage-repeated", "team-4", "outer orbs on the 5x5 edge, collected without leaving the square", vod("V1", "G74, G79, G128, G135")),
-      "any-floor": selected<OrbFloor>("any-floor", "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158")),
+      "safe-floor": selected<OrbFloor>("safe-floor", "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
+      "any-floor": selected<OrbFloor>("any-floor", "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
     }),
     focus: choice("full-fight", {
       "full-fight": selected<Focus>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", PRACTICE),

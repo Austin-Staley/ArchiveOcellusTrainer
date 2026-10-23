@@ -602,7 +602,7 @@ export class Ocellus extends Mob {
 
   private drain(kind: VoidKind, at: Tick, player: Tile): void {
     const divisor = OCELLUS_P4.lifeforceOrb.drainDivisor.value;
-    const tile = orbTile(this.config.seed, at, player, kind, this.config.choices);
+    const tile = orbTile(this.config.seed, at, player, kind, this.config.choices, this.holes);
     const hit = new P4Hit(this, this.target, (hp) => Math.floor(hp / divisor), (receipt) => {
       const credit = receipt.applied;
       this.orbs = [...this.orbs.filter((orb) => orb.void !== kind), { kind: "dormant", void: kind, credit, owed: credit, tile }];

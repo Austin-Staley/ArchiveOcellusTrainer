@@ -1,0 +1,64 @@
+{
+  "classes": [
+    {
+      "id": "render-path-parity-gap",
+      "description": "A visual change reaches one render path and not the other, so 2D and 3D show a cue over different parts of a tick.",
+      "occurrences": [
+        { "ref": "review:archive-ocellus/explosion-visual-review-sol", "date": "2026-10-23", "note": "The 2D explosion mark drew only its still-transparent glow, so it was invisible through half of the mark tick while 3D showed the shards." },
+        { "ref": "review:archive-ocellus/explosion-fix-review-sol", "date": "2026-10-23", "note": "The 2D repair was proved only by a single draw-method probe, with no check of the assembled 2D view over the mark tick." }
+      ],
+      "check": {
+        "path": "review-ratchet/checks/render-paths.mjs",
+        "fixtures": "review-ratchet/fixtures/render-path-parity",
+        "violation": { "fixture": "violation.json", "args": ["{fixture}"] },
+        "clean": { "fixture": "clean.json", "args": ["{fixture}"] },
+        "used_by": ["src/content/ocellus/tests/RenderPaths.test.ts"]
+      }
+    },
+    {
+      "id": "replay-fails-for-wrong-reason",
+      "description": "A claimed regression fails on the base because the overlaid head test code does not run there, not at the assertion it claims.",
+      "occurrences": [
+        { "ref": "review:archive-ocellus/invincible-rereview-sol", "date": "2026-10-22", "note": "Four new shell cases and the unchanged walking control aborted on the base on a constant only the head fixture read, so the replay credited failures that never reached their assertions." },
+        { "ref": "review:archive-ocellus/sound-on-review-sol", "date": "2026-10-22", "note": "A claimed shell case failed on the base partly because the head fixture's page sequence no longer matched the old driver." }
+      ],
+      "check": {
+        "path": "review-ratchet/checks/replay-controls.mjs",
+        "fixtures": "review-ratchet/fixtures/replay-controls",
+        "violation": { "fixture": "violation", "setup": ["bash", "make-repo.sh", "{fixture}"], "args": ["--repo", "{fixture}/repo", "--base", "base", "--head", "head"] },
+        "clean": { "fixture": "clean", "setup": ["bash", "make-repo.sh", "{fixture}"], "args": ["--repo", "{fixture}/repo", "--base", "base", "--head", "head"] },
+        "used_by": [".github/workflows/test.yml"]
+      }
+    },
+    {
+      "id": "test-substitutes-guarded-policy",
+      "description": "A test replaces the policy it claims to guard, such as running an extracted function under its own shell options instead of the script's.",
+      "occurrences": [
+        { "ref": "review:archive-ocellus/deploy-review-sol", "date": "2026-10-21", "note": "The failed-install test extracted the reader step and ran it under its own errexit, so removing errexit from the build script still passed." },
+        { "ref": "review:archive-ocellus/deploy-rereview-sol", "date": "2026-10-21", "note": "The repaired test copied the build script's set line without its position, so moving that line below the call still passed." }
+      ],
+      "check": {
+        "path": "review-ratchet/checks/shell-test-runs-entry.mjs",
+        "fixtures": "review-ratchet/fixtures/substituted-policy",
+        "violation": { "fixture": "violation", "args": ["{fixture}"] },
+        "clean": { "fixture": "clean", "args": ["{fixture}"] },
+        "used_by": [".github/workflows/test.yml"]
+      }
+    },
+    {
+      "id": "unproved-behavior-claim",
+      "description": "A behaviour is claimed without executable proof: a specified state or required observation has no check that fails when it regresses.",
+      "occurrences": [
+        { "ref": "review:u1-review-opus/F1", "date": "2026-10-21", "note": "The hidden lead-in had no test of what the player sees: removing the hidden check from the boss's visibility left every test green." },
+        { "ref": "review:u2-review-sol/1", "date": "2026-10-21", "note": "A required browser witness of a ranged attack across the flood was replaced by a melee hit after the player walked into the safe square." }
+      ],
+      "check": {
+        "path": "review-ratchet/checks/observable-states.mjs",
+        "fixtures": "review-ratchet/fixtures/observable-states",
+        "violation": { "fixture": "violation.json", "args": ["{fixture}"] },
+        "clean": { "fixture": "clean.json", "args": ["{fixture}"] },
+        "used_by": ["src/content/ocellus/tests/BossStates.test.ts"]
+      }
+    }
+  ]
+}

@@ -6,6 +6,16 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# shell-test-runs-entry.mjs credits a case's failure under a mutation only to an assertion after the case's ready line, so a case calls ready once its setup is done.
+fail() {
+  printf 'ASSERTION FAILED: %s\n' "$*"
+  exit 1
+}
+
+ready() {
+  printf 'ready %s\n' "$t"
+}
+
 clean_tree() {
   T="$(mktemp -d "$WORK/case.XXXXXX")"
   mkdir -p "$T/src/content/ocellus/js/p4" "$T/src/content/ocellus/tests" "$T/test"
@@ -49,19 +59,20 @@ plant() {
 
 expect_clean() {
   clean_tree
-  node "$CHECK" "$T" >"$T/out.txt" 2>&1 || { cat "$T/out.txt"; return 1; }
-  grep -q "check-types: 0 finding(s)" "$T/out.txt" || { cat "$T/out.txt"; return 1; }
+  ready
+  node "$CHECK" "$T" >"$T/out.txt" 2>&1 || { cat "$T/out.txt"; fail "check-types failed on the clean tree"; }
+  grep -q "check-types: 0 finding(s)" "$T/out.txt" || { cat "$T/out.txt"; fail "check-types did not report 0 findings"; }
 }
 
 expect_finding() {
   local file="$1" body="$2" rule="$3"
   clean_tree
   plant "$file" "$body"
+  ready
   if node "$CHECK" "$T" >"$T/out.txt" 2>&1; then
-    echo "check passed although ${file} contains: ${body}"
-    return 1
+    fail "check passed although ${file} contains: ${body}"
   fi
-  grep -q "^${file}:[0-9]*:[0-9]* ${rule}" "$T/out.txt" || { echo "missing '${rule}' finding for ${file}"; cat "$T/out.txt"; return 1; }
+  grep -q "^${file}:[0-9]*:[0-9]* ${rule}" "$T/out.txt" || { cat "$T/out.txt"; fail "missing '${rule}' finding for ${file}"; }
 }
 
 expect_compile_error() {
@@ -69,13 +80,13 @@ expect_compile_error() {
   T="$(mktemp -d "$WORK/case.XXXXXX")"
   cp -R "$REPO/src" "$REPO/test" "$REPO/tsconfig.json" "$T/" && ln -s "$REPO/node_modules" "$T/node_modules" || return 1
   source="$(cat "$T/$file")"
-  [[ "$source" == *"$from"* ]] || { echo "${file} no longer contains: ${from}"; return 1; }
+  [[ "$source" == *"$from"* ]] || fail "${file} no longer contains: ${from}"
   printf '%s\n' "${source/"$from"/"$to"}" >"$T/$file"
+  ready
   if (cd "$T" && node_modules/.bin/tsc --noEmit -p .) >"$T/out.txt" 2>&1; then
-    echo "tsc accepted ${to} in ${file}"
-    return 1
+    fail "tsc accepted ${to} in ${file}"
   fi
-  grep -F "${file}(" "$T/out.txt" | grep -qF "$error" || { echo "missing '${error}' in ${file}"; cat "$T/out.txt"; return 1; }
+  grep -F "${file}(" "$T/out.txt" | grep -qF "$error" || { cat "$T/out.txt"; fail "missing '${error}' in ${file}"; }
 }
 
 clean_tree_passes() { expect_clean; }
@@ -141,8 +152,8 @@ for t in \
     echo "PASS $t"
   else
     echo "FAIL $t"
-    sed 's/^/  /' "$WORK/$t.log"
     failed=1
   fi
+  sed 's/^/  /' "$WORK/$t.log"
 done
 exit $failed

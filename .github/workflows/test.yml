@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
@@ -21,6 +23,13 @@ jobs:
       - run: scripts/install-beta-sdk.sh
       - run: npm run typecheck
       - run: scripts/check-types.test.sh
+      - run: review-ratchet/checks/shell-test-runs-entry.test.sh
+      - run: node review-ratchet/checks/shell-test-runs-entry.mjs .
       - run: npm test
+      - name: Replay the test changes over the base
+        if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node review-ratchet/checks/replay-controls.mjs --base "$BASE"
       - run: scripts/netlify-build.test.sh
       - run: npm run build

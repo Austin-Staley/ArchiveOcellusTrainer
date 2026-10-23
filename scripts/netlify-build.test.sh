@@ -5,6 +5,16 @@ SCRIPT="$(cd "$(dirname "$0")" && pwd)/netlify-build.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# shell-test-runs-entry.mjs credits a case's failure under a mutation only to an assertion after the case's ready line, so a case calls ready once its setup is done.
+fail() {
+  printf 'ASSERTION FAILED: %s\n' "$*"
+  exit 1
+}
+
+ready() {
+  printf 'ready %s\n' "$t"
+}
+
 # git and npm are the build's external commands. The application install marks that the reader step finished and fails, so the build stops there.
 mkdir "$WORK/bin"
 cat >"$WORK/bin/git" <<'EOF'
@@ -43,28 +53,31 @@ build() {
 failed_install_is_not_reused() {
   setup
   : >"$T/npm-fails"
-  if build; then echo "build continued although the reader's npm ci failed"; return 1; fi
-  [[ ! -e "$READER" ]] || { echo "a failed install left $READER"; return 1; }
+  ready
+  if build; then fail "build continued although the reader's npm ci failed"; fi
+  [[ ! -e "$READER" ]] || fail "a failed install left $READER"
   rm "$T/npm-fails"
-  build || { echo "retry failed"; return 1; }
-  [[ -d "$READER/node_modules" ]] || { echo "retry did not install the reader"; return 1; }
-  [[ "$(ls "$CACHE_ROOT")" == "osrscachereader-1111111111111111111111111111111111111111" ]] || { echo "cache root holds: $(ls "$CACHE_ROOT" | tr '\n' ' ')"; return 1; }
+  build || fail "retry failed"
+  [[ -d "$READER/node_modules" ]] || fail "retry did not install the reader"
+  [[ "$(ls "$CACHE_ROOT")" == "osrscachereader-1111111111111111111111111111111111111111" ]] || fail "cache root holds: $(ls "$CACHE_ROOT" | tr '\n' ' ')"
 }
 
 installed_reader_is_reused() {
   setup
-  build || { echo "first build failed"; return 1; }
-  build || { echo "second build failed"; return 1; }
+  ready
+  build || fail "first build failed"
+  build || fail "second build failed"
   local fetched
   fetched="$(wc -l <"$T/fetches" | tr -d ' ')"
-  [[ "$fetched" == 1 ]] || { echo "fetched $fetched times, expected 1"; return 1; }
+  [[ "$fetched" == 1 ]] || fail "fetched $fetched times, expected 1"
 }
 
 changed_pin_removes_the_old_reader() {
   setup
   mkdir -p "$CACHE_ROOT/osrscachereader-0000000000000000000000000000000000000000" "$CACHE_ROOT/openrs2/2746"
-  build || { echo "build failed"; return 1; }
-  [[ "$(ls "$CACHE_ROOT" | tr '\n' ' ')" == "openrs2 osrscachereader-1111111111111111111111111111111111111111 " ]] || { echo "cache root holds: $(ls "$CACHE_ROOT" | tr '\n' ' ')"; return 1; }
+  ready
+  build || fail "build failed"
+  [[ "$(ls "$CACHE_ROOT" | tr '\n' ' ')" == "openrs2 osrscachereader-1111111111111111111111111111111111111111 " ]] || fail "cache root holds: $(ls "$CACHE_ROOT" | tr '\n' ' ')"
 }
 
 failed=0
@@ -76,8 +89,8 @@ for t in \
     echo "PASS $t"
   else
     echo "FAIL $t"
-    sed 's/^/  /' "$WORK/$t.log"
     failed=1
   fi
+  sed 's/^/  /' "$WORK/$t.log"
 done
 exit $failed

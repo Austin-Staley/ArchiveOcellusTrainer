@@ -1,5 +1,15 @@
 import { act } from "react";
+import { OcellusRegion } from "../js/OcellusRegion";
 import { captureNavigation, loadPage } from "./page";
+
+function choose(id: string, value: string, page: ReturnType<typeof loadPage>) {
+  act(() => {
+    const select = page.element(id);
+    if (!(select instanceof HTMLSelectElement)) throw new Error(`#${id} is not a select`);
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
 
 describe("Settings menu", () => {
   beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
@@ -42,15 +52,35 @@ describe("Settings menu", () => {
     const navigation = captureNavigation();
     const page = loadPage("/?seed=3");
     page.click("settings");
-    act(() => {
-      const setup = page.element("setup");
-      if (!(setup instanceof HTMLSelectElement)) throw new Error("#setup is not a select");
-      setup.value = "melee";
-      setup.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    choose("setup", "melee", page);
     page.click("restart");
     page.close();
     navigation.restore();
     expect(navigation.assigned).toEqual(["http://localhost/?setup=melee&focus=full-fight"]);
+  });
+
+  test("picking Rifts as the Focus loads the rifts drill, whose first boss step is P4 tick 62, five ticks before the rifts spawn", () => {
+    const navigation = captureNavigation();
+    const menuPage = loadPage("/?seed=1");
+    menuPage.click("settings");
+    choose("focus", "rifts", menuPage);
+    menuPage.close();
+    navigation.restore();
+
+    // The page builds its own region; the call-through spy hands the test that instance so it can tick the world the SDK loop would.
+    const built = vi.spyOn(OcellusRegion.prototype, "initialiseRegion");
+    const drillPage = loadPage(navigation.assigned[0] ?? "/");
+    const region = built.mock.contexts.at(-1);
+    built.mockRestore();
+    if (!(region instanceof OcellusRegion)) throw new Error("the page built no region");
+    region.world.getReadyTimer = 0;
+    region.world.tickWorld();
+    const firstStep = region.snapshot()?.run;
+    drillPage.close();
+
+    expect([navigation.assigned, firstStep]).toEqual([
+      ["http://localhost/?setup=ranged&focus=rifts"],
+      { kind: "running", tick: 62, phase: { stage: "after-outer", cycle: 1, boss: "present-damageable", overhead: "soul-split" } },
+    ]);
   });
 });

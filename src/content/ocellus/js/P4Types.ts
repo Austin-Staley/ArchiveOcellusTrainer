@@ -1,3 +1,4 @@
+import type { MovePace } from "osrs-sdk";
 import type { GearSlot, ResolvedChoices, SpecialStyle, TransitionCue } from "./OcellusTimings";
 
 declare const brand: unique symbol;
@@ -153,7 +154,7 @@ export type FightEvent =
 export type PlayerObservation = Readonly<{ tile: Tile; hp: number; prayer: Style | null }>;
 
 export type InputObservation =
-  | Readonly<{ kind: "walk-ordered"; destination: Tile }>
+  | Readonly<{ kind: "walk-ordered"; destination: Tile; pace: MovePace }>
   | Readonly<{ kind: "prayer-published"; prayer: Style | null }>;
 
 export type TickRow = Readonly<{

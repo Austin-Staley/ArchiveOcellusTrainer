@@ -1,5 +1,5 @@
 import { Collision, Player, Random } from "osrs-sdk";
-import type { Location, Region } from "osrs-sdk";
+import type { Location, MovePace, Region } from "osrs-sdk";
 import type { InputObservation, PlayerObservation, Style } from "./P4Types";
 import { tile } from "./P4Types";
 import { Ocellus } from "./mobs/Ocellus";
@@ -31,9 +31,9 @@ export class OcellusPlayer extends Player {
     return { tile: tile(this.location.x, this.location.y), hp: this.currentStats.hitpoint, prayer: this.protection };
   }
 
-  override moveTo(x: number, y: number): void {
-    super.moveTo(x, y);
-    this.report({ kind: "walk-ordered", destination: tile(x, y) });
+  override moveTo(x: number, y: number, pace: MovePace = "run-setting"): void {
+    super.moveTo(x, y, pace);
+    this.report({ kind: "walk-ordered", destination: tile(x, y), pace });
   }
 
   /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. */

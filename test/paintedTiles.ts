@@ -28,3 +28,33 @@ export function paintedFills(paint: (context: OffscreenCanvasRenderingContext2D)
   paint(context as unknown as OffscreenCanvasRenderingContext2D);
   return fills;
 }
+
+export function drawsVisibly(paint: (context: OffscreenCanvasRenderingContext2D) => void): boolean {
+  let drew = false;
+  const state: Record<string | symbol, unknown> = { globalAlpha: 1 };
+  const saved: Record<string | symbol, unknown>[] = [];
+  const mark = () => {
+    if (Number(state.globalAlpha) > 0) drew = true;
+  };
+  const methods: Record<string, () => void> = {
+    fill: mark,
+    fillRect: mark,
+    stroke: mark,
+    strokeRect: mark,
+    drawImage: mark,
+    fillText: mark,
+    strokeText: mark,
+    putImageData: mark,
+    save: () => void saved.push({ ...state }),
+    restore: () => void Object.assign(state, saved.pop()),
+  };
+  const context = new Proxy(state, {
+    get: (target, property) => (typeof property === "string" && property in methods ? methods[property] : property in target ? target[property] : () => undefined),
+    set: (target, property, value) => {
+      target[property] = value;
+      return true;
+    },
+  });
+  paint(context as unknown as OffscreenCanvasRenderingContext2D);
+  return drew;
+}

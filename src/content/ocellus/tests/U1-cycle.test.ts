@@ -1,7 +1,7 @@
 import { Random } from "osrs-sdk";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { parseDrillRequest } from "../js/OcellusTimings";
-import { startDrill } from "./drill";
+import { RING_NORTH, UNDER_BOSS, startDrill } from "./drill";
 
 function posesRequested(selection: DrillSelection, start: number, through: number): [number, number][] {
   const drill = startDrill({ selection });
@@ -128,49 +128,62 @@ describe("U1 cycle skeleton", () => {
     expect(entry({ selection: { entryHpFraction: "v1-observed" } })).toEqual({ npcId: 16677, hp: 1349, maxHp: 5420, visible: false, defence: 250 });
   });
 
-  test("a restart starts a new run: entry HP again and a log from P4 tick 0", () => {
-    const drill = startDrill();
-    drill.tickTo(7);
-    drill.hit(drill.player(), drill.boss(), 20);
+  test("guard: a restart starts a new run: entry HP again and a log from P4 tick 0", async () => {
+    const drill = startDrill({ seed: 100 });
+    drill.tickTo(4);
+    await drill.click(UNDER_BOSS);
     drill.tickTo(9);
-    expect(drill.region.snapshot()?.boss.hp).toBe(1335);
+    expect(drill.region.snapshot()?.boss.hp).toBe(1301);
     drill.restart();
     drill.tickTo(1);
     expect([drill.region.snapshot()?.boss.hp, drill.rows().map((row) => row.tick)]).toEqual([1355, [0, 1]]);
     drill.dispose();
   });
 
-  test("the boss is hidden through P4 tick 3, drawn and targetable from 4, and takes damage only from 8", () => {
+  test("guard: the boss is hidden through P4 tick 3, drawn and targetable from 4, and takes damage only from 8", async () => {
     const drill = startDrill();
     const presence = [0, 1, 2, 3, 4].map((t) => {
       drill.tickTo(t);
       return [drill.region.snapshot()?.boss.visible, drill.boss().canBeAttacked()];
     });
     expect(presence).toEqual([[false, false], [false, false], [false, false], [false, false], [true, true]]);
-    drill.tickTo(5);
-    drill.hit(drill.player(), drill.boss(), 20);
-    drill.tickTo(7);
-    drill.hit(drill.player(), drill.boss(), 20);
-    drill.tickTo(8);
-    expect(drill.events("player-hit-judged").map((e) => [e.at, e.outcome, e.requested])).toEqual([[6, "invulnerable", 20], [8, "passed", 20]]);
-    expect([drill.row(6).bossHp, drill.row(8).bossHp]).toEqual([{ atBossStep: 1355, atPostTick: 1355 }, { atBossStep: 1355, atPostTick: 1335 }]);
     drill.dispose();
+    const shotFromTheRing = async (clickAt: number) => {
+      const shooter = startDrill({ seed: 100 });
+      await shooter.click(RING_NORTH);
+      shooter.tickTo(clickAt);
+      await shooter.click(UNDER_BOSS);
+      shooter.tickTo(clickAt + 3);
+      const landed = [shooter.events("player-hit-judged").map((e) => [e.at, e.outcome, e.requested]), shooter.row(clickAt + 3).bossHp];
+      shooter.dispose();
+      return landed;
+    };
+    expect([await shotFromTheRing(4), await shotFromTheRing(5)]).toEqual([
+      [[[7, "invulnerable", 54]], { atBossStep: 1355, atPostTick: 1355 }],
+      [[[8, "passed", 54]], { atBossStep: 1355, atPostTick: 1301 }],
+    ]);
   });
 
-  test("a lethal hit on the boss ends the run before that tick's beats act", () => {
-    const drill = startDrill();
-    drill.tickTo(11);
-    drill.hit(drill.player(), drill.boss(), 1355);
+  test("guard: a lethal hit on the boss ends the run before that tick's beats act", async () => {
+    const drill = startDrill({ seed: 100, bossHp: 1 });
+    drill.tickTo(8);
+    await drill.click(UNDER_BOSS);
     drill.tickTo(20);
     expect(drill.events("run-ended").map((e) => [e.at, e.reason])).toEqual([[12, "kill"]]);
     expect(drill.rows().slice(-2).map((row) => [row.tick, row.beats.map((b) => b.kind)])).toEqual([[11, ["lifeforce-tell", "floor-damage"]], [12, []]]);
     expect(drill.region.snapshot()?.run).toEqual({ kind: "ended", at: 12, reason: "kill" });
+    expect([drill.row(12).events.map((e) => e.kind), drill.row(12).playerAtPostTick.hp]).toEqual([["player-hit-judged", "run-ended"], 99]);
     drill.dispose();
+    const idle = startDrill({ seed: 100, bossHp: 1 });
+    idle.tickTo(12);
+    expect([idle.row(12).events.map((e) => e.kind), idle.row(12).playerAtPostTick.hp]).toEqual([["lifeforce-drained", "orb-spawned"], 50]);
+    idle.dispose();
   });
 
   test.each([
     {
       at: 8,
+      clickAt: 4,
       phase: { stage: "inner-void", cycle: 1, boss: "present-out-of-melee-reach", overhead: "deflect-melee" },
       entered: [
         { kind: "stage-entered", at: 8, stage: "inner-void" },
@@ -180,23 +193,24 @@ describe("U1 cycle skeleton", () => {
     },
     {
       at: 39,
+      clickAt: 36,
       phase: { stage: "outer-void", cycle: 1, boss: "present-damageable", overhead: "deflect-range" },
       entered: [
         { kind: "stage-entered", at: 39, stage: "outer-void" },
         { kind: "overhead-switched", at: 39, overhead: "deflect-range" },
       ],
     },
-  ])("a lethal hit on phase-change tick $at logs the phase that tick enters and none of its beats", ({ at, phase, entered }) => {
-    const drill = startDrill();
-    drill.playCorrectlyTo(at - 1);
-    drill.hit(drill.player(), drill.boss(), 1355);
+  ])("guard: a lethal hit on phase-change tick $at logs the phase that tick enters and none of its beats", async ({ at, clickAt, phase, entered }) => {
+    const drill = startDrill({ seed: 100, bossHp: 1 });
+    drill.playCorrectlyTo(clickAt);
+    await drill.click(UNDER_BOSS);
     drill.tickTo(at + 2);
     const row = drill.row(at);
     expect([row.phase, row.beats, row.events]).toEqual([
       phase,
       [],
       [
-        { kind: "player-hit-judged", at, style: "typeless", outcome: "passed", requested: 1355 },
+        { kind: "player-hit-judged", at, style: "ranged", outcome: "passed", requested: 1 },
         ...entered,
         { kind: "run-ended", at, reason: "kill" },
       ],
@@ -204,14 +218,12 @@ describe("U1 cycle skeleton", () => {
     drill.dispose();
   });
 
-  test("a lethal hit on the player ends the run on the tick it lands", () => {
-    const drill = startDrill();
-    drill.tickTo(9);
-    drill.hit(drill.boss(), drill.player(), 99);
-    drill.tickTo(20);
-    expect(drill.events("run-ended").map((e) => [e.at, e.reason])).toEqual([[10, "death"]]);
-    expect(drill.rows().map((row) => row.tick).slice(-1)).toEqual([10]);
-    expect(drill.row(10).playerAtPostTick.hp).toBe(0);
+  test("guard: a lethal hit on the player ends the run on the tick it lands", () => {
+    const drill = startDrill({ selection: { focus: "void-floor" } });
+    drill.tickTo(60);
+    expect(drill.events("run-ended").map((e) => [e.at, e.reason])).toEqual([[54, "death"]]);
+    expect(drill.rows().map((row) => row.tick).slice(-1)).toEqual([54]);
+    expect(drill.row(54).playerAtPostTick.hp).toBe(0);
     drill.dispose();
   });
 
@@ -240,24 +252,23 @@ describe("U1 cycle skeleton", () => {
     drill.dispose();
   });
 
-  test("native combat rolls replay from the seed, and the SDK's random source is restored between ticks", () => {
-    const fight = (global: number) => {
+  test("guard: native combat rolls replay from the seed, and the SDK's random source is restored between ticks", async () => {
+    const fight = async (global: number) => {
       Random.setRandom(() => global);
       const drill = startDrill({ selection: { focus: "rifts", drillStart: "cycle-start" } });
       drill.tickTo(8);
-      drill.player().setAggro(drill.boss());
+      await drill.click(UNDER_BOSS);
       drill.tickTo(40);
       const out = { bossHp: drill.rows().map((row) => row.bossHp.atPostTick), draws: drill.rows().reduce((sum, row) => sum + row.combatDraws, 0), after: Random.get() };
       drill.dispose();
       return out;
     };
     const original = Random.randomFn;
-    const [low, high] = [fight(0.25), fight(0.75)];
+    const [low, high] = [await fight(0.25), await fight(0.75)];
     Random.setRandom(original);
     expect([low.after, high.after]).toEqual([0.25, 0.75]);
     expect(low.bossHp).toEqual(high.bossHp);
-    expect(low.bossHp[low.bossHp.length - 1]).toBeLessThan(1355);
-    expect(low.draws).toBeGreaterThan(0);
+    expect([low.bossHp[low.bossHp.length - 1], low.draws]).toEqual([1310, 9]);
   });
 
   test("the URL selects data-file options and lists unknown keys, options and seeds by name", () => {

@@ -2,8 +2,9 @@ import * as THREE from "three";
 import { CacheRenderInstancedModel, CacheRenderReferences, CollisionType, Entity, GROUND_OVERLAY_Y, LineOfSightMask } from "osrs-sdk";
 import type { Location3, Model, Region } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Tile } from "../P4Types";
-import { PLATFORM, WALKWAY, beside } from "../p4/floor";
+import type { Tile } from "../../../../sim/brands";
+import { beside } from "../../../../sim/tiles";
+import { PLATFORM, WALKWAY } from "../p4/floor";
 import { rimEdges } from "./P4Views";
 
 const LOOK = OCELLUS_P4.geometry.walkway.value;

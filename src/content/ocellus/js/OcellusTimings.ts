@@ -1,9 +1,12 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Special, Stage, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
-import { cycle, seed, soundId, span, tick, tile } from "./P4Types";
+import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
+import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { Basis, Citations, Evidence, WikiRef } from "../../../sim/provenance";
+import { noWiki, wiki } from "../../../sim/provenance";
+import type { DrillStart, Focus } from "../../../sim/schedule";
+import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, Style, TransitionKind, VoidKind } from "./P4Types";
 import { roll } from "./p4/roll";
 
-type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "community-tested" | "owner-estimated" | "inferred" | "assumption";
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
 
 const VODS = {
@@ -16,23 +19,15 @@ type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23";
 
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
-  | Readonly<{ kind: "wiki"; page: string; oldid: number | null }>
+  | Readonly<{ kind: "news"; url: string }>
   | Readonly<{ kind: "cache"; build: 2746; record: string }>
   | Readonly<{ kind: "owner"; date: OwnerDate; topic: string }>
   | Readonly<{ kind: "guide"; url: string; at: string }>;
 
-type Evidence = Readonly<{
-  status: "unverified";
-  basis: Basis;
-  scale: Scale;
-  note: string;
-  sources: readonly [Source, ...Source[]];
-}>;
+type Selected<T> = Readonly<{ kind: "selected"; value: T; evidence: Evidence<Source, Scale> }>;
 
-type Selected<T> = Readonly<{ kind: "selected"; value: T; evidence: Evidence }>;
-
-function selected<T>(value: T, basis: Basis, scale: Scale, note: string, first: Source, ...rest: Source[]): Selected<T> {
-  return { kind: "selected", value, evidence: { status: "unverified", basis, scale, note, sources: [first, ...rest] } };
+function selected<T>(value: T, basis: Basis, scale: Scale, note: string, ...sources: Citations<Source>): Selected<T> {
+  return { kind: "selected", value, evidence: { status: "unverified", basis, scale, note, sources } };
 }
 
 type Options = Readonly<Record<string, Selected<unknown>>>;
@@ -42,12 +37,20 @@ function choice<O extends Options>(defaultKey: keyof O & string, options: O): Ch
 }
 
 const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at });
-const wiki = (page: string, oldid: number | null): Source => ({ kind: "wiki", page, oldid });
+const news = (url: string): Source => ({ kind: "news", url });
 const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
 const owner = (topic: string, date: OwnerDate = "2026-10-21"): Source => ({ kind: "owner", date, topic });
 const guide = (url: string, at: string): Source => ({ kind: "guide", url, at });
+const STRATEGIES_P4 = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381030);
+const BOSS_INFOBOX = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15380968);
+const VOID_RIFT_PAGE = wiki("https://oldschool.runescape.wiki/w/Void_Rift", 15380527);
+const NO_WIKI_TICKS = noWiki("the wiki's phase 4 steps give the order of events but no tick counts (Strategies rev 15381030)");
+const NO_WIKI_P4 = noWiki("the wiki's phase 4 steps do not state it (Strategies rev 15381030)");
+const NO_WIKI_ARENA = noWiki("the wiki has no tile layout of the phase 4 platform (Strategies rev 15381030, Ocellus rev 15380968)");
+const NO_WIKI_PRESENTATION = noWiki("presentation from the cache or footage, not a game rule");
+const NO_WIKI_PRACTICE = noWiki("a trainer option, not game data");
 const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
-  selected(id, basis, "unscaled", note, cache(`seq ${id} ${name}`));
+  selected(id, basis, "unscaled", note, NO_WIKI_PRESENTATION, cache(`seq ${id} ${name}`));
 const DEFLECT_MELEE_SEEN = [vod("V1", "G53, G55 to G57, G109, G115 to G117, G153, G154, G175 to G177"), vod("V2", "k48, k60, k70 to k72, k131, k132, k168, k170, k250 to k252")] as const;
 const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133, G184 to G186, G189 to G193"), vod("V2", "k79 to k93, k143 to k153, k199, k200, k214 to k217, k259 to k273 but k266")] as const;
 const SOUL_SPLIT_SEEN = [vod("V1", "G58 to G62, G86 to G91, G118 to G122, G146 to G151, G178 to G182"), vod("V2", "k73 to k77, k133 to k136, k161 to k166, k253 to k257")] as const;
@@ -58,8 +61,8 @@ const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_
 const STRATEGIES_VOID_POOLS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15380016);
 const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
 const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
-const HOTFIX_NEWS = wiki("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1", null);
-const SOLO_SCALE = wiki("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1", null);
+const HOTFIX_NEWS = news("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1");
+const SOLO_SCALE = news("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1");
 
 type AmmunitionClass = "light" | "standard" | "heavy";
 type Footprint = "blocks-movement" | "walkable";
@@ -166,8 +169,6 @@ type GeometryRecipe = Readonly<{
   brazier: Selected<BrazierRecipe>;
 }>;
 
-export type Focus = Readonly<{ kind: "full-fight" }> | Readonly<{ kind: "drill"; mechanics: readonly [Mechanic, ...Mechanic[]] }>;
-export type DrillStart = Readonly<{ kind: "before-first-beat"; lead: TickSpan }> | Readonly<{ kind: "cycle-start" }>;
 
 type BossPose =
   | "idle"
@@ -208,7 +209,7 @@ type PresentationRecipe = Readonly<{
 }>;
 
 const headIcon = (frame: number, note: string, seen: readonly Source[]): Selected<SpriteFrame> =>
-  selected({ archive: 440, frame }, "footage-repeated", "unscaled", note, cache(`sprite 440 headicons_prayer frame ${frame}`), ...seen);
+  selected({ archive: 440, frame }, "footage-repeated", "unscaled", note, NO_WIKI_PRESENTATION, cache(`sprite 440 headicons_prayer frame ${frame}`), ...seen);
 
 type StyleBonuses = Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>;
 export type ItemStats = Readonly<{
@@ -255,60 +256,60 @@ type GearRecipe = Readonly<{
 }>;
 
 const BOSS: BossRecipe = {
-  npcId: selected(16677, "inferred", "unscaled", "tfa_ocellus_p3, the only combat form after phase 2; live level 1601 differs from cache 1197 (C7)", cache("npc 16677"), BOSS_PAGE),
-  size: selected(3, "spec-confirmed", "unscaled", "3x3 marker in both clips", cache("npc 16677 size"), vod("V1", "G29"), vod("V2", "k44")),
-  combatLevel: selected(1601, "footage-repeated", "unscaled", "hover text Attack Ocellus (level-1601)", vod("V1", "frame 3317"), vod("V2", "k44")),
-  stats: selected({ attack: 325, strength: 250, defence: 250, range: 300, magic: 300 }, "spec-confirmed", "unscaled", "the wiki's phase 3 infobox, edited after the 21 October hotfix, lists the cache's levels", cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]"), BOSS_PAGE),
-  defenceBonuses: selected({ stab: 150, slash: 100, crush: 30, magic: 200 }, "spec-confirmed", "unscaled", "cache params 5 to 8 match the wiki's phase 3 infobox", cache("npc 16677 params 5, 6, 7, 8"), BOSS_PAGE),
+  npcId: selected(16677, "inferred", "unscaled", "tfa_ocellus_p3, the only combat form after phase 2; live level 1601 differs from cache 1197 (C7)", BOSS_PAGE, cache("npc 16677")),
+  size: selected(3, "spec-confirmed", "unscaled", "3x3 marker in both clips", BOSS_INFOBOX, cache("npc 16677 size"), vod("V1", "G29"), vod("V2", "k44")),
+  combatLevel: selected(1601, "footage-repeated", "unscaled", "hover text Attack Ocellus (level-1601)", BOSS_INFOBOX, vod("V1", "frame 3317"), vod("V2", "k44")),
+  stats: selected({ attack: 325, strength: 250, defence: 250, range: 300, magic: 300 }, "spec-confirmed", "unscaled", "the wiki's phase 3 infobox, edited after the 21 October hotfix, lists the cache's levels", BOSS_PAGE, cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
+  defenceBonuses: selected({ stab: 150, slash: 100, crush: 30, magic: 200 }, "spec-confirmed", "unscaled", "cache params 5 to 8 match the wiki's phase 3 infobox", BOSS_PAGE, cache("npc 16677 params 5, 6, 7, 8")),
   rangedDefence: selected({ light: 250, standard: 250, heavy: 250 }, "spec-single", "unscaled", "the wiki's phase 3 infobox; the cache decode has no ranged defence param", BOSS_PAGE),
-  lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred)", HOTFIX_NEWS, BOSS_PAGE, DEFENCE_REDUCTION_TABLE),
+  lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred)", BOSS_PAGE, DEFENCE_REDUCTION_TABLE, HOTFIX_NEWS),
   footprint: selected(
     { "lead-in": "walkable", "inner-void": "walkable", "after-inner": "walkable", "outer-void": "blocks-movement", "after-outer": "walkable" },
     "community-tested",
     "unscaled",
     "community feedback 2026-10-23, unconfirmed: in the outer void, the melee phase, the boss's 3x3 blocks the player, who paths around his edge instead of under him; no report covers the other stages, so they keep the trainer's walkable footprint",
-    owner("a redditor's comment relayed by the owner: you can run under the boss during the melee phase whereas in game it will path you around the edge of the boss", "2026-10-23"),
+    NO_WIKI_P4, owner("a redditor's comment relayed by the owner: you can run under the boss during the melee phase whereas in game it will path you around the edge of the boss", "2026-10-23"),
   ),
 };
 
 const LEAD_IN: LeadInRecipe = {
-  hiddenFor: selected(span(4), "footage-repeated", "team-4-and-5", "boss model gone from t = 0, back on the main platform at t = 4", vod("V1", "G25 to G29"), vod("V2", "k40 to k44")),
-  presentFor: selected(span(4), "footage-repeated", "team-4-and-5", "present from t = 4 but no splats until the first inner void at t = 8", vod("V1", "G29 to G33, first hit G35"), vod("V2", "k44 to k48, first splats k48")),
-  shout: selected({ text: "End...", at: span(5), lasts: span(3) }, "footage-repeated", "team-4-and-5", "overhead text from t = 5 for 3 ticks", vod("V1", "G30 to G32"), vod("V2", "k45 to k47")),
+  hiddenFor: selected(span(4), "footage-repeated", "team-4-and-5", "boss model gone from t = 0, back on the main platform at t = 4", NO_WIKI_TICKS, vod("V1", "G25 to G29"), vod("V2", "k40 to k44")),
+  presentFor: selected(span(4), "footage-repeated", "team-4-and-5", "present from t = 4 but no splats until the first inner void at t = 8", NO_WIKI_TICKS, vod("V1", "G29 to G33, first hit G35"), vod("V2", "k44 to k48, first splats k48")),
+  shout: selected({ text: "End...", at: span(5), lasts: span(3) }, "footage-repeated", "team-4-and-5", "overhead text from t = 5 for 3 ticks", STRATEGIES_P4, vod("V1", "G30 to G32"), vod("V2", "k45 to k47")),
 };
 
 const INNER_VOID: VoidRecipe<"inner-void"> = {
   kind: "inner-void",
-  duration: selected(span(22), "footage-repeated", "team-4-and-5", "inner void visible 22 ticks", vod("V1", "G33-G54, G93-G114, G153-G174"), vod("V2", "k48-k69, k108-k129, k168-k189, k228-k249")),
-  orbMaturesAfterHit: selected(span(12), "footage-repeated", "team-4-and-5", "orb glows teal 12 ticks after the hit", vod("V1", "G49"), vod("V2", "k64"), cache("spotanim 4311 soul_fragment_spawn_12_ticks")),
+  duration: selected(span(22), "footage-repeated", "team-4-and-5", "inner void visible 22 ticks", NO_WIKI_TICKS, vod("V1", "G33-G54, G93-G114, G153-G174"), vod("V2", "k48-k69, k108-k129, k168-k189, k228-k249")),
+  orbMaturesAfterHit: selected(span(12), "footage-repeated", "team-4-and-5", "orb glows teal 12 ticks after the hit", NO_WIKI_TICKS, vod("V1", "G49"), vod("V2", "k64"), cache("spotanim 4311 soul_fragment_spawn_12_ticks")),
   orbLingersAfterClear: selected(
     span(5),
     "owner-estimated",
     "unscaled",
     "community feedback: an orb stays pickable a few seconds into the transition attack after its void; 5 ticks, 3.0 s, keeps it through S+26, past the tell at S+24 and before the hit at S+29; a pickup at S+21 returned at S+22 (V1 G175); a 1 fps guide shows the orb on clear floor about 1 s after the clear and gone 1 s later, a weak bound because the camera moved",
-    owner("healing orbs despawn almost instantly after a phase ends when usually you can grab it for a few seconds during the attack you need to pray against", "2026-10-23"),
+    NO_WIKI_TICKS, owner("healing orbs despawn almost instantly after a phase ends when usually you can grab it for a few seconds during the attack you need to pray against", "2026-10-23"),
     vod("V1", "G175"),
   ),
 };
 
 const AFTER_INNER: TransitionRecipe<"after-inner"> = {
   kind: "after-inner",
-  duration: selected(span(9), "footage-repeated", "team-4-and-5", "inner void clears at S+22, outer forms at S+31", vod("V1", "G55-G63"), vod("V2", "k70-k78")),
-  tellAfterStart: selected(span(2), "footage-repeated", "team-4-and-5", "transition attack 1 starts at S+24", vod("V1", "G57, G117, G177"), vod("V2", "k72, k132, k192, k252")),
-  hitAfterStart: selected(span(7), "footage-repeated", "team-4-and-5", "transition attack 1 damage at S+29", vod("V1", "G62, G122, G182"), vod("V2", "k77, k137, k197, k257")),
-  soulSplitAfterTell: selected(span(1), "footage-repeated", "team-4-and-5", "Soul Split at S+25; Deflect Melee still up at S+24", vod("V1", "frames 2741-2777, 4901-4937"), vod("V2", "k73")),
+  duration: selected(span(9), "footage-repeated", "team-4-and-5", "inner void clears at S+22, outer forms at S+31", NO_WIKI_TICKS, vod("V1", "G55-G63"), vod("V2", "k70-k78")),
+  tellAfterStart: selected(span(2), "footage-repeated", "team-4-and-5", "transition attack 1 starts at S+24", NO_WIKI_TICKS, vod("V1", "G57, G117, G177"), vod("V2", "k72, k132, k192, k252")),
+  hitAfterStart: selected(span(7), "footage-repeated", "team-4-and-5", "transition attack 1 damage at S+29", NO_WIKI_TICKS, vod("V1", "G62, G122, G182"), vod("V2", "k77, k137, k197, k257")),
+  soulSplitAfterTell: selected(span(1), "footage-repeated", "team-4-and-5", "Soul Split at S+25; Deflect Melee still up at S+24", NO_WIKI_TICKS, vod("V1", "frames 2741-2777, 4901-4937"), vod("V2", "k73")),
 };
 
 const OUTER_VOID: VoidRecipe<"outer-void"> = {
   kind: "outer-void",
-  duration: selected(span(20), "footage-repeated", "team-4-and-5", "outer void visible 20 ticks", vod("V1", "G64-G83, G124-G143"), vod("V2", "k79-k98, k139-k158, k199-k218")),
-  orbMaturesAfterHit: selected(span(6), "footage-repeated", "team-4-and-5", "outer orb first glows 5 to 6 ticks after the hit", vod("V1", "G74"), vod("V2", "k88, k149"), cache("spotanim 4309 soul_fragment_spawn_6_ticks")),
+  duration: selected(span(20), "footage-repeated", "team-4-and-5", "outer void visible 20 ticks", NO_WIKI_TICKS, vod("V1", "G64-G83, G124-G143"), vod("V2", "k79-k98, k139-k158, k199-k218")),
+  orbMaturesAfterHit: selected(span(6), "footage-repeated", "team-4-and-5", "outer orb first glows 5 to 6 ticks after the hit", NO_WIKI_TICKS, vod("V1", "G74"), vod("V2", "k88, k149"), cache("spotanim 4309 soul_fragment_spawn_6_ticks")),
   orbLingersAfterClear: selected(
     span(2),
     "inferred",
     "team-4-and-5",
     "the flood clears at S+51 and an unclaimed outer orb heals the boss at hit + 19, S+54 (C17), so the last pickup is S+53, a tick into the tell; the community's few seconds would move that heal later than the footage shows",
-    vod("V1", "G147"),
+    NO_WIKI_TICKS, vod("V1", "G147"),
     vod("V2", "k102, k222"),
     owner("healing orbs despawn almost instantly after a phase ends when usually you can grab it for a few seconds during the attack you need to pray against", "2026-10-23"),
   ),
@@ -316,19 +317,19 @@ const OUTER_VOID: VoidRecipe<"outer-void"> = {
 
 const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
   kind: "after-outer",
-  duration: selected(span(9), "footage-repeated", "team-4-and-5", "outer void clears at S+51, next inner at S+60", vod("V1", "G84-G92"), vod("V2", "k99-k107")),
-  tellAfterStart: selected(span(1), "footage-repeated", "team-4-and-5", "transition attack 2 starts at S+52; one of five onsets came a tick late (k161), damage tick unchanged", vod("V1", "G85, G145"), vod("V2", "k100, k220")),
-  hitAfterStart: selected(span(6), "footage-repeated", "team-4-and-5", "transition attack 2 damage at S+57", vod("V1", "G90, G150"), vod("V2", "k105, k165, k225")),
-  soulSplitAfterTell: selected(span(1), "footage-once", "team-4", "Soul Split at S+53", vod("V1", "frames 3749-3785")),
+  duration: selected(span(9), "footage-repeated", "team-4-and-5", "outer void clears at S+51, next inner at S+60", NO_WIKI_TICKS, vod("V1", "G84-G92"), vod("V2", "k99-k107")),
+  tellAfterStart: selected(span(1), "footage-repeated", "team-4-and-5", "transition attack 2 starts at S+52; one of five onsets came a tick late (k161), damage tick unchanged", NO_WIKI_TICKS, vod("V1", "G85, G145"), vod("V2", "k100, k220")),
+  hitAfterStart: selected(span(6), "footage-repeated", "team-4-and-5", "transition attack 2 damage at S+57", NO_WIKI_TICKS, vod("V1", "G90, G150"), vod("V2", "k105, k165, k225")),
+  soulSplitAfterTell: selected(span(1), "footage-once", "team-4", "Soul Split at S+53", NO_WIKI_TICKS, vod("V1", "frames 3749-3785")),
 };
 
 const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
 
 const OVERHEADS: OverheadRecipe = {
-  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it", ...DEFLECT_MELEE_SEEN, STRATEGIES),
-  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed", ...DEFLECT_RANGE_SEEN, STRATEGIES),
-  transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
-  offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
+  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it", STRATEGIES, ...DEFLECT_MELEE_SEEN),
+  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed", STRATEGIES, ...DEFLECT_RANGE_SEEN),
+  transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", STRATEGIES_P4, vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
+  offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", NO_WIKI_TICKS, vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
 
 export type DeflectRule = Readonly<{ kind: "block"; reflectPercent: number }> | Readonly<{ kind: "none" }>;
@@ -340,22 +341,22 @@ const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
 };
 
 const LIFEFORCE: LifeforceRecipe = {
-  tellAfterOnset: selected(span(3), "footage-repeated", "team-4-and-5", "teal swirl and chat line", vod("V1", "G36, G127"), vod("V2", "k51")),
-  hitAfterOnset: selected(span(4), "footage-repeated", "team-4-and-5", "hit 4 ticks after each void forms", vod("V1", "G37, G68, G97, G128, G157, G188"), vod("V2", "k52, k83, k112, k143, k172, k203")),
-  tellChat: selected("Ocellus manipulates your lifeforce!", "footage-repeated", "team-4-and-5", "game chat line on the tell tick, first in the frame that shows the teal swirl", vod("V1", "3:54:02.78, G36"), vod("V2", "5:20:25.87, k51")),
+  tellAfterOnset: selected(span(3), "footage-repeated", "team-4-and-5", "teal swirl and chat line", NO_WIKI_TICKS, vod("V1", "G36, G127"), vod("V2", "k51")),
+  hitAfterOnset: selected(span(4), "footage-repeated", "team-4-and-5", "hit 4 ticks after each void forms", NO_WIKI_TICKS, vod("V1", "G37, G68, G97, G128, G157, G188"), vod("V2", "k52, k83, k112, k143, k172, k203")),
+  tellChat: selected("Ocellus manipulates your lifeforce!", "footage-repeated", "team-4-and-5", "game chat line on the tell tick, first in the frame that shows the teal swirl", NO_WIKI_P4, vod("V1", "3:54:02.78, G36"), vod("V2", "5:20:25.87, k51")),
 };
 
 const cue = (sound: TransitionSound, afterTell: number, delayMs: number, note: string, first: Source, ...rest: Source[]): Selected<TransitionCue> =>
-  selected({ sound, afterTell: span(afterTell), delayMs }, "footage-repeated", "team-4-and-5", note, first, ...rest);
+  selected({ sound, afterTell: span(afterTell), delayMs }, "footage-repeated", "team-4-and-5", note, NO_WIKI_PRESENTATION, first, ...rest);
 
 const SPECIAL: SpecialRecipe = {
   styles: {
-    "black-disk": selected("melee", "footage-repeated", "team-4-and-5", "Kirby on Protect from Melee takes 7 and a teammate 50; the streamer on Magic takes 43 while four others take 6", vod("V1", "G62, G90"), vod("V2", "k137")),
-    "spike-disk": selected("ranged", "footage-repeated", "team-4-and-5", "players on Protect from Missiles take 7, 5 and 9", vod("V1", "G122"), vod("V2", "k105, k197")),
-    vortex: selected("magic", "footage-repeated", "team-5", "players on Protect from Magic take 7 twice", vod("V2", "k77, k165")),
+    "black-disk": selected("melee", "footage-repeated", "team-4-and-5", "Kirby on Protect from Melee takes 7 and a teammate 50; the streamer on Magic takes 43 while four others take 6", STRATEGIES_P4, vod("V1", "G62, G90"), vod("V2", "k137")),
+    "spike-disk": selected("ranged", "footage-repeated", "team-4-and-5", "players on Protect from Missiles take 7, 5 and 9", STRATEGIES_P4, vod("V1", "G122"), vod("V2", "k105, k197")),
+    vortex: selected("magic", "footage-repeated", "team-5", "players on Protect from Magic take 7 twice", STRATEGIES_P4, vod("V2", "k77, k165")),
   },
-  protectedDamage: selected({ min: 5, max: 9 }, "footage-repeated", "team-4-and-5", "7, 6, 7, 6, 9 on Kirby and 7, 5, 7, 9 on the streamer under the matching prayer; the solo carry-over is inferred", vod("V1", "G62, G90, G122, G150, G182"), vod("V2", "k77, k105, k165, k197")),
-  unprotectedDamage: selected({ min: 43, max: 50 }, "footage-repeated", "team-4-and-5", "50 on a teammate whose prayer is not seen, 43 on the streamer under the wrong prayer; the solo carry-over is inferred", vod("V1", "G62"), vod("V2", "k137")),
+  protectedDamage: selected({ min: 5, max: 9 }, "footage-repeated", "team-4-and-5", "7, 6, 7, 6, 9 on Kirby and 7, 5, 7, 9 on the streamer under the matching prayer; the solo carry-over is inferred", STRATEGIES_P4, vod("V1", "G62, G90, G122, G150, G182"), vod("V2", "k77, k105, k165, k197")),
+  unprotectedDamage: selected({ min: 43, max: 50 }, "footage-repeated", "team-4-and-5", "50 on a teammate whose prayer is not seen, 43 on the streamer under the wrong prayer; the solo carry-over is inferred", STRATEGIES_P4, vod("V1", "G62"), vod("V2", "k137")),
   cues: {
     melee: [
       cue("meleeTell", 0, 60, "tell + 0.1 in all 5 melee attacks; 0.1 tick is 60 ms", vod("V1", "3:54:32.45, t60.1")),
@@ -372,17 +373,17 @@ const SPECIAL: SpecialRecipe = {
 };
 
 const BOSS_HEALS: BossHealRecipe = {
-  soulSplitAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "boss heals by wrong-prayer damage only: +50 and +43 while protected players took 7 and 6", vod("V1", "G62 then G64"), vod("V2", "k137 then k139")),
+  soulSplitAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "boss heals by wrong-prayer damage only: +50 and +43 while protected players took 7 and 6", NO_WIKI_TICKS, vod("V1", "G62 then G64"), vod("V2", "k137 then k139")),
 };
 
 const RIFTS: RiftRecipe = {
-  spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", vod("V1", "G152"), vod("V2", "k107, k167, k227")),
+  spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", NO_WIKI_TICKS, vod("V1", "G152"), vod("V2", "k107, k167, k227")),
   chargeAfterSpawn: selected(
     span(23),
     "owner-estimated",
     "unscaled",
     "the owner reports that rifts last much longer than 6.6 s (11 ticks), that none of the footage they found shows one bursting, and that they watched two killed within about 10 s with about 4 s still on the timer: about 14 s, 23 ticks of 0.6 s (inferred); both clips show a rift standing after spawn + 11, V1 at G164 and V2 from k177 to k196",
-    owner("rift charge timer", "2026-10-22"),
+    NO_WIKI_TICKS, owner("rift charge timer", "2026-10-22"),
     vod("V1", "G152 to G168"),
     vod("V2", "k167 to k196"),
   ),
@@ -391,23 +392,23 @@ const RIFTS: RiftRecipe = {
     "footage-once",
     "unscaled",
     "the owner's in-game picture, read by the lead: under each rift's green HP bar and touching it, a bar of the same width and height, dark olive background, yellow fill from the left, about a tenth full on both rifts; that the fill tracks the charge and is full on the burst tick is inferred from that one frame",
-    owner("rift timer bar picture", "2026-10-22"),
+    NO_WIKI_PRESENTATION, owner("rift timer bar picture", "2026-10-22"),
   ),
-  npcId: selected(16678, "spec-confirmed", "unscaled", "tfa_ocellus_p3_bombportal_basic, Void Rift", cache("npc 16678"), vod("V2", "k193")),
-  name: selected("Void Rift", "spec-confirmed", "unscaled", "hover text Attack Void Rift (level-138)", cache("npc 16678 name"), vod("V2", "k193")),
-  combatLevel: selected(138, "spec-confirmed", "unscaled", "cache level matches the hover text", cache("npc 16678 combat level"), vod("V2", "k193")),
-  size: selected(1, "spec-confirmed", "unscaled", "one-tile shard", cache("npc 16678 size")),
-  stats: selected({ attack: 1, strength: 1, defence: 175, range: 1, magic: 300, hitpoint: 44 }, "spec-confirmed", "unscaled", "the rift never attacks", cache("npc 16678 stats [1, 175, 1, 44, 1, 300]")),
-  defenceBonuses: selected({ stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, "spec-confirmed", "unscaled", "params 5 to 8 are 0; the decode has no ranged defence param, taken as 0 (inferred)", cache("npc 16678 params 5, 6, 7, 8")),
+  npcId: selected(16678, "spec-confirmed", "unscaled", "tfa_ocellus_p3_bombportal_basic, Void Rift", VOID_RIFT_PAGE, cache("npc 16678"), vod("V2", "k193")),
+  name: selected("Void Rift", "spec-confirmed", "unscaled", "hover text Attack Void Rift (level-138)", VOID_RIFT_PAGE, cache("npc 16678 name"), vod("V2", "k193")),
+  combatLevel: selected(138, "spec-confirmed", "unscaled", "cache level matches the hover text", VOID_RIFT_PAGE, cache("npc 16678 combat level"), vod("V2", "k193")),
+  size: selected(1, "spec-confirmed", "unscaled", "one-tile shard", noWiki("the Void Rift infobox leaves size empty (rev 15380527)"), cache("npc 16678 size")),
+  stats: selected({ attack: 1, strength: 1, defence: 175, range: 1, magic: 300, hitpoint: 44 }, "spec-confirmed", "unscaled", "the rift never attacks", VOID_RIFT_PAGE, cache("npc 16678 stats [1, 175, 1, 44, 1, 300]")),
+  defenceBonuses: selected({ stab: 0, slash: 0, crush: 0, magic: 0, range: 0 }, "spec-confirmed", "unscaled", "params 5 to 8 are 0; the decode has no ranged defence param, taken as 0 (inferred)", VOID_RIFT_PAGE, cache("npc 16678 params 5, 6, 7, 8")),
   offsetsFromBoss: selected(
     [{ dx: -2, dy: -4 }, { dx: 6, dy: -4 }],
     "footage-once",
     "team-4-and-5",
     "(2, 2) and (10, 2), north of the 5x5: V1's two rifts, placed from their HP bars and carried onto the V2 platform by the east-west mirror; (2, 2) is the same tile under the 270-degree turn; the second carries to (11, 2), also a V2 second-spawn rift, and sits 1 tile west on (10, 2) so it stays off the middle of the 3 holes players stack against the east wall on x 11 (inferred, 2026-10-23); every observed rift is north of the 5x5, and V2's other rift tiles lie on the undrawn strip north of this grid",
-    vod("V1", "G152-G164"),
+    NO_WIKI_ARENA, vod("V1", "G152-G164"),
     vod("V2", "k167-k173"),
   ),
-  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared, with a rift still standing; taken as the burst's damage, though the burst now lands 23 ticks after spawn (inferred)", vod("V2", "k118, k178")),
+  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared, with a rift still standing; taken as the burst's damage, though the burst now lands 23 ticks after spawn (inferred)", noWiki("the wiki says an unkilled rift damages all players but gives no amount (Strategies rev 15381030)"), vod("V2", "k118, k178")),
   standardRangedRoll: selected(
     { guaranteedHit: true, maxDamage: true },
     "spec-single",
@@ -416,14 +417,14 @@ const RIFTS: RiftRecipe = {
     BOSS_PAGE,
     owner("rifts almost always one-shot", "2026-10-22"),
   ),
-  killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", vod("V1", "3:55:21.98"), vod("V2", "k116")),
+  killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", NO_WIKI_P4, vod("V1", "3:55:21.98"), vod("V2", "k116")),
   poses: {
     idle: pose(14895, "vfx_ocellus_voidflare_default_idle", "spec-confirmed", "rift stand and walk animation"),
     spawn: pose(14896, "vfx_ocellus_voidflare_default_spawn", "inferred", "rift appearing, 1 tick, frame sound 12643"),
     despawn: pose(14897, "vfx_ocellus_voidflare_default_despawn", "inferred", "rift dying, 1 tick, frame sound 12640"),
     detonate: pose(14898, "vfx_ocellus_voidflare_default_detonate", "inferred", "rift releasing its charge, 2 ticks, frame sounds 12641 and 12642"),
   },
-  burstFlare: selected(4306, "inferred", "unscaled", "vfx_human_ocellus_voidflare_default shares the rift's model 62369; played on the player as the charge lands", cache("spotanim 4306 vfx_human_ocellus_voidflare_default")),
+  burstFlare: selected(4306, "inferred", "unscaled", "vfx_human_ocellus_voidflare_default shares the rift's model 62369; played on the player as the charge lands", NO_WIKI_PRESENTATION, cache("spotanim 4306 vfx_human_ocellus_voidflare_default")),
 };
 
 const FLOOD_FRAMES = vod("V2", "k86, k95, k142, k156, k205, k212, k262, k269");
@@ -449,7 +450,7 @@ const GEOMETRY: GeometryRecipe = {
     "community-tested",
     "unscaled",
     "row y = 0 first, x = 0 leftmost; # is floor, . is not floor, ? is a tile the kills disagree on (±1 tile) and is left blocked, w is the raised brazier walkway and b its brazier, drawn and never walkable; the walkway is the band 2 tiles past the floor's diagonal edge, ending where J1 ends it at y 12, and it covers five of the six disputed diagonal tiles, (10, 4), (11, 4), (9, 5), (8, 6) and (4, 11), J1 floor that V2's walkway base excludes; the sixth, (11, 3), is floor, and the walkway takes (13, 3) and (12, 4) instead so its band stays unbroken: players report the east side 1 tile too close to the boss, and the owner's in-game picture shows the wall straight for the 3 tiles on x 11, rows 1 to 3, where players stack the holes, then 2 floor tiles on the diagonal, (9, 4) and (8, 5), before the walkway juts in to the 5x5 on (8, 6), (8, 7) and (7, 8) so no path runs behind the boss; the brazier sits in the walkway's step beside the 5x5's corner; a triangle with 2-tile bands north and west of the 5x5 and the brazier walkway on the diagonal; V2's drawn void and J1's rims agree on both legs, J1 adds the 6 floor tiles the boss hid south of the 5x5 in V2, and V2's north strip is left out because V1 and J1 drop away there; 81 floor tiles; seen with teams of 2 (J1), 4 (V1) and 5 (V2); cache 2746 has no XTEA keys for the raid",
-    owner("redditor: the tiles on the east side are 1 too close to the boss and need dragging out by 1", "2026-10-23"),
+    NO_WIKI_ARENA, owner("redditor: the tiles on the east side are 1 too close to the boss and need dragging out by 1", "2026-10-23"),
     owner("in-game picture: the wall runs straight 3 tiles in, then a smooth diagonal with 2 full tiles until the jut", "2026-10-23"),
     FLOOD_FRAMES,
     vod("V2", "k060 to k269, walkway base and strip rims, 18 frames"),
@@ -458,14 +459,14 @@ const GEOMETRY: GeometryRecipe = {
     owner("P4 platform screenshot: the triangle and the brazier walkway"),
     cache("region keys absent"),
   ),
-  bossAnchor: selected(tile(4, 6), "footage-repeated", "team-4-and-5", "south-west tile of the boss's 3x3 at x 4-6, y 4-6, centred in the 5x5 at x 3-7, y 3-7; the cyan 3x3 marker sits inside the purple 5x5 rim in every fitted frame", FLOOD_FRAMES, V1_FLOOD_FRAMES),
-  playerSpawn: selected(tile(5, 1), "inferred", "team-4-and-5", "two tiles north of the 5x5, where players wait through the first inner void; no clip pins one tile", vod("V2", "k49 to k52"), vod("V1", "G33")),
+  bossAnchor: selected(tile(4, 6), "footage-repeated", "team-4-and-5", "south-west tile of the boss's 3x3 at x 4-6, y 4-6, centred in the 5x5 at x 3-7, y 3-7; the cyan 3x3 marker sits inside the purple 5x5 rim in every fitted frame", NO_WIKI_ARENA, FLOOD_FRAMES, V1_FLOOD_FRAMES),
+  playerSpawn: selected(tile(5, 1), "inferred", "team-4-and-5", "two tiles north of the 5x5, where players wait through the first inner void; no clip pins one tile", NO_WIKI_ARENA, vod("V2", "k49 to k52"), vod("V1", "G33")),
   walkway: selected(
     { height: 0.4, top: "#6b6c40", face: "#8e9a80", shade: "#3c4233" },
     "footage-once",
     "unscaled",
     "a raised curb about 0.4 tile high with an olive top and a light stone face toward the platform; colours are approximate medians of the curb in one frame",
-    vod("V2", "k256, curb beside the 5x5"),
+    NO_WIKI_PRESENTATION, vod("V2", "k256, curb beside the 5x5"),
     owner("P4 platform screenshot: the triangle and the brazier walkway"),
   ),
   brazier: selected(
@@ -473,7 +474,7 @@ const GEOMETRY: GeometryRecipe = {
     "assumption",
     "unscaled",
     "a god censer hangs over the fire bowl in the curb's step; the purple one in V2 reads as the Zarosian Censer, one of the raid's four (62693 to 62700); P4 use of the censers is not seen, so it is scenery; the fire bowl and its stand are among the raid's unnamed locs and are not drawn",
-    vod("V2", "k256, purple censer over the fire bowl on the curb"),
+    NO_WIKI_PRESENTATION, vod("V2", "k256, purple censer over the fire bowl on the curb"),
     vod("V1", "G146, fire bowl in the curb's step beside the 5x5"),
     cache("loc 62697 Zarosian Censer: model 62440, animation 14833"),
   ),
@@ -493,19 +494,19 @@ type FloorRecipe = Readonly<{
 const FLOOD_PER_TICK: DamageRange = { min: 9, max: 11 };
 
 const FLOOR: FloorRecipe = {
-  squareSide: selected(5, "footage-repeated", "team-4-and-5", "the boss's 3x3 plus a 1-tile ring", vod("V1", "frame 4325"), vod("V2", "k86"), STRATEGIES),
+  squareSide: selected(5, "footage-repeated", "team-4-and-5", "the boss's 3x3 plus a 1-tile ring", STRATEGIES, vod("V1", "frame 4325"), vod("V2", "k86")),
   shapes: {
-    "inner-void": selected("near-square", "footage-repeated", "team-4-and-5", "the 5x5 under and around the boss", vod("V1", "G33, G93, G153"), vod("V2", "k48, k108, k168, k228"), STRATEGIES),
-    "outer-void": selected("platform-minus-near-square", "footage-repeated", "team-4-and-5", "all floor but the 5x5; floor the client leaves undrawn is not safe (C16), and the platform leaves out V2's undrawn strip north of it", vod("V1", "G64"), vod("V2", "k86, k93-k97"), STRATEGIES),
+    "inner-void": selected("near-square", "footage-repeated", "team-4-and-5", "the 5x5 under and around the boss", STRATEGIES, vod("V1", "G33, G93, G153"), vod("V2", "k48, k108, k168, k228")),
+    "outer-void": selected("platform-minus-near-square", "footage-repeated", "team-4-and-5", "all floor but the 5x5; floor the client leaves undrawn is not safe (C16), and the platform leaves out V2's undrawn strip north of it", STRATEGIES, vod("V1", "G64"), vod("V2", "k86, k93-k97")),
   },
-  outerDamage: selected({ kind: "damages", afterOnset: span(5), perTick: FLOOD_PER_TICK }, "footage-once", "team-5", "standing on the flood from its onset, first damage at S+36; amounts 11, 9, 9, 9, 10, 11", vod("V2", "k199 to k204"), vod("V2", "k92-k97")),
-  look: selected({ void: "#1e2529", stars: "#babcc2", rim: "#9f48bd" }, "footage-repeated", "team-4", "starry near-black tiles inside a glowing purple rim; median colours of each in two frames", vod("V1", "G33, frame 1877"), vod("V1", "G64, frame 2993")),
+  outerDamage: selected({ kind: "damages", afterOnset: span(5), perTick: FLOOD_PER_TICK }, "footage-once", "team-5", "standing on the flood from its onset, first damage at S+36; amounts 11, 9, 9, 9, 10, 11", NO_WIKI_P4, vod("V2", "k199 to k204"), vod("V2", "k92-k97")),
+  look: selected({ void: "#1e2529", stars: "#babcc2", rim: "#9f48bd" }, "footage-repeated", "team-4", "starry near-black tiles inside a glowing purple rim; median colours of each in two frames", NO_WIKI_PRESENTATION, vod("V1", "G33, frame 1877"), vod("V1", "G64, frame 2993")),
 };
 
 const INNER_VOID_FLOOR = choice("one-tick-grace", {
-  "one-tick-grace": selected<FloorRule>({ kind: "damages", afterOnset: span(2), perTick: FLOOD_PER_TICK }, "inferred", "team-5", "inside at S+0 and off by S+1 took no splat; the floor reads the tile a tick starts on, so S+2 is the earliest onset that capture allows; amounts copy the flood", vod("V2", "k48 to k49"), STRATEGIES),
-  "outer-rule": selected<FloorRule>({ kind: "damages", afterOnset: span(5), perTick: FLOOD_PER_TICK }, "assumption", "team-5", "the flood's S+5 onset; no capture shows a player inside past one tick", vod("V2", "k48 to k49")),
-  harmless: selected<FloorRule>({ kind: "harmless" }, "assumption", "unscaled", "no capture shows inner-void damage", vod("V2", "k48 to k49")),
+  "one-tick-grace": selected<FloorRule>({ kind: "damages", afterOnset: span(2), perTick: FLOOD_PER_TICK }, "inferred", "team-5", "inside at S+0 and off by S+1 took no splat; the floor reads the tile a tick starts on, so S+2 is the earliest onset that capture allows; amounts copy the flood", STRATEGIES, vod("V2", "k48 to k49")),
+  "outer-rule": selected<FloorRule>({ kind: "damages", afterOnset: span(5), perTick: FLOOD_PER_TICK }, "assumption", "team-5", "the flood's S+5 onset; no capture shows a player inside past one tick", NO_WIKI_P4, vod("V2", "k48 to k49")),
+  harmless: selected<FloorRule>({ kind: "harmless" }, "assumption", "unscaled", "no capture shows inner-void damage", NO_WIKI_P4, vod("V2", "k48 to k49")),
 });
 
 export type HoleRule = Readonly<{ kind: "damages"; perTick: DamageRange }> | Readonly<{ kind: "harmless" }>;
@@ -520,11 +521,11 @@ type FloorHoleRecipe = Readonly<{
 const HOLE_FRAMES = vod("V1", "seen G29 to G176 on 84 fitted ticks; the same tiles at t-42 (clip 0.40 s) and t-5 (clip 23.00 s)");
 
 const FLOOR_HOLES: FloorHoleRecipe = {
-  lifetime: selected("whole-phase", "footage-repeated", "team-4-and-5", "on the platform before P4 tick 0 and on the same tiles to the kill (V1) or the wipe (V2); no hole appears, moves or leaves during P4; the wiki puts void pools in phase 3", HOLE_FRAMES, vod("V2", "seen k49 to k270 on 85 fitted ticks"), STRATEGIES),
-  hiddenUnder: selected("outer-void", "footage-repeated", "team-4", "V1's holes show on 0 of 99 in-view tile-ticks during the flood and 227 of 295 outside it; V2's stay visible on the strip the flood does not draw", HOLE_FRAMES),
+  lifetime: selected("whole-phase", "footage-repeated", "team-4-and-5", "on the platform before P4 tick 0 and on the same tiles to the kill (V1) or the wipe (V2); no hole appears, moves or leaves during P4; the wiki puts void pools in phase 3", STRATEGIES, HOLE_FRAMES, vod("V2", "seen k49 to k270 on 85 fitted ticks")),
+  hiddenUnder: selected("outer-void", "footage-repeated", "team-4", "V1's holes show on 0 of 99 in-view tile-ticks during the flood and 227 of 295 outside it; V2's stay visible on the strip the flood does not draw", NO_WIKI_P4, HOLE_FRAMES),
   look: {
-    model: selected(62508, "inferred", "unscaled", "loc 62701 Void (tfa_ocellus_void_degen_bomb), shape 22; one tile, black starfield texture 215 in a purple rim, colour 50130; 62507 is the shape-10 twin; which shape the server spawns is unknown", cache("loc 62701 models 62507, 62508")),
-    idle: selected(14891, "spec-confirmed", "unscaled", "the loc's own animation, 1.33-tick loop, no sounds", cache("loc 62701 animation 14891")),
+    model: selected(62508, "inferred", "unscaled", "loc 62701 Void (tfa_ocellus_void_degen_bomb), shape 22; one tile, black starfield texture 215 in a purple rim, colour 50130; 62507 is the shape-10 twin; which shape the server spawns is unknown", NO_WIKI_PRESENTATION, cache("loc 62701 models 62507, 62508")),
+    idle: selected(14891, "spec-confirmed", "unscaled", "the loc's own animation, 1.33-tick loop, no sounds", NO_WIKI_PRESENTATION, cache("loc 62701 animation 14891")),
   },
 };
 
@@ -548,15 +549,15 @@ const FLOOR_HOLE_LAYOUT = choice("corner-stack", {
     guide(HOLE_STACK_GUIDE, "0:00 to 1:05 the method, 1:59 to 2:09 the 3 holes on the marked row in P4; the description's tile markers"),
     owner("picture: 3 holes in a row tucked in the corner against the brazier border", "2026-10-23"),
   ),
-  "v1-turn": selected<HoleLayout>(scattered([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)]), "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
-  "v1-mirror": selected<HoleLayout>(scattered([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)]), "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn, where a hole forms under a player standing there as P4 starts; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", HOLE_FRAMES),
-  "j1-mirror": selected<HoleLayout>(scattered([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)]), "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", owner("P4 platform screenshot: five black hole blobs")),
-  "j1-turn": selected<HoleLayout>(scattered([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)]), "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", owner("P4 platform screenshot: five black hole blobs")),
+  "v1-turn": selected<HoleLayout>(scattered([tile(1, 5), tile(1, 6), tile(2, 8), tile(2, 9), tile(4, 9), tile(8, 5)]), "footage-repeated", "team-4", "V1's six holes carried by the quarter turn, x = 3 + v, y = 3 + u; (4, 9) is floor only on the rows that carry J1's floor south of the 5x5", NO_WIKI_ARENA, HOLE_FRAMES),
+  "v1-mirror": selected<HoleLayout>(scattered([tile(5, 1), tile(6, 1), tile(8, 2), tile(9, 2), tile(9, 4), tile(5, 8)]), "footage-repeated", "team-4", "V1's six holes carried by the east-west mirror, x = 3 + u, y = 3 + v, the carry rift option A uses; (5, 1) is the player spawn, where a hole forms under a player standing there as P4 starts; (5, 8) is floor only on the rows that carry J1's floor south of the 5x5", NO_WIKI_ARENA, HOLE_FRAMES),
+  "j1-mirror": selected<HoleLayout>(scattered([tile(9, 3), tile(9, 1), tile(2, 6), tile(2, 5), tile(2, 2)]), "footage-once", "unscaled", "five holes in the owner's screenshot, team of 2, mirror carry; (2, 2) is rift option A's first tile", NO_WIKI_ARENA, owner("P4 platform screenshot: five black hole blobs")),
+  "j1-turn": selected<HoleLayout>(scattered([tile(3, 9), tile(1, 9), tile(6, 2), tile(5, 2), tile(2, 2)]), "footage-once", "unscaled", "the same five, quarter-turn carry; (5, 2) is a drill tile and (2, 2) is rift option A", NO_WIKI_ARENA, owner("P4 platform screenshot: five black hole blobs")),
 });
 
 const FLOOR_HOLE_DAMAGE = choice("flood-rate", {
-  "flood-rate": selected<HoleRule>({ kind: "damages", perTick: FLOOD_PER_TICK }, "assumption", "unscaled", "the owner says they damage when stepped on, and the wiki's phase 3 void pools deal periodic damage; no capture shows anyone on a hole, so the amount copies the flood's 9 to 11 a tick, read on the tile a tick starts on, and a hole under a damaging flood hits as well as the flood", owner("black hole blobs damage if you step on them"), STRATEGIES, cache("loc 62701 tfa_ocellus_void_degen_bomb")),
-  harmless: selected<HoleRule>({ kind: "harmless" }, "assumption", "unscaled", "no capture shows a hole's effect", HOLE_FRAMES),
+  "flood-rate": selected<HoleRule>({ kind: "damages", perTick: FLOOD_PER_TICK }, "assumption", "unscaled", "the owner says they damage when stepped on, and the wiki's phase 3 void pools deal periodic damage; no capture shows anyone on a hole, so the amount copies the flood's 9 to 11 a tick, read on the tile a tick starts on, and a hole under a damaging flood hits as well as the flood", STRATEGIES, owner("black hole blobs damage if you step on them"), cache("loc 62701 tfa_ocellus_void_degen_bomb")),
+  harmless: selected<HoleRule>({ kind: "harmless" }, "assumption", "unscaled", "no capture shows a hole's effect", NO_WIKI_P4, HOLE_FRAMES),
 });
 
 export type OrbFloor = "safe-floor" | "any-floor";
@@ -573,20 +574,20 @@ type LifeforceOrbRecipe = Readonly<{
 }>;
 
 const spotAnim = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
-  selected(id, basis, "unscaled", note, cache(`spotanim ${id} ${name}`));
+  selected(id, basis, "unscaled", note, NO_WIKI_PRESENTATION, cache(`spotanim ${id} ${name}`));
 
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
-  drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles"), STRATEGIES),
-  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", vod("V1", "G39"), vod("V2", "k53"), STRATEGIES, ORB_OFF_HOLES),
-  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "safe floor: inner orbs appear off the void and off the holes", vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
-  returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
+  drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", STRATEGIES, vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles")),
+  orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", STRATEGIES, vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
+  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "safe floor: inner orbs appear off the void and off the holes", STRATEGIES_P4, vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
+  returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", NO_WIKI_TICKS, vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
   look: {
     innerSpawn: selected(
       4311,
       "footage-repeated",
       "unscaled",
       "inner orb from the lifeforce hit to its glow, 364 client cycles, about 12 ticks; it starts on the hit tick, because its chimes 12621, 12622 and 12623 sit 3.87, 7.8 and 10.8 ticks in and the clips hear them at hit + 3.9, 7.8 and 10.8; the dark orb is first seen 1 to 2 ticks after the hit",
-      cache("spotanim 4311 vfx_ocellus_soul_fragment_spawn_12_ticks, seq 14915 frames 3, 40, 84 and 117"),
+      NO_WIKI_PRESENTATION, cache("spotanim 4311 vfx_ocellus_soul_fragment_spawn_12_ticks, seq 14915 frames 3, 40, 84 and 117"),
       vod("V1", "3:54:05.93, t15.9"),
       vod("V2", "5:20:29.03, t15.9; 5:21:09.20, t82.8"),
       vod("V2", "k53"),
@@ -597,7 +598,7 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
       "footage-repeated",
       "unscaled",
       "outer orb from the lifeforce hit to its glow, 182 client cycles, about 6 ticks; it starts on the hit tick, because its chimes 12624, 12621, 12622 and 12623 sit 0.1, 1.7, 3.8 and 5.3 ticks in and the clips hear them at hit + 0.1, 1.7, 3.8 and 5.3, so the last chime plays before the glow",
-      cache("spotanim 4309 vfx_ocellus_soul_fragment_spawn_6_ticks, seq 14913 frames 1, 18, 41 and 57"),
+      NO_WIKI_PRESENTATION, cache("spotanim 4309 vfx_ocellus_soul_fragment_spawn_6_ticks, seq 14913 frames 1, 18, 41 and 57"),
       vod("V1", "3:54:58.25, t103.1"),
     ),
     idle: spotAnim(4310, "soul_fragment_idle", "inferred", "the glowing orb, looped"),
@@ -605,7 +606,7 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
     tell: spotAnim(4313, "soul_fragment_player_idle", "assumption", "played on the player at the lifeforce tell, where the footage shows a teal swirl; the spec pairs it with the pickup"),
     regain: spotAnim(4314, "soul_fragment_player_regain", "inferred", "the fragment returning to the player"),
   },
-  marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", vod("V2", "k53"), vod("V2", "k64")),
+  marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", NO_WIKI_PRESENTATION, vod("V2", "k53"), vod("V2", "k64")),
 };
 
 type ExplosionSeriesRecipe = Readonly<{
@@ -628,14 +629,13 @@ type ExplosionLook = Readonly<{
 }>;
 
 const EXPLOSION: ExplosionSeriesRecipe = {
-  seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
+  seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", NO_WIKI_TICKS, vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
   shards: selected(
     "#5e317b",
     "footage-repeated",
     "team-5",
     "dark purple shards stand around the player's tile on each mark tick; median colour of the shards on four mark ticks. The spec's cache candidate, spotanims 4299 to 4302 (model 62509), renders a white disc and a white flash, which the footage does not show",
-    vod("V2", "k57, k59, k61, k65"),
-    STRATEGIES,
+    STRATEGIES, vod("V2", "k57, k59, k61, k65"),
   ),
   look: selected(
     {
@@ -652,7 +652,7 @@ const EXPLOSION: ExplosionSeriesRecipe = {
     "footage-repeated",
     "unscaled",
     "each mark lasts the mark tick and the impact tick. In the mark tick, purple motes and thin shards fly in to the tile, and for its second half a translucent hexagonal purple glow fills the tile; on the impact tick the glow collapses, crystals burst outward and a grey dust puff fades. Three cycles at 20 fps put the glow from 6 to 8 of the tick's 12 frames, so it starts halfway and ramps in over about 2 frames. The glow colour and opacity solve the 120, 55, 150 glow seen over the 126, 140, 115 floor. The dust, the glow and dust sizes and the 2D view's shard squares in tiles, the shards' paths (radius in tiles, lean in radians) and the scale ranges are chosen by eye against the same frames; times are fractions of the tick. The SDK cannot play spotanims 4299 to 4302 instead: it makes a spotanim translucent only from base face alphas, model 62509's alphas all come from its animation, and it draws the 588 faces textured with 215 as white",
-    owner("explosion mark in https://www.twitch.tv/videos/2907533010 from 8:38:50 to 8:38:53, frames at 20 fps", "2026-10-22"),
+    NO_WIKI_PRESENTATION, owner("explosion mark in https://www.twitch.tv/videos/2907533010 from 8:38:50 to 8:38:53, frames at 20 fps", "2026-10-22"),
     owner("friends' screenshot of the explosion mark", "2026-10-22"),
     cache("model 62509: all 1176 faces in animated alpha groups, none with a base alpha; 588 faces textured with 215"),
   ),
@@ -670,7 +670,7 @@ const EXPLOSION: ExplosionSeriesRecipe = {
 };
 
 const sound = (id: number, note: string, first: Source, ...rest: Source[]): Selected<SoundId> =>
-  selected(soundId(id), "footage-repeated", "team-4-and-5", note, first, ...rest, cache(`synth ${id}`));
+  selected(soundId(id), "footage-repeated", "team-4-and-5", note, NO_WIKI_PRESENTATION, first, ...rest, cache(`synth ${id}`));
 
 const PRESENTATION: PresentationRecipe = {
   bossPoses: {
@@ -704,19 +704,19 @@ const PRESENTATION: PresentationRecipe = {
     rangedHit: sound(12556, "the ranged transition hit, in 3 of 4 ranged attacks; the server sends it", vod("V1", "t97.1, t157.1"), vod("V2", "t65.3")),
     magicWindUp: sound(12554, "the magic transition wind-up, in 3 of 3 magic attacks, scoring at most 0.09 in the other styles; the server sends it", vod("V2", "5:20:39.13, t32.7")),
   },
-  soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", cache("seq 14863 frame sound 12613 location 31, retain 31")),
-  landingBeforeInnerClears: selected(span(1), "footage-repeated", "team-4-and-5", "the landing's frame sounds 12584, 12587, 12586 and 12585 at S+21.1, S+21.8, S+23.0 and S+23.5 put its start at S+21, a tick before the inner void clears; 12586 is heard in 3 V1 and 3 V2 cycles", vod("V1", "3:54:15.01, t31.0"), vod("V2", "5:20:38.13, t31.0"), cache("seq 14865 frames 3, 25, 61 and 74")),
+  soundPlayback: selected({ volume: 0.1, range: 31, retain: 31 }, "inferred", "unscaled", "played as area sounds on the player's tile, so they share the area-sound toggle with the boss; range and retain copy the boss's own frame sounds and volume the SDK's level for them, because the clips cannot show the server's values", NO_WIKI_PRESENTATION, cache("seq 14863 frame sound 12613 location 31, retain 31")),
+  landingBeforeInnerClears: selected(span(1), "footage-repeated", "team-4-and-5", "the landing's frame sounds 12584, 12587, 12586 and 12585 at S+21.1, S+21.8, S+23.0 and S+23.5 put its start at S+21, a tick before the inner void clears; 12586 is heard in 3 V1 and 3 V2 cycles", NO_WIKI_TICKS, vod("V1", "3:54:15.01, t31.0"), vod("V2", "5:20:38.13, t31.0"), cache("seq 14865 frames 3, 25, 61 and 74")),
   transitionTells: {
-    vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across", cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
-    "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players", cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),
-    "black-disk": selected(4328, "inferred", "unscaled", "a purple semicircle, then a disk over the footprint", cache("spotanim 4328 phase3_melee_hybrid"), vod("V2", "k132 to k137")),
+    vortex: selected(4329, "inferred", "unscaled", "a purple starburst over the footprint, then a purple-rimmed ring about 7 tiles across", NO_WIKI_PRESENTATION, cache("spotanim 4329 phase3_melee_hybrid_magic"), vod("V2", "k72 to k78")),
+    "spike-disk": selected(4330, "inferred", "unscaled", "a dark disk with purple spikes radiating toward the players", NO_WIKI_PRESENTATION, cache("spotanim 4330 phase3_melee_hybrid_ranged"), vod("V2", "k100 to k106")),
+    "black-disk": selected(4328, "inferred", "unscaled", "a purple semicircle, then a disk over the footprint", NO_WIKI_PRESENTATION, cache("spotanim 4328 phase3_melee_hybrid"), vod("V2", "k132 to k137")),
   },
   tellCentre: selected(
     { faceColour: 4, rgb: 0x020203 },
     "inferred",
     "unscaled",
     "the three tells share model 62698, whose centre is 144 faces of colour 4 textured with 215, a near-black starfield; the SDK draws spotanims without textures, so those faces show their lighting as near white, and recolouring colour 4 to the texture's mean texel draws them black as the footage does. The 296 untextured colour-4 faces were already near black",
-    cache("model 62698 faces of colour 4 with texture 215"),
+    NO_WIKI_PRESENTATION, cache("model 62698 faces of colour 4 with texture 215"),
     cache("texture 215 sprite 8803, mean texel #020203"),
     vod("V2", "k72 to k78, k100 to k106, k132 to k137"),
   ),
@@ -725,7 +725,7 @@ const PRESENTATION: PresentationRecipe = {
     "deflect-range": headIcon(16, "an arrow over the same badge; 96 of the 168 icon detections in both clips match this frame, each closer to it than to the arrowless Dampen frames 12 and 13", DEFLECT_RANGE_SEEN),
     "soul-split": headIcon(11, "a white star with red arrows over a purple badge; 47 of the 168 icon detections in both clips match this frame", SOUL_SPLIT_SEEN),
   },
-  overheadIconBelowHpBar: selected(7, "inferred", "unscaled", "the boss's HP bar sits above its curse icon, not over it as the SDK draws player overheads; 7 px clears the bar at the SDK's overhead scale", vod("V2", "k60, k71, k73, k80, k90")),
+  overheadIconBelowHpBar: selected(7, "inferred", "unscaled", "the boss's HP bar sits above its curse icon, not over it as the SDK draws player overheads; 7 px clears the bar at the SDK's overhead scale", NO_WIKI_PRESENTATION, vod("V2", "k60, k71, k73, k80, k90")),
 };
 
 const OSRS_WIKI = "https://oldschool.runescape.wiki/w/";
@@ -755,7 +755,7 @@ const item = (itemId: number, page: string, oldid: number, itemStats: ItemStats)
   itemId: selected(itemId, "spec-single", "unscaled", "infobox item id", wiki(`${OSRS_WIKI}${page}`, oldid)),
   stats: selected(itemStats, "spec-single", "unscaled", "infobox combat bonuses", wiki(`${OSRS_WIKI}${page}`, oldid)),
 });
-const sdkIcon = (itemId: number, page: Source): Selected<number> =>
+const sdkIcon = (itemId: number, page: WikiRef): Selected<number> =>
   selected(itemId, "spec-single", "unscaled", "infobox item id of an SDK item whose inventory icon the trainer draws from cache 2746; the SDK's bundled Masori body (f) image matches the wiki's 2022 upload and differs from the cache render in 107 pixels", page, cache(`item ${itemId} inventory model`));
 
 const GEAR: GearRecipe = {
@@ -766,7 +766,7 @@ const GEAR: GearRecipe = {
     tonalzticsOfRalos: item(28922, "Tonalztics_of_ralos", 15368852, stats([0, 0, 0, 0, 115], [0, 0, 0, 0, 0], [0, 55, 0, 2])),
   },
   sdkCacheIds: {
-    necklaceOfRupture: selected(33639, "spec-confirmed", "unscaled", "the SDK's class carries anguish's id 19547 as a stand-in; cache 2746 holds item 33639 with male model 61426", cache("item 33639 maleModel0 61426"), RUPTURE_PAGE),
+    necklaceOfRupture: selected(33639, "spec-confirmed", "unscaled", "the SDK's class carries anguish's id 19547 as a stand-in; cache 2746 holds item 33639 with male model 61426", RUPTURE_PAGE, cache("item 33639 maleModel0 61426")),
   },
   sdkIcons: {
     masoriMaskF: sdkIcon(27235, MASORI_MASK_PAGE),
@@ -792,12 +792,12 @@ const GEAR: GearRecipe = {
   inquisitorCrushPerMille: selected({ inquisitorsGreatHelm: 5, inquisitorsHauberk: 10, inquisitorsPlateskirt: 10 }, "spec-single", "unscaled", "crush accuracy and damage per piece; the 2026-07-22 update moved the 1% set bonus onto the hauberk and plateskirt", wiki(`${OSRS_WIKI}Inquisitor%27s_hauberk`, 15352823), wiki(`${OSRS_WIKI}Inquisitor%27s_plateskirt`, 15352824), INQUISITOR_SET),
   scytheStance: selected("jab", "spec-single", "unscaled", "Jab is the scythe's crush style; the owner wants the Scythe setup on crush", SCYTHE_PAGE, owner("melee setup")),
   scytheMaxHitsOnOneTarget: selected(3, "spec-single", "unscaled", "one hit per tile of the target's width, up to three: a 1x1 target once, 2x2 twice, 3x3 or larger three times; other 1x1 targets in the 1x3 arc take their own hit", SCYTHE_PAGE),
-  specialWeapon: selected("tonalzticsOfRalos", "assumption", "unscaled", "owner: players tend to use Ralos to spec the boss", owner("special attack weapon")),
+  specialWeapon: selected("tonalzticsOfRalos", "assumption", "unscaled", "owner: players tend to use Ralos to spec the boss", NO_WIKI_PRACTICE, owner("special attack weapon")),
 };
 
 const PRACTICE = owner("practice one mechanic at a time; a drill option, not game data");
-const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus> =>
-  selected<Focus>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs from the drill's start; only these mechanics act", PRACTICE);
+const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus<Mechanic>> =>
+  selected<Focus<Mechanic>>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs from the drill's start; only these mechanics act", NO_WIKI_PRACTICE, PRACTICE);
 
 export const OCELLUS_P4 = {
   vods: VODS,
@@ -822,41 +822,41 @@ export const OCELLUS_P4 = {
       ranged: selected<Setup>(
         { weapon: "twistedBow", helmet: "masoriMaskF", chest: "masoriBodyF", legs: "masoriChapsF", gloves: "zaryteVambraces", cape: "dizanasQuiver", necklace: "necklaceOfRupture", feet: "avernicTreadsMax", ring: "venatorRing", ammo: "dragonArrows" },
         "assumption", "unscaled", "owner-named Twisted Bow with Masori mask, body and chaps (f) in place of elite void, the armour the wiki's ranged switch now lists first; Zaryte vambraces, the wiki's first ranged gloves, replace the void knight gloves, which had no bonus but the void set effect (inferred); the owner asked for the best-in-slot ranged necklace, which the wiki names as the Necklace of rupture, and Avernic treads (max) in both setups; arrows, cape and ring are SDK items (assumption); the default because the first void's Deflect Melee leaves ranged open",
-        owner("ranged setup"), owner("ranged armour"), owner("ranged necklace"), owner("boots"), RANGED_SWITCH, MASORI_MASK_PAGE, MASORI_BODY_PAGE, MASORI_CHAPS_PAGE, ZARYTE_VAMBRACES_PAGE, ANGUISH_PAGE, RUPTURE_PAGE, TREADS_PAGE,
+        RANGED_SWITCH, MASORI_MASK_PAGE, MASORI_BODY_PAGE, MASORI_CHAPS_PAGE, ZARYTE_VAMBRACES_PAGE, ANGUISH_PAGE, RUPTURE_PAGE, TREADS_PAGE, owner("ranged setup"), owner("ranged armour"), owner("ranged necklace"), owner("boots"),
       ),
       melee: selected<Setup>(
         { weapon: "scytheOfVitur", helmet: "inquisitorsGreatHelm", chest: "inquisitorsHauberk", legs: "inquisitorsPlateskirt", gloves: "ferociousGloves", cape: "infernalCape", necklace: "amuletOfRancour", feet: "avernicTreadsMax", ring: "ultorRing", ammo: "dragonArrows" },
         "assumption", "unscaled", "owner-named Inquisitor's armour with the Scythe of Vitur on crush, the Amulet of rancour (the owner's first choice over blood fury; both are in cache 2746) and Avernic treads (max) in both setups; gloves, cape and ring are SDK items (assumption)",
-        owner("melee setup"), owner("melee amulet"), owner("boots"), RANCOUR_PAGE, TREADS_PAGE,
+        RANCOUR_PAGE, TREADS_PAGE, owner("melee setup"), owner("melee amulet"), owner("boots"),
       ),
     }),
     bossMaxHp: choice("footage-fit", {
-      "footage-fit": selected(5420, "inferred", "team-4-and-5", "9820 at 4 and 12020 at 5 is 2200 per player plus 1020, at the 2-player scale solo uses", vod("V1", "HUD 9820"), vod("V2", "HUD 12020"), SOLO_SCALE),
-      cache: selected(5250, "spec-confirmed", "unscaled", "cache hitpoints; matched neither team bar", cache("npc 16677 stats")),
+      "footage-fit": selected(5420, "inferred", "team-4-and-5", "9820 at 4 and 12020 at 5 is 2200 per player plus 1020, at the 2-player scale solo uses", noWiki("the Ocellus hitpoints table (rev 15380968) lists 9,820 at 4 and 12,020 at 5 but 5,250, not 5,420, for a team of 1 or 2"), vod("V1", "HUD 9820"), vod("V2", "HUD 12020"), SOLO_SCALE),
+      cache: selected(5250, "spec-confirmed", "unscaled", "cache hitpoints; matched neither team bar", BOSS_INFOBOX, cache("npc 16677 stats")),
     }),
     entryHpFraction: choice("quarter", {
-      quarter: selected(0.25, "inferred", "team-4-and-5", "halfway between the two observations", vod("V1", "2445 / 9820"), vod("V2", "3118 / 12020")),
-      "v1-observed": selected(0.249, "footage-once", "team-4", "V1 entry bar", vod("V1", "3:53:54")),
-      "v2-observed": selected(0.259, "footage-once", "team-5", "V2 entry bar", vod("V2", "5:20:18")),
+      quarter: selected(0.25, "inferred", "team-4-and-5", "halfway between the two observations", NO_WIKI_P4, vod("V1", "2445 / 9820"), vod("V2", "3118 / 12020")),
+      "v1-observed": selected(0.249, "footage-once", "team-4", "V1 entry bar", NO_WIKI_P4, vod("V1", "3:53:54")),
+      "v2-observed": selected(0.259, "footage-once", "team-5", "V2 entry bar", NO_WIKI_P4, vod("V2", "5:20:18")),
     }),
     explosions: choice("v2-tell-then-six", {
       "wiki-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "spec-single", "unscaled", "six marks every 2 ticks, damage a tick later; first mark from k55; 16 from one teammate splat (inferred)", STRATEGIES, vod("V2", "k55-k65, k62")),
-      "v2-seven": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 7, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "footage-once", "team-5", "bursts on every odd tick k55 to k67 (C4)", vod("V2", "k55-k67")),
-      "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-4-and-5", "k55 read as a tell, marks k57 to k67 (C4); the default because sound 12537 plays at hit + 5 to hit + 15 in every void of both clips and the marks are taken to sit on it", vod("V2", "k55-k67"), vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
+      "v2-seven": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 7, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "footage-once", "team-5", "bursts on every odd tick k55 to k67 (C4)", noWiki("the wiki's phase 4 steps say six (Strategies rev 15381030); seven is V2's count"), vod("V2", "k55-k67")),
+      "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-4-and-5", "k55 read as a tell, marks k57 to k67 (C4); the default because sound 12537 plays at hit + 5 to hit + 15 in every void of both clips and the marks are taken to sit on it", STRATEGIES_P4, vod("V2", "k55-k67"), vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
     }),
     specialSelection: choice("random-uniform", {
-      "random-uniform": selected<SpecialSelection>({ kind: "random-uniform" }, "inferred", "unscaled", "V1 repeats melee, so no fixed rotation explains both clips (C3)", vod("V1", "G62, G90"), vod("V2", "k77-k257")),
-      "rotation-magic-ranged-melee": selected<SpecialSelection>({ kind: "rotation", order: ["vortex", "spike-disk", "black-disk"] }, "footage-once", "team-5", "V2 strict rotation over 7 attacks", vod("V2", "k77, k105, k137, k165, k197, k225, k257")),
-      "replay-v1": selected<SpecialSelection>({ kind: "replay", order: ["black-disk", "black-disk", "spike-disk", "black-disk", "spike-disk"] }, "footage-once", "team-4", "melee, melee, ranged; the last two only look like melee and ranged (Q1)", vod("V1", "G62, G90, G122, G150, G182")),
-      "replay-v2": selected<SpecialSelection>({ kind: "replay", order: ["vortex", "spike-disk", "black-disk", "vortex", "spike-disk", "black-disk", "vortex"] }, "footage-once", "team-5", "as V2 ran it", vod("V2", "k77, k105, k137, k165, k197, k225, k257")),
+      "random-uniform": selected<SpecialSelection>({ kind: "random-uniform" }, "inferred", "unscaled", "V1 repeats melee, so no fixed rotation explains both clips (C3)", NO_WIKI_P4, vod("V1", "G62, G90"), vod("V2", "k77-k257")),
+      "rotation-magic-ranged-melee": selected<SpecialSelection>({ kind: "rotation", order: ["vortex", "spike-disk", "black-disk"] }, "footage-once", "team-5", "V2 strict rotation over 7 attacks", NO_WIKI_P4, vod("V2", "k77, k105, k137, k165, k197, k225, k257")),
+      "replay-v1": selected<SpecialSelection>({ kind: "replay", order: ["black-disk", "black-disk", "spike-disk", "black-disk", "spike-disk"] }, "footage-once", "team-4", "melee, melee, ranged; the last two only look like melee and ranged (Q1)", NO_WIKI_P4, vod("V1", "G62, G90, G122, G150, G182")),
+      "replay-v2": selected<SpecialSelection>({ kind: "replay", order: ["vortex", "spike-disk", "black-disk", "vortex", "spike-disk", "black-disk", "vortex"] }, "footage-once", "team-5", "as V2 ran it", NO_WIKI_P4, vod("V2", "k77, k105, k137, k165, k197, k225, k257")),
     }),
     unclaimedOuterOrb: choice("heals-boss", {
-      "heals-boss": selected<UnclaimedOrbRule>({ kind: "heals-boss", afterHit: span(19) }, "inferred", "team-4-and-5", "three heals 19 ticks after an outer hit; +51 equals a teammate's 51 (C17)", vod("V1", "G147"), vod("V2", "k102, k222")),
-      off: selected<UnclaimedOrbRule>({ kind: "off" }, "assumption", "unscaled", "the mechanism is inferred only", vod("V1", "G147")),
+      "heals-boss": selected<UnclaimedOrbRule>({ kind: "heals-boss", afterHit: span(19) }, "inferred", "team-4-and-5", "three heals 19 ticks after an outer hit; +51 equals a teammate's 51 (C17)", NO_WIKI_P4, vod("V1", "G147"), vod("V2", "k102, k222")),
+      off: selected<UnclaimedOrbRule>({ kind: "off" }, "assumption", "unscaled", "the mechanism is inferred only", NO_WIKI_P4, vod("V1", "G147")),
     }),
     riftFirstCycle: choice("cycle-2", {
-      "cycle-2": selected<Cycle>(cycle(2), "footage-repeated", "team-5", "rifts before every inner void after the first (C5)", vod("V2", "k107, k167, k227"), STRATEGIES),
-      "cycle-3": selected<Cycle>(cycle(3), "footage-once", "team-4", "none in view before cycle 2, two before cycle 3", vod("V1", "G90-G95, G152")),
+      "cycle-2": selected<Cycle>(cycle(2), "footage-repeated", "team-5", "rifts before every inner void after the first (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
+      "cycle-3": selected<Cycle>(cycle(3), "footage-once", "team-4", "none in view before cycle 2, two before cycle 3", noWiki("the wiki's phase 4 steps spawn rifts at every rise but the first (Strategies rev 15381030); cycle 3 is V1's reading"), vod("V1", "G90-G95, G152")),
     }),
     innerVoidFloor: INNER_VOID_FLOOR,
     floorHoleLayout: FLOOR_HOLE_LAYOUT,
@@ -867,21 +867,18 @@ export const OCELLUS_P4 = {
         "owner-estimated",
         "unscaled",
         "blocked as under block-at-launch, and the player takes 10% of the damage the blocked hit would have dealt, rounded down, as its own hitsplat, and nothing when that is 0; the owner named Nex's Deflect, about 10%; the wiki says Nex's Deflect Melee turns back the damage a melee hit would have dealt but gives no fraction, and the Ocellus pages name the prayers without saying what they do; the rounding is inferred",
-        owner("deflect reflects about 10%, as on Nex", "2026-10-22"),
-        DEFLECT_MELEE_PAGE,
-        BOSS_PAGE,
-        STRATEGIES_RIFTS,
+        DEFLECT_MELEE_PAGE, BOSS_PAGE, STRATEGIES_RIFTS, owner("deflect reflects about 10%, as on Nex", "2026-10-22"),
       ),
-      "block-at-launch": selected<DeflectRule>({ kind: "block", reflectPercent: 0 }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8); nothing comes back to the player", vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
+      "block-at-launch": selected<DeflectRule>({ kind: "block", reflectPercent: 0 }, "inferred", "unscaled", "a hit of the deflected style lands as 0, judged by the overhead up when it was launched: three ranged hits launched before Deflect Range rose landed in full under it, and no capture shows a hit launched into a deflect of its own style (Q8); nothing comes back to the player", NO_WIKI_P4, vod("V1", "G182 to G184"), vod("V2", "k78 to k81, k137 to k140")),
       none: selected<DeflectRule>({ kind: "none" }, "assumption", "unscaled", "the wiki names the prayers without saying what they do", STRATEGIES),
     }),
     hoverMeleeReach: choice("unreachable", {
-      unreachable: selected<HoveringBoss>("present-out-of-melee-reach", "inferred", "unscaled", "melee cannot reach the boss while he hovers, from S+0 to S+21: all 28 of Kirby's attacks in 6 hovers are ranged, every player stands off the 5x5 while he hovers, and the owner believes melee cannot reach him in the air; whether the void ring or his height stops it is not filmed", vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189"), owner("melee reach while airborne")),
-      reachable: selected<HoveringBoss>("present-damageable", "assumption", "unscaled", "melee reaches the hovering boss as it reaches the landed one; no capture shows a melee attack while he hovers", vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189")),
+      unreachable: selected<HoveringBoss>("present-out-of-melee-reach", "inferred", "unscaled", "melee cannot reach the boss while he hovers, from S+0 to S+21: all 28 of Kirby's attacks in 6 hovers are ranged, every player stands off the 5x5 while he hovers, and the owner believes melee cannot reach him in the air; whether the void ring or his height stops it is not filmed", NO_WIKI_P4, vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189"), owner("melee reach while airborne")),
+      reachable: selected<HoveringBoss>("present-damageable", "assumption", "unscaled", "melee reaches the hovering boss as it reaches the landed one; no capture shows a melee attack while he hovers", NO_WIKI_P4, vod("V1", "G33 to G54, G93 to G114, G153 to G174"), vod("V2", "k48 to k69, k108 to k129, k168 to k189")),
     }),
     orbPickupRadius: choice("on-tile", {
-      "on-tile": selected(0, "footage-repeated", "team-5", "the streamer stands on the orb tile a tick before each heal (C9)", vod("V2", "k67, k95")),
-      adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", vod("V1", "G51, G135, G175")),
+      "on-tile": selected(0, "footage-repeated", "team-5", "the streamer stands on the orb tile a tick before each heal (C9)", STRATEGIES_P4, vod("V2", "k67, k95")),
+      adjacent: selected(1, "footage-once", "team-4", "pickups read from an adjacent tile, with about 1 tile of perspective error (C9)", NO_WIKI_P4, vod("V1", "G51, G135, G175")),
     }),
     outerOrbTile: choice("opposite-entry", {
       "opposite-entry": selected<OuterOrbTile>(
@@ -889,13 +886,13 @@ export const OCELLUS_P4 = {
         "spec-single",
         "unscaled",
         "on the 5x5 rim tile farthest in a straight line from the tile where the player last stepped into the 5x5, or from the player when they are outside it at the hit, never on a hole; ties are a seeded pick; a guide says the orb is pretty much always on the opposite side of where you enter, and its frame shows the orb on the far edge",
-        owner("the orb opposite of where you enter", "2026-10-23"),
+        NO_WIKI_P4, owner("the orb opposite of where you enter", "2026-10-23"),
       ),
-      "safe-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "safe-floor" }, "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
-      "any-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "any-floor" }, "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
+      "safe-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "safe-floor" }, "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", STRATEGIES_P4, vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
+      "any-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "any-floor" }, "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", noWiki("the wiki's phase 4 steps put the orb on a safe tile (Strategies rev 15381030); any floor is V2's reading"), vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
     }),
     focus: choice("full-fight", {
-      "full-fight": selected<Focus>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", PRACTICE),
+      "full-fight": selected<Focus<Mechanic>>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", NO_WIKI_PRACTICE, PRACTICE),
       "void-floor": drill("void-floor"),
       "lifeforce-orb": drill("lifeforce-orb"),
       "orb-retrieval": drill("lifeforce-orb", "void-floor"),
@@ -906,8 +903,8 @@ export const OCELLUS_P4 = {
       "floor-holes": drill("floor-holes"),
     }),
     drillStart: choice("at-mechanic", {
-      "at-mechanic": selected<DrillStart>({ kind: "before-first-beat", lead: span(5) }, "assumption", "unscaled", "a drill starts 5 ticks before its first focused beat, or at tick 0 when it has none, as floor holes do; the full fight always starts at 0", owner("jumping straight to a mechanic", "2026-10-22")),
-      "cycle-start": selected<DrillStart>({ kind: "cycle-start" }, "assumption", "unscaled", "a drill starts at P4 tick 0 with the full fight", PRACTICE),
+      "at-mechanic": selected<DrillStart>({ kind: "before-first-beat", lead: span(5) }, "assumption", "unscaled", "a drill starts 5 ticks before its first focused beat, or at tick 0 when it has none, as floor holes do; the full fight always starts at 0", NO_WIKI_PRACTICE, owner("jumping straight to a mechanic", "2026-10-22")),
+      "cycle-start": selected<DrillStart>({ kind: "cycle-start" }, "assumption", "unscaled", "a drill starts at P4 tick 0 with the full fight", NO_WIKI_PRACTICE, PRACTICE),
     }),
   },
 } as const;
@@ -931,7 +928,6 @@ class ResolvedChoice<K extends ChoiceName> {
 }
 export type ResolvedChoices = { readonly [K in ChoiceName]: ResolvedChoice<K> };
 
-type DrillRequest = Readonly<{ seed: Seed; selection?: DrillSelection }>;
 export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices; bossEntryHp: number | null }>;
 type ParsedDrill = Readonly<{ config: DrillConfig; invincible: boolean; rejected: readonly string[] }>;
 
@@ -978,11 +974,6 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
 
 function isChoiceName(name: string): name is ChoiceName {
   return hasKey(OCELLUS_P4.choices, name);
-}
-
-export function resolveDrill(request: DrillRequest): DrillConfig {
-  const selection: Readonly<Record<string, string | undefined>> = request.selection ?? {};
-  return { seed: request.seed, choices: resolveChoices((name) => selection[name], [], request.seed), bossEntryHp: null };
 }
 
 export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {

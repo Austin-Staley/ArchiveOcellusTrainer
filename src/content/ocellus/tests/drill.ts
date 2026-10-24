@@ -3,9 +3,8 @@ import type { Mob, Player, Unit } from "osrs-sdk";
 import { paintedFills } from "../../../../test/paintedTiles";
 import { OcellusRegion } from "../js/OcellusRegion";
 import type { DrillSelection } from "../js/OcellusTimings";
-import { OCELLUS_P4, resolveDrill } from "../js/OcellusTimings";
+import { OCELLUS_P4, parseDrillRequest } from "../js/OcellusTimings";
 import type { FightEvent, Style, TickRow } from "../js/P4Types";
-import { seed } from "../js/P4Types";
 
 export type DrillOptions = Readonly<{ seed?: number; selection?: DrillSelection }>;
 export type At = Readonly<{ x: number; y: number }>;
@@ -29,7 +28,14 @@ function besideOnSameFloor(home: At, insideSquare: boolean): At {
 
 export function startDrill(options: DrillOptions = {}) {
   Settings.readFromStorage();
-  const region = new OcellusRegion(resolveDrill({ seed: seed(options.seed ?? 1), selection: options.selection }));
+  const link = new URL("http://localhost/");
+  link.searchParams.set("seed", String(options.seed ?? 1));
+  for (const [name, option] of Object.entries(options.selection ?? {})) if (option !== undefined) link.searchParams.set(name, option);
+  const { config, rejected } = parseDrillRequest(link, () => {
+    throw new Error(`the drill link has no usable seed: ${link.search}`);
+  });
+  if (rejected.length > 0) throw new Error(`the drill link has options the trainer rejects: ${rejected.join(", ")}`);
+  const region = new OcellusRegion(config);
   const trainer = new TrainerInstance(region, { force2d: true });
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   // The world tick after the last held one ends GET READY and is the boss's first step, P4 tick 0.

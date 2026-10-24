@@ -18,10 +18,21 @@ ready() {
 
 clean_tree() {
   T="$(mktemp -d "$WORK/case.XXXXXX")"
-  mkdir -p "$T/src/content/ocellus/js/p4" "$T/src/content/ocellus/tests" "$T/test"
+  mkdir -p "$T/src/content/ocellus/js/p4" "$T/src/content/ocellus/tests" "$T/src/sim" "$T/test"
+  cat >"$T/src/sim/brands.ts" <<'EOF'
+export type Tick = number & { readonly brand: "tick" };
+EOF
+  cat >"$T/src/sim/schedule.ts" <<'EOF'
+import type { Tick } from "./brands";
+export const at = (t: Tick): Tick => t;
+EOF
   cat >"$T/src/content/ocellus/js/P4Types.ts" <<'EOF'
 export type Tick = number & { readonly brand: "tick" };
 export const STAGES = ["inner-void", "outer-void"] as const;
+EOF
+  cat >"$T/src/content/ocellus/js/p4/floor.ts" <<'EOF'
+import { at } from "../../../../sim/schedule";
+export const floor = at;
 EOF
   cat >"$T/src/content/ocellus/js/p4/schedule.ts" <<'EOF'
 import type { Tick } from "../P4Types";
@@ -98,7 +109,7 @@ helmet_factory_rejects_a_weapon() {
 void_masks_reject_a_swapped_mask() {
   expect_compile_error src/content/ocellus/js/p4/floor.ts \
     '"inner-void": voidMask("inner-void")' '"inner-void": voidMask("outer-void")' \
-    "error TS2322: Type 'TileMask<\"outer-void\">' is not assignable to type 'TileMask<\"inner-void\">'."
+    "error TS2322: Type 'TileSet<\"outer-void\">' is not assignable to type 'TileSet<\"inner-void\">'."
 }
 explicit_any_fails() { expect_finding src/content/ocellus/js/p4/roll.ts 'export const x: any = 1;' "explicit any"; }
 as_cast_fails() { expect_finding src/content/ocellus/js/p4/roll.ts 'export const x = (1 as number);' "type assertion with as"; }
@@ -121,6 +132,18 @@ declaration_file_import_of_internal_fails() { expect_finding src/globals.d.ts 'e
 backtick_import_of_internal_fails() { expect_finding src/content/ocellus/tests/schedule.test.ts 'export const load = () => import(`../js/p4/schedule`);' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
 test_file_inside_the_fight_fails() { expect_finding src/content/ocellus/js/p4/schedule.test.ts 'export const later = 1;' "test file inside the fight"; }
 absolute_import_of_internal_fails() { expect_finding src/App.tsx 'export { later } from "@ROOT@/src/content/ocellus/js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
+sim_import_of_content_fails() { expect_finding src/sim/schedule.ts 'import type { Tick } from "../content/ocellus/js/P4Types";' "sim import from outside src/sim src/content/ocellus/js/P4Types.ts"; }
+sim_import_of_app_fails() { expect_finding src/sim/schedule.ts 'export const app = () => import("../ArchiveOcellusApp");' "sim import from outside src/sim src/ArchiveOcellusApp"; }
+sourced_value_without_a_wiki_answer_fails() {
+  expect_compile_error src/content/ocellus/js/OcellusTimings.ts \
+    '"one-tile shard", noWiki("the Void Rift infobox leaves size empty (rev 15380527)"), cache("npc 16678 size")' '"one-tile shard", cache("npc 16678 size")' \
+    "error TS2345: Argument of type '[Source]' is not assignable to parameter of type 'Citations<Source>'."
+}
+no_wiki_answer_followed_by_a_wiki_reference_fails() {
+  expect_compile_error src/content/ocellus/js/OcellusTimings.ts \
+    '"one-tile shard", noWiki("the Void Rift infobox leaves size empty (rev 15380527)"), cache("npc 16678 size")' '"one-tile shard", noWiki("the Void Rift infobox leaves size empty (rev 15380527)"), VOID_RIFT_PAGE' \
+    "is not assignable to parameter of type 'Citations<Source>'."
+}
 
 failed=0
 for t in \
@@ -146,8 +169,12 @@ for t in \
   backtick_import_of_internal_fails \
   test_file_inside_the_fight_fails \
   absolute_import_of_internal_fails \
+  sim_import_of_content_fails \
+  sim_import_of_app_fails \
   helmet_factory_rejects_a_weapon \
-  void_masks_reject_a_swapped_mask; do
+  void_masks_reject_a_swapped_mask \
+  sourced_value_without_a_wiki_answer_fails \
+  no_wiki_answer_followed_by_a_wiki_reference_fails; do
   if ("$t") >"$WORK/$t.log" 2>&1; then
     echo "PASS $t"
   else

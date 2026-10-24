@@ -1,14 +1,13 @@
-import type { DrillStart, Focus, ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } from "../OcellusTimings";
+import type { ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Beat, BossOverhead, Cycle, Mechanic, Phase, Seed, Special, Tick, TransitionKind, VoidKind } from "../P4Types";
-import { cycle, ordinal, tick } from "../P4Types";
+import type { Cycle, Seed, Tick } from "../../../../sim/brands";
+import { cycle, tick } from "../../../../sim/brands";
+import type { BeatAt, Moment, Slot } from "../../../../sim/schedule";
+import { Schedule } from "../../../../sim/schedule";
+import type { Beat, BossOverhead, Mechanic, Phase, Special, TransitionKind, VoidKind } from "../P4Types";
+import { ordinal } from "../P4Types";
 import { floorRule } from "./floor";
 import { roll } from "./roll";
-
-export type Moment = Readonly<{ tick: Tick; phase: Phase; beats: readonly Beat[] }>;
-
-type BeatAt = (cycleNumber: Cycle, cycleStart: Tick) => Beat | null;
-type Slot = Readonly<{ phase: (cycleNumber: Cycle) => Phase; beats: readonly BeatAt[] }>;
 
 const VARIANTS: readonly Special[] = ["vortex", "spike-disk", "black-disk"];
 
@@ -60,160 +59,110 @@ function mechanicOf(beat: Beat): Mechanic | null {
   }
 }
 
-export class Schedule {
-  readonly start: Tick;
+export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<Phase, Beat, Mechanic> {
+  const { leadIn, cycle: stages, overheads, lifeforce, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
+  const hidden = leadIn.hiddenFor.value;
+  const leadInLength = hidden + leadIn.presentFor.value;
+  const shout = leadIn.shout.value;
+  if (shout.at >= leadInLength) throw new RangeError(`lead-in shout at ${shout.at} is outside the ${leadInLength}-tick lead-in`);
+  const leadInTable = Array.from({ length: leadInLength }, (_, t): Moment<Phase, Beat> => ({
+    tick: tick(t),
+    phase: { stage: "lead-in", boss: t < hidden ? "hidden" : "present-invulnerable", overhead: null },
+    beats: t === shout.at ? [{ kind: "boss-shouts", text: shout.text, lasts: shout.lasts }] : [],
+  }));
 
-  private constructor(
-    private readonly leadIn: readonly Moment[],
-    private readonly slots: readonly Slot[],
-    private readonly focus: Focus,
-    drillStart: DrillStart,
-    horizon: number,
-  ) {
-    this.start = this.startTick(drillStart, horizon);
-  }
+  const [inner, afterInner, outer, afterOuter] = stages;
+  const afterInnerStart = inner.duration.value;
+  const outerStart = afterInnerStart + afterInner.duration.value;
+  const afterOuterStart = outerStart + outer.duration.value;
+  const length = afterOuterStart + afterOuter.duration.value;
+  const beats: BeatAt<Beat>[][] = Array.from({ length }, () => []);
+  const put = (offset: number, label: string, beat: BeatAt<Beat>) => {
+    if (offset < 0 || offset >= length) throw new RangeError(`${label} at cycle offset ${offset} is outside the ${length}-tick cycle`);
+    beats[offset].push(beat);
+  };
+  const inside = (offset: number, duration: number, label: string) => {
+    if (offset >= duration) throw new RangeError(`${label} at ${offset} is outside its ${duration}-tick stage`);
+  };
 
-  static compile(seed: Seed, choices: ResolvedChoices): Schedule {
-    const { leadIn, cycle: stages, overheads, lifeforce, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
-    const hidden = leadIn.hiddenFor.value;
-    const leadInLength = hidden + leadIn.presentFor.value;
-    const shout = leadIn.shout.value;
-    if (shout.at >= leadInLength) throw new RangeError(`lead-in shout at ${shout.at} is outside the ${leadInLength}-tick lead-in`);
-    const leadInTable = Array.from({ length: leadInLength }, (_, t): Moment => ({
-      tick: tick(t),
-      phase: { stage: "lead-in", boss: t < hidden ? "hidden" : "present-invulnerable", overhead: null },
-      beats: t === shout.at ? [{ kind: "boss-shouts", text: shout.text, lasts: shout.lasts }] : [],
-    }));
-
-    const [inner, afterInner, outer, afterOuter] = stages;
-    const afterInnerStart = inner.duration.value;
-    const outerStart = afterInnerStart + afterInner.duration.value;
-    const afterOuterStart = outerStart + outer.duration.value;
-    const length = afterOuterStart + afterOuter.duration.value;
-    const beats: BeatAt[][] = Array.from({ length }, () => []);
-    const put = (offset: number, label: string, beat: BeatAt) => {
-      if (offset < 0 || offset >= length) throw new RangeError(`${label} at cycle offset ${offset} is outside the ${length}-tick cycle`);
-      beats[offset].push(beat);
-    };
-    const inside = (offset: number, duration: number, label: string) => {
-      if (offset >= duration) throw new RangeError(`${label} at ${offset} is outside its ${duration}-tick stage`);
-    };
-
-    const explosions = choices.explosions.option.value;
-    const unclaimed = choices.unclaimedOuterOrb.option.value;
-    const voidBeats = (recipe: VoidRecipe<VoidKind>, start: number) => {
-      const { kind } = recipe;
-      inside(lifeforce.hitAfterOnset.value, recipe.duration.value, `${kind} lifeforce hit`);
-      const hit = start + lifeforce.hitAfterOnset.value;
-      put(start + lifeforce.tellAfterOnset.value, `${kind} lifeforce tell`, () => ({ kind: "lifeforce-tell", void: kind }));
-      put(hit, `${kind} lifeforce hit`, () => ({ kind: "lifeforce-hit", void: kind }));
-      put(hit + recipe.orbMaturesAfterHit.value, `${kind} orb maturity`, () => ({ kind: "orb-matures", void: kind }));
-      const expiry = start + recipe.duration.value + recipe.orbLingersAfterClear.value;
-      put(expiry, `${kind} orb expiry`, () => ({ kind: "orb-expires", void: kind }));
-      if (kind === "outer-void" && unclaimed.kind === "heals-boss") {
-        if (hit + unclaimed.afterHit <= expiry) throw new RangeError(`an unclaimed outer orb must heal the boss after it expires at ${expiry}, not at ${hit + unclaimed.afterHit}`);
-        put(hit + unclaimed.afterHit, "unclaimed outer orb heal", () => ({ kind: "unclaimed-orb-heals" }));
-      }
-      put(hit + explosionCues.seriesStartsAfterHit.value, `${kind} explosion series start`, () => ({ kind: "explosion-series-starts", void: kind }));
-      for (let pulse = 0; pulse < explosions.count; pulse++) {
-        const mark = hit + explosions.firstMarkAfterHit + pulse * explosions.period;
-        put(mark, `${kind} explosion mark ${pulse}`, () => ({ kind: "explosion-mark", void: kind, pulse }));
-        put(mark + explosions.impactAfterMark, `${kind} explosion impact ${pulse}`, () => ({ kind: "explosion-impact", void: kind, pulse }));
-      }
-      const floor = floorRule(kind, choices);
-      if (floor.kind === "damages") {
-        inside(floor.afterOnset, recipe.duration.value, `${kind} floor damage onset`);
-        for (let offset = floor.afterOnset; offset < recipe.duration.value; offset++) {
-          put(start + offset, `${kind} floor damage`, () => ({ kind: "floor-damage", void: kind }));
-        }
-      }
-    };
-
-    const selection = choices.specialSelection.option.value;
-    const transitionBeats = (recipe: TransitionRecipe<TransitionKind>, start: number) => {
-      const { kind, duration, tellAfterStart, hitAfterStart, soulSplitAfterTell } = recipe;
-      inside(tellAfterStart.value + soulSplitAfterTell.value, duration.value, `${kind} Soul Split`);
-      inside(hitAfterStart.value, duration.value, `${kind} transition hit`);
-      const nth = (c: Cycle) => ordinal(2 * (c - 1) + (kind === "after-inner" ? 0 : 1));
-      const variant = (c: Cycle, cycleStart: Tick) => specialFor(selection, nth(c), seed, tick(cycleStart + start + hitAfterStart.value));
-      put(start + tellAfterStart.value, `${kind} transition tell`, (c, s) => ({ kind: "special-tell", ordinal: nth(c), variant: variant(c, s) }));
-      put(start + hitAfterStart.value, `${kind} transition hit`, (c, s) => ({ kind: "special-hit", ordinal: nth(c), variant: variant(c, s) }));
-      put(start + hitAfterStart.value + bossHeals.soulSplitAfterHit.value, `${kind} Soul Split heal`, (c) => ({ kind: "soul-split-heal", ordinal: nth(c) }));
-      for (const told of VARIANTS) {
-        for (const { value: cue } of special.cues[special.styles[told].value]) {
-          inside(tellAfterStart.value + cue.afterTell, duration.value, `${kind} ${cue.sound}`);
-          put(start + tellAfterStart.value + cue.afterTell, `${kind} ${cue.sound}`, (c, s) => (variant(c, s) === told ? { kind: "special-sound", ordinal: nth(c), cue } : null));
-        }
-      }
-    };
-
-    voidBeats(inner, 0);
-    put(afterInnerStart - presentation.landingBeforeInnerClears.value, "boss landing", () => ({ kind: "boss-landing-starts" }));
-    transitionBeats(afterInner, afterInnerStart);
-    voidBeats(outer, outerStart);
-    transitionBeats(afterOuter, afterOuterStart);
-
-    const firstRiftCycle = choices.riftFirstCycle.option.value;
-    if (firstRiftCycle < 2) throw new RangeError(`rifts cannot spawn before cycle 1 starts (first rift cycle ${firstRiftCycle})`);
-    const riftSpawn = length - rifts.spawnBeforeOnset.value;
-    put(riftSpawn, "rift spawn", (c) => (c + 1 >= firstRiftCycle ? { kind: "rifts-spawn", forCycle: cycle(c + 1) } : null));
-    put(riftSpawn + rifts.chargeAfterSpawn.value - length, "rift charge", (c) => (c >= firstRiftCycle ? { kind: "rift-charge-ends", forCycle: c } : null));
-
-    const overheadAfter = <D extends BossOverhead>(recipe: TransitionRecipe<TransitionKind>, sinceStart: number, deflect: D): D | "soul-split" | null => {
-      if (sinceStart >= recipe.duration.value - overheads.offBeforeVoid.value) return null;
-      return sinceStart < recipe.tellAfterStart.value + recipe.soulSplitAfterTell.value ? deflect : overheads.transition.value;
-    };
-    const phaseAt = (offset: number) => (c: Cycle): Phase => {
-      if (offset < afterInnerStart) {
-        return { stage: "inner-void", cycle: c, boss: choices.hoverMeleeReach.option.value, overhead: overheads["inner-void"].value };
-      }
-      if (offset < outerStart) {
-        return { stage: "after-inner", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterInner, offset - afterInnerStart, overheads["inner-void"].value) };
-      }
-      if (offset < afterOuterStart) {
-        return { stage: "outer-void", cycle: c, boss: "present-damageable", overhead: overheads["outer-void"].value };
-      }
-      return { stage: "after-outer", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterOuter, offset - afterOuterStart, overheads["outer-void"].value) };
-    };
-
-    const slots = beats.map((slotBeats, offset): Slot => ({ phase: phaseAt(offset), beats: slotBeats }));
-    // Rifts are the only beats gated by cycle, and they spawn before their first rift cycle starts.
-    return new Schedule(leadInTable, slots, choices.focus.option.value, choices.drillStart.option.value, leadInLength + length * firstRiftCycle);
-  }
-
-  private startTick(drillStart: DrillStart, horizon: number): Tick {
-    if (this.focus.kind === "full-fight") return tick(0);
-    switch (drillStart.kind) {
-      case "cycle-start":
-        return tick(0);
-      case "before-first-beat": {
-        for (let t = 0; t < horizon; t++) {
-          if (this.at(tick(t)).beats.some((beat) => mechanicOf(beat) !== null)) return tick(Math.max(0, t - drillStart.lead));
-        }
-        return tick(0);
-      }
-      default: {
-        const unhandled: never = drillStart;
-        return unhandled;
+  const explosions = choices.explosions.option.value;
+  const unclaimed = choices.unclaimedOuterOrb.option.value;
+  const voidBeats = (recipe: VoidRecipe<VoidKind>, start: number) => {
+    const { kind } = recipe;
+    inside(lifeforce.hitAfterOnset.value, recipe.duration.value, `${kind} lifeforce hit`);
+    const hit = start + lifeforce.hitAfterOnset.value;
+    put(start + lifeforce.tellAfterOnset.value, `${kind} lifeforce tell`, () => ({ kind: "lifeforce-tell", void: kind }));
+    put(hit, `${kind} lifeforce hit`, () => ({ kind: "lifeforce-hit", void: kind }));
+    put(hit + recipe.orbMaturesAfterHit.value, `${kind} orb maturity`, () => ({ kind: "orb-matures", void: kind }));
+    const expiry = start + recipe.duration.value + recipe.orbLingersAfterClear.value;
+    put(expiry, `${kind} orb expiry`, () => ({ kind: "orb-expires", void: kind }));
+    if (kind === "outer-void" && unclaimed.kind === "heals-boss") {
+      if (hit + unclaimed.afterHit <= expiry) throw new RangeError(`an unclaimed outer orb must heal the boss after it expires at ${expiry}, not at ${hit + unclaimed.afterHit}`);
+      put(hit + unclaimed.afterHit, "unclaimed outer orb heal", () => ({ kind: "unclaimed-orb-heals" }));
+    }
+    put(hit + explosionCues.seriesStartsAfterHit.value, `${kind} explosion series start`, () => ({ kind: "explosion-series-starts", void: kind }));
+    for (let pulse = 0; pulse < explosions.count; pulse++) {
+      const mark = hit + explosions.firstMarkAfterHit + pulse * explosions.period;
+      put(mark, `${kind} explosion mark ${pulse}`, () => ({ kind: "explosion-mark", void: kind, pulse }));
+      put(mark + explosions.impactAfterMark, `${kind} explosion impact ${pulse}`, () => ({ kind: "explosion-impact", void: kind, pulse }));
+    }
+    const floor = floorRule(kind, choices);
+    if (floor.kind === "damages") {
+      inside(floor.afterOnset, recipe.duration.value, `${kind} floor damage onset`);
+      for (let offset = floor.afterOnset; offset < recipe.duration.value; offset++) {
+        put(start + offset, `${kind} floor damage`, () => ({ kind: "floor-damage", void: kind }));
       }
     }
-  }
+  };
 
-  acts(mechanic: Mechanic): boolean {
-    return this.focus.kind === "full-fight" || this.focus.mechanics.includes(mechanic);
-  }
+  const selection = choices.specialSelection.option.value;
+  const transitionBeats = (recipe: TransitionRecipe<TransitionKind>, start: number) => {
+    const { kind, duration, tellAfterStart, hitAfterStart, soulSplitAfterTell } = recipe;
+    inside(tellAfterStart.value + soulSplitAfterTell.value, duration.value, `${kind} Soul Split`);
+    inside(hitAfterStart.value, duration.value, `${kind} transition hit`);
+    const nth = (c: Cycle) => ordinal(2 * (c - 1) + (kind === "after-inner" ? 0 : 1));
+    const variant = (c: Cycle, cycleStart: Tick) => specialFor(selection, nth(c), seed, tick(cycleStart + start + hitAfterStart.value));
+    put(start + tellAfterStart.value, `${kind} transition tell`, (c, s) => ({ kind: "special-tell", ordinal: nth(c), variant: variant(c, s) }));
+    put(start + hitAfterStart.value, `${kind} transition hit`, (c, s) => ({ kind: "special-hit", ordinal: nth(c), variant: variant(c, s) }));
+    put(start + hitAfterStart.value + bossHeals.soulSplitAfterHit.value, `${kind} Soul Split heal`, (c) => ({ kind: "soul-split-heal", ordinal: nth(c) }));
+    for (const told of VARIANTS) {
+      for (const { value: cue } of special.cues[special.styles[told].value]) {
+        inside(tellAfterStart.value + cue.afterTell, duration.value, `${kind} ${cue.sound}`);
+        put(start + tellAfterStart.value + cue.afterTell, `${kind} ${cue.sound}`, (c, s) => (variant(c, s) === told ? { kind: "special-sound", ordinal: nth(c), cue } : null));
+      }
+    }
+  };
 
-  at(t: Tick): Moment {
-    if (t < this.leadIn.length) return this.leadIn[t];
-    const sinceFirstVoid = t - this.leadIn.length;
-    const offset = sinceFirstVoid % this.slots.length;
-    const cycleNumber = cycle(Math.floor(sinceFirstVoid / this.slots.length) + 1);
-    const cycleStart = tick(t - offset);
-    const slot = this.slots[offset];
-    const beats = slot.beats.flatMap((beat) => beat(cycleNumber, cycleStart) ?? []).filter((beat) => {
-      const mechanic = mechanicOf(beat);
-      return mechanic === null || this.acts(mechanic);
-    });
-    return { tick: t, phase: slot.phase(cycleNumber), beats };
-  }
+  voidBeats(inner, 0);
+  put(afterInnerStart - presentation.landingBeforeInnerClears.value, "boss landing", () => ({ kind: "boss-landing-starts" }));
+  transitionBeats(afterInner, afterInnerStart);
+  voidBeats(outer, outerStart);
+  transitionBeats(afterOuter, afterOuterStart);
+
+  const firstRiftCycle = choices.riftFirstCycle.option.value;
+  if (firstRiftCycle < 2) throw new RangeError(`rifts cannot spawn before cycle 1 starts (first rift cycle ${firstRiftCycle})`);
+  const riftSpawn = length - rifts.spawnBeforeOnset.value;
+  put(riftSpawn, "rift spawn", (c) => (c + 1 >= firstRiftCycle ? { kind: "rifts-spawn", forCycle: cycle(c + 1) } : null));
+  put(riftSpawn + rifts.chargeAfterSpawn.value - length, "rift charge", (c) => (c >= firstRiftCycle ? { kind: "rift-charge-ends", forCycle: c } : null));
+
+  const overheadAfter = <D extends BossOverhead>(recipe: TransitionRecipe<TransitionKind>, sinceStart: number, deflect: D): D | "soul-split" | null => {
+    if (sinceStart >= recipe.duration.value - overheads.offBeforeVoid.value) return null;
+    return sinceStart < recipe.tellAfterStart.value + recipe.soulSplitAfterTell.value ? deflect : overheads.transition.value;
+  };
+  const phaseAt = (offset: number) => (c: Cycle): Phase => {
+    if (offset < afterInnerStart) {
+      return { stage: "inner-void", cycle: c, boss: choices.hoverMeleeReach.option.value, overhead: overheads["inner-void"].value };
+    }
+    if (offset < outerStart) {
+      return { stage: "after-inner", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterInner, offset - afterInnerStart, overheads["inner-void"].value) };
+    }
+    if (offset < afterOuterStart) {
+      return { stage: "outer-void", cycle: c, boss: "present-damageable", overhead: overheads["outer-void"].value };
+    }
+    return { stage: "after-outer", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterOuter, offset - afterOuterStart, overheads["outer-void"].value) };
+  };
+
+  const slots = beats.map((slotBeats, offset): Slot<Phase, Beat> => ({ phase: phaseAt(offset), beats: slotBeats }));
+  const firstRiftCycleEnds = tick(leadInLength + length * firstRiftCycle);
+  return new Schedule(leadInTable, slots, mechanicOf, choices.focus.option.value, choices.drillStart.option.value, firstRiftCycleEnds);
 }

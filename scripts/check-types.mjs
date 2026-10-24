@@ -8,6 +8,8 @@ const ts = createRequire(import.meta.url)("typescript");
 const root = path.resolve(process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const FIGHT = path.join(root, "src/content/ocellus/js");
 const SIM = path.join(root, "src/sim");
+const SIM_SDK = path.join(SIM, "sdk");
+const SDK_PACKAGE = /^osrs-sdk(-[a-z]+)?(\/|$)/;
 const PUBLIC = new Set(["OcellusRegion.ts", "OcellusTimings.ts", "P4Types.ts"].map((file) => path.join(FIGHT, file)));
 const SUPPRESSION = /@ts-(ignore|expect-error|nocheck)\b/;
 const TEST_FILE = /(^|[/\\])__tests__[/\\]|\.(test|spec)(-d)?\.[cm]?[jt]sx?$/;
@@ -34,6 +36,7 @@ for (const file of [...sources(path.join(root, "src")), ...sources(path.join(roo
   const inSrc = file.startsWith(path.join(root, "src") + path.sep);
   const insideFight = file.startsWith(FIGHT + path.sep);
   const insideSim = file.startsWith(SIM + path.sep);
+  const insideSimCore = insideSim && !file.startsWith(SIM_SDK + path.sep);
   const report = (pos, rule) => {
     const { line, character } = sf.getLineAndCharacterOfPosition(pos);
     findings.push(`${path.relative(root, file)}:${line + 1}:${character + 1} ${rule}`);
@@ -70,6 +73,12 @@ for (const file of [...sources(path.join(root, "src")), ...sources(path.join(roo
       }
       if (insideSim && target && !target.startsWith(SIM + path.sep)) {
         report(node.getStart(sf), `sim import from outside src/sim ${path.relative(root, target)}`);
+      }
+      if (insideSimCore && SDK_PACKAGE.test(node.text)) {
+        report(node.getStart(sf), `sim core import of the SDK ${node.text}`);
+      }
+      if (insideSimCore && target && target.startsWith(SIM_SDK + path.sep)) {
+        report(node.getStart(sf), `sim core import of src/sim/sdk ${path.relative(root, target)}`);
       }
     }
     ts.forEachChild(node, visit);

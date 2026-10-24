@@ -117,6 +117,17 @@ export function startDrill(options: DrillOptions = {}) {
         .map((fill) => Math.hypot((fill.x + fill.width / 2) / scale - (around.x + 0.5), (fill.y + fill.height / 2) / scale - (around.y + 0.5)));
     },
     walkTo,
+    async click(on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}) {
+      const view = Viewport.viewport;
+      const size = Settings.tileSize;
+      const { viewportX, viewportY } = view.getViewport(region.world.tickPercent);
+      const [x, y] = [(on.x + 0.5 - viewportX) * size, (on.y + 0.5 - viewportY) * size];
+      const [offsetX, offsetY] = Settings.rotated === "south" ? [view.width * size - x, view.height * size - y] : [x, y];
+      const press = new MouseEvent("mousedown", { button: 0, ...modifiers });
+      Object.defineProperties(press, { offsetX: { value: offsetX }, offsetY: { value: offsetY } });
+      view.canvas.dispatchEvent(press);
+      await new Promise((queued) => setTimeout(queued, Settings.inputDelay));
+    },
     pray,
     clickInventory(cacheItemId: number) {
       const item = player().inventory.find((slot) => slot?.cacheItemId === cacheItemId);

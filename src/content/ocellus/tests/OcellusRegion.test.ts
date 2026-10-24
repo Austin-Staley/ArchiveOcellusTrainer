@@ -133,4 +133,27 @@ describe("Ocellus arena", () => {
       [{ x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
     ]);
   });
+
+  test("guard: clicks that keep the player running between (3, 2) and (7, 2) empty the run energy on P4 tick 164, which moves one tile, and every click after it walks one tile a tick with run off", async () => {
+    const drill = startDrill({ selection: { focus: "floor-holes", floorHoleDamage: "harmless" } });
+    const [west, east]: readonly At[] = [{ x: 3, y: 2 }, { x: 7, y: 2 }];
+    const on = (at: At) => drill.player().location.x === at.x && drill.player().location.y === at.y;
+    const tilesPerTick: number[] = [];
+    drill.tickTo(0);
+    await drill.click(east);
+    for (let t = 1; t <= 166; t++) {
+      if (on(west)) await drill.click(east);
+      else if (on(east)) await drill.click(west);
+      drill.tickTo(t);
+      const [from, to] = [drill.row(t - 1).playerAtPostTick.tile, drill.row(t).playerAtPostTick.tile];
+      tilesPerTick.push(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)));
+    }
+    const paces = new Set(drill.rows().flatMap((row) => row.inputs.flatMap((input) => (input.kind === "walk-ordered" ? [input.pace] : []))));
+    expect({ tilesPerTick, paces: [...paces], running: drill.player().running }).toEqual({
+      tilesPerTick: [...Array<number>(163).fill(2), 1, 1, 1],
+      paces: ["run-setting"],
+      running: false,
+    });
+    drill.dispose();
+  });
 });

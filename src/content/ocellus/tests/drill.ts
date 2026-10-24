@@ -1,5 +1,5 @@
 import { Projectile, Settings, TrainerInstance, Viewport } from "osrs-sdk";
-import type { Mob, Player, Unit } from "osrs-sdk";
+import type { Mob, Player, Unit, World } from "osrs-sdk";
 import { paintedFills } from "../../../../test/paintedTiles";
 import { OcellusRegion } from "../js/OcellusRegion";
 import type { DrillSelection } from "../js/OcellusTimings";
@@ -7,7 +7,7 @@ import { OCELLUS_P4, parseDrillRequest } from "../js/OcellusTimings";
 import type { Style } from "../../../sim/combat";
 import type { FightEvent, TickRow } from "../js/P4Types";
 
-export type DrillOptions = Readonly<{ seed?: number; selection?: DrillSelection }>;
+export type DrillOptions = Readonly<{ seed?: number; bossHp?: number; selection?: DrillSelection }>;
 export type At = Readonly<{ x: number; y: number }>;
 
 export const SPAWN_ON_FLOOD: At = OCELLUS_P4.geometry.playerSpawn.value;
@@ -27,10 +27,20 @@ function besideOnSameFloor(home: At, insideSquare: boolean): At {
   return sides.find((side) => onPlatform(side) && !underBoss(side) && inNearSquare(side) === insideSquare) ?? home;
 }
 
+export async function clickTile(world: World, on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}): Promise<void> {
+  const at = Viewport.viewport.projectTile(on, world);
+  if (!at) throw new Error(`tile (${on.x}, ${on.y}) is not on the canvas`);
+  const press = new MouseEvent("mousedown", { button: 0, ...modifiers });
+  Object.defineProperties(press, { offsetX: { value: at.x }, offsetY: { value: at.y } });
+  Viewport.viewport.canvas.dispatchEvent(press);
+  await new Promise((queued) => setTimeout(queued, Settings.inputDelay));
+}
+
 export function startDrill(options: DrillOptions = {}) {
   Settings.readFromStorage();
   const link = new URL("http://localhost/");
   link.searchParams.set("seed", String(options.seed ?? 1));
+  if (options.bossHp !== undefined) link.searchParams.set("bosshp", String(options.bossHp));
   for (const [name, option] of Object.entries(options.selection ?? {})) if (option !== undefined) link.searchParams.set(name, option);
   const { config, rejected } = parseDrillRequest(link, () => {
     throw new Error(`the drill link has no usable seed: ${link.search}`);
@@ -125,14 +135,7 @@ export function startDrill(options: DrillOptions = {}) {
         .map((fill) => Math.hypot((fill.x + fill.width / 2) / scale - (around.x + 0.5), (fill.y + fill.height / 2) / scale - (around.y + 0.5)));
     },
     walkTo,
-    async click(on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}) {
-      const at = Viewport.viewport.projectTile(on, region.world);
-      if (!at) throw new Error(`tile (${on.x}, ${on.y}) is not on the canvas`);
-      const press = new MouseEvent("mousedown", { button: 0, ...modifiers });
-      Object.defineProperties(press, { offsetX: { value: at.x }, offsetY: { value: at.y } });
-      Viewport.viewport.canvas.dispatchEvent(press);
-      await new Promise((queued) => setTimeout(queued, Settings.inputDelay));
-    },
+    click: (on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}) => clickTile(region.world, on, modifiers),
     pray,
     clickInventory(cacheItemId: number) {
       const item = player().inventory.find((slot) => slot?.cacheItemId === cacheItemId);

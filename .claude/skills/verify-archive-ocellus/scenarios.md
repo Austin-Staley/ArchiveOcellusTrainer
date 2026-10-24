@@ -4,11 +4,11 @@ This page lists, for each mechanic, the Vitest scenario and the browser scenario
 
 ## Input kinds
 
-- `click`: a real `mousedown` on the trainer's canvas at the tile's 2D position. `drill.click(tile, { ctrlKey })` in `src/content/ocellus/tests/drill.ts` sends it. The SDK's ClickController resolves the tile, queues the order through InputController, and the next `world.tickWorld()` hands it to `Player.moveTo`. The fight log's `walk-ordered` input proves which tile the click resolved to.
+- `click`: a real `mousedown` on the trainer's canvas at the SDK's 2D projection of the tile, `Viewport.projectTile`. `drill.click(tile, { ctrlKey })` in `src/content/ocellus/tests/drill.ts` sends it. The SDK's ClickController resolves the tile, queues the order through InputController, and the next `world.tickWorld()` hands it to `Player.moveTo`. The fight log's `walk-ordered` input proves which tile the click resolved to.
 - `page`: a real DOM click or key press on the mounted page through `loadPage` in `page.tsx`.
 - `order`: a direct `Player.moveTo` through `drill.walkTo` or `drill.player().moveTo`. It skips ClickController, the input queue and the Control-key mapping.
 - `none`: no player input. The URL's drill options and real World ticks drive the run.
-- Browser: `scripts/verify.sh browser` sends real mouse input through agent-browser, and a Control-click through CDP's Input domain. Every browser scenario runs in 3D.
+- Browser: `scripts/verify.sh browser` sends real mouse input through agent-browser, and a Control-click through CDP's Input domain. Every browser scenario runs in 3D. The walkway, corner, pathing and holes pages click each named tile at the SDK's 3D projection, read through the probe's `tileCentre`, and `projectedClicksOrderTheirTiles` checks that every such click ordered its tile. The other floor and target clicks still use hand-placed offsets from the canvas centre.
 
 Every Vitest scenario built on `startDrill` ticks the real world through GET READY, so the first world tick after `startDrill` or `drill.restart` is P4 tick 0.
 

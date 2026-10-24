@@ -119,14 +119,11 @@ export function startDrill(options: DrillOptions = {}) {
     },
     walkTo,
     async click(on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}) {
-      const view = Viewport.viewport;
-      const size = Settings.tileSize;
-      const { viewportX, viewportY } = view.getViewport(region.world.tickPercent);
-      const [x, y] = [(on.x + 0.5 - viewportX) * size, (on.y + 0.5 - viewportY) * size];
-      const [offsetX, offsetY] = Settings.rotated === "south" ? [view.width * size - x, view.height * size - y] : [x, y];
+      const at = Viewport.viewport.projectTile(on, region.world);
+      if (!at) throw new Error(`tile (${on.x}, ${on.y}) is not on the canvas`);
       const press = new MouseEvent("mousedown", { button: 0, ...modifiers });
-      Object.defineProperties(press, { offsetX: { value: offsetX }, offsetY: { value: offsetY } });
-      view.canvas.dispatchEvent(press);
+      Object.defineProperties(press, { offsetX: { value: at.x }, offsetY: { value: at.y } });
+      Viewport.viewport.canvas.dispatchEvent(press);
       await new Promise((queued) => setTimeout(queued, Settings.inputDelay));
     },
     pray,

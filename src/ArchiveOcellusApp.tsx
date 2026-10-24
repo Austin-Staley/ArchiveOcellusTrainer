@@ -21,7 +21,11 @@ export const CREDIT_LINE =
 
 declare global {
   interface Window {
-    __archiveOcellusProbe?: Readonly<{ snapshot(): VerificationProbeSnapshot; log(): FightLog }>;
+    __archiveOcellusProbe?: Readonly<{
+      snapshot(): VerificationProbeSnapshot;
+      log(): FightLog;
+      tileCentre(at: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> | null;
+    }>;
   }
 }
 
@@ -68,6 +72,7 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion
       };
     },
     log: () => region.fightLog(),
+    tileCentre: (at) => Viewport.viewport.projectTile(at, trainer.getSnapshot().world),
   });
 }
 

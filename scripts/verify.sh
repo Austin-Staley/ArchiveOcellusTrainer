@@ -65,47 +65,33 @@ KEYBIND_INVENTORY_BUTTON_Y=650
 KEYBIND_DEFAULT_KEY=F4
 KEYBIND_NEW_KEY=F6
 WALKWAY_QUERY="?seed=1&focus=${FOCUS_DRILL}"
-WALKWAY_CLICK_LEFT_PX=400
 WALKWAY_ORDER_TILE='{"x":13,"y":2}'
 WALKWAY_STOP_TILE='{"x":11,"y":2}'
 WALKWAY_PIXEL="#6b6c40"
 WALKWAY_MIN_SHARE=1
-WALKWAY_RUN_END_CLICK_LEFT_PX=290
-WALKWAY_RUN_END_CLICK_UP_PX=42
 WALKWAY_RUN_END_TILE='{"x":11,"y":3}'
 WALKWAY_RUN_TILES='[{"x":7,"y":1},{"x":9,"y":1},{"x":11,"y":2}]'
 CONTROL_MODIFIER=2
 CONTROL_WALK_TILES='[{"x":6,"y":1},{"x":7,"y":1},{"x":8,"y":1},{"x":9,"y":1},{"x":10,"y":1},{"x":11,"y":2}]'
 CORNER_QUERY="?seed=2&focus=${FOCUS_DRILL}"
-CORNER_HOLE_CLICK_RIGHT_PX=60
-CORNER_HOLE_CLICK_UP_PX=155
 CORNER_HOLE_TILE='{"x":3,"y":8}'
-CORNER_NUB_CLICK_RIGHT_PX=40
-CORNER_NUB_CLICK_UP_PX=170
 CORNER_NUB_TILE='{"x":4,"y":9}'
-CORNER_VIEW_CLICK_RIGHT_PX=150
-CORNER_VIEW_CLICK_UP_PX=20
 CORNER_VIEW_TILE='{"x":2,"y":2}'
 CORNER_VIEW_DRAG_LEFT_PX=95
 PATHING_QUERY="?seed=1&focus=${FOCUS_DRILL}&drillStart=cycle-start"
-PATHING_WEST_CLICK_RIGHT_PX=100
-PATHING_WEST_CLICK_UP_PX=100
 PATHING_WEST_TILE='{"x":3,"y":5}'
 PATHING_EAST_TILE='{"x":7,"y":5}'
 PATHING_BACK_TILE='{"x":4,"y":3}'
-PATHING_ACROSS_PX=200
-PATHING_BACK_CLICK_DOWN_PX=90
 PATHING_UNDER_TICK=30
 PATHING_AROUND_TICK=40
 PATHING_LAST_TICK=46
 PATHING_EXPECTED='[["after-inner",[{"x":5,"y":5},{"x":7,"y":5}]],["outer-void",[{"x":7,"y":3},{"x":5,"y":3},{"x":4,"y":3}]]]'
-PATHING_EDGE_CLICK_UP_PX=60
+PATHING_EDGE_TILE='{"x":5,"y":4}'
 PATHING_REROUTE_TICK=38
 PATHING_REROUTE_EXPECTED='[[{"x":5,"y":4}],[39],[["outer-void",[{"x":5,"y":3}]]]]'
 PATHING_CONTROL_EXPECTED='[[{"x":5,"y":4}],["walk"],[39],[["outer-void",[{"x":5,"y":2},{"x":5,"y":3}]]]]'
-PATHING_UNDER_CLICK_UP_PX=100
 PATHING_UNDER_TILE='{"x":5,"y":5}'
-PATHING_OUT_CLICK_DOWN_PX=90
+PATHING_OUT_TILE='{"x":5,"y":3}'
 PATHING_OUT_TICK=40
 PATHING_OUT_EXPECTED='[[{"x":5,"y":5},{"x":5,"y":3}],[41],[["lead-in",[{"x":5,"y":3},{"x":5,"y":5}]],["outer-void",[{"x":5,"y":3}]]]]'
 HOLES_QUERY="?seed=1&focus=floor-holes"
@@ -116,11 +102,10 @@ HOLE_BOX_HALF_PX=8
 HOLE_MIN_DARK_SHARE=30
 HOLE_MAX_DARK_SHARE=5
 HOLE_FLOOD_SHOT_TICK=45
-HOLE_CLICK_LEFT_PX=309
-HOLE_CLICK_UP_PX=15
 HOLE_TILE='{"x":11,"y":2}'
 HOLE_HITS=3
 HOLE_DAMAGE='{"min":9,"max":11}'
+PROJECTED_TILE_CLICKS=14
 ORB_HOLES_QUERY="?seed=5&floorHoleLayout=v1-turn"
 ORB_HOLES_SHOT_TICK=13
 ORB_HOLES_EXPECTED='[[12,"inner-void",{"x":2,"y":5}]]'
@@ -860,17 +845,43 @@ wait_until_ticking() {
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" --timeout 90000 >/dev/null || { log "the drill never started ticking"; return 1; }
 }
 
-walk_by_click() {
-  click_at "$1" "$2" || return 1
+# The point is the SDK's own projection of the tile at the current camera, read once P4 tick $3 has started ("now" reads it at once).
+click_tile() {
+  local page="$1" tile="$2" after="$3" modifier="${4:-none}" read orders
+  read="$(ab --json eval "new Promise((done) => {
+    const probe = window.__archiveOcellusProbe, ready = () => '${after}' === 'now' || (probe.snapshot().fight?.run.tick ?? -1) >= Number('${after}');
+    const read = () => {
+      if (!ready()) return requestAnimationFrame(read);
+      const at = probe.tileCentre(${tile}), box = document.querySelector('#world').getBoundingClientRect();
+      done({ at: at && { x: Math.round(box.x + at.x), y: Math.round(box.y + at.y) }, orders: probe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered').length });
+    };
+    read();
+  })" | json data.result)" || return 1
+  [[ "$(json at <<<"$read")" != null ]] || { log "${page}: tile ${tile} is not on the canvas"; return 1; }
+  CLICK_X="$(json at.x <<<"$read")" CLICK_Y="$(json at.y <<<"$read")" orders="$(json orders <<<"$read")"
+  case "$modifier" in
+    none) printf '[["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' "$CLICK_X" "$CLICK_Y" | ab batch --bail >/dev/null ;;
+    control) control_click_at "$CLICK_X" "$CLICK_Y" ;;
+  esac || { log "${page}: the click on ${tile} was not sent"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered').length > ${orders}" --timeout 5000 >/dev/null ||
+    log "${page}: the click on ${tile} ordered no walk"
+  ab --json eval "(() => {
+    const orders = window.__archiveOcellusProbe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered');
+    return { page: '${page}', tile: ${tile}, at: { x: ${CLICK_X}, y: ${CLICK_Y} }, ordered: orders[${orders}]?.destination ?? null };
+  })()" | json data.result >>"$VERIFY_DIR/tile-clicks.jsonl" && echo >>"$VERIFY_DIR/tile-clicks.jsonl"
+}
+
+walk_to_tile() {
+  click_tile "$1" "$2" now || return 1
   ab wait --fn "(() => { const s = window.__archiveOcellusProbe.snapshot(), to = $3; return s.player.x === to.x && s.player.y === to.y; })()" \
     --timeout 15000 >/dev/null || log "player never stood on $3"
 }
 
 drive_walkway() {
   local arrived
-  ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
-  echo "{\"x\":$((CX - WALKWAY_CLICK_LEFT_PX)),\"y\":${CY}}" >"$VERIFY_DIR/walkway-click.json"
-  walk_by_click $((CX - WALKWAY_CLICK_LEFT_PX)) "$CY" "$WALKWAY_STOP_TILE" || return 1
+  ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking || return 1
+  walk_to_tile walkway "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" || return 1
+  echo "{\"x\":${CLICK_X},\"y\":${CLICK_Y}}" >"$VERIFY_DIR/walkway-click.json"
   arrived="$(probe "snapshot()")"
   echo "$arrived" >"$VERIFY_DIR/walkway-arrived.json"
   ab wait --fn "window.__archiveOcellusProbe.snapshot().tick >= $(json tick <<<"$arrived") + ${EDGE_HOLD_TICKS}" --timeout 15000 >/dev/null
@@ -880,7 +891,7 @@ drive_walkway() {
   ab console >"$VERIFY_DIR/walkway-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/walkway-page-errors.json" || { log "page error capture failed"; return 1; }
   ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking || return 1
-  walk_by_click $((CX - WALKWAY_RUN_END_CLICK_LEFT_PX)) $((CY - WALKWAY_RUN_END_CLICK_UP_PX)) "$WALKWAY_RUN_END_TILE" || return 1
+  walk_to_tile walkway-run-end "$WALKWAY_RUN_END_TILE" "$WALKWAY_RUN_END_TILE" || return 1
   arrived="$(probe "snapshot()")"
   ab wait --fn "window.__archiveOcellusProbe.snapshot().tick >= $(json tick <<<"$arrived") + ${EDGE_HOLD_TICKS}" --timeout 15000 >/dev/null
   probe "snapshot()" >"$VERIFY_DIR/walkway-run-end.json"
@@ -929,7 +940,7 @@ control_click_at() {
 drive_control_walk() {
   ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
   ab eval '(() => { window.__contextMenus = 0; document.querySelector("#world").addEventListener("contextmenu", () => window.__contextMenus++); return true; })()' >/dev/null || return 1
-  control_click_at $((CX - WALKWAY_CLICK_LEFT_PX)) "$CY" || { log "the Control-click was not sent"; return 1; }
+  click_tile control-walk "$WALKWAY_ORDER_TILE" now control || return 1
   ab wait --fn "window.__archiveOcellusProbe.snapshot().player.x >= 8" --timeout 15000 >/dev/null || log "player never passed x 8 after the Control-click"
   ab screenshot "$VERIFY_DIR/control-walk.png" >/dev/null || { log "control walk screenshot failed"; return 1; }
   ab wait --fn "(() => { const s = window.__archiveOcellusProbe.snapshot(), to = ${WALKWAY_STOP_TILE}; return s.player.x === to.x && s.player.y === to.y; })()" \
@@ -946,18 +957,18 @@ drive_control_walk() {
 drive_corner() {
   local step
   ab open "${URL}${CORNER_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
-  walk_by_click $((CX + CORNER_HOLE_CLICK_RIGHT_PX)) $((CY - CORNER_HOLE_CLICK_UP_PX)) "$CORNER_HOLE_TILE" || return 1
+  walk_to_tile corner-hole "$CORNER_HOLE_TILE" "$CORNER_HOLE_TILE" || return 1
   probe "snapshot()" >"$VERIFY_DIR/corner-hole.json"
   probe "log()" >"$VERIFY_DIR/corner-hole-log.json"
   ab wait 1000 >/dev/null && ab screenshot "$VERIFY_DIR/corner-hole.png" >/dev/null || { log "corner screenshot failed"; return 1; }
   ab open "${URL}${CORNER_QUERY}" >/dev/null && wait_until_ticking || return 1
-  walk_by_click $((CX + CORNER_NUB_CLICK_RIGHT_PX)) $((CY - CORNER_NUB_CLICK_UP_PX)) "$CORNER_NUB_TILE" || return 1
+  walk_to_tile corner-nub "$CORNER_NUB_TILE" "$CORNER_NUB_TILE" || return 1
   probe "snapshot()" >"$VERIFY_DIR/corner-nub.json"
   probe "log()" >"$VERIFY_DIR/corner-nub-log.json"
   ab console >"$VERIFY_DIR/corner-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/corner-page-errors.json" || { log "page error capture failed"; return 1; }
   ab open "${URL}${CORNER_QUERY}" >/dev/null && wait_until_ticking || return 1
-  walk_by_click $((CX + CORNER_VIEW_CLICK_RIGHT_PX)) $((CY - CORNER_VIEW_CLICK_UP_PX)) "$CORNER_VIEW_TILE" || return 1
+  walk_to_tile corner-view "$CORNER_VIEW_TILE" "$CORNER_VIEW_TILE" || return 1
   ab mouse move "$CX" $((CY + 100)) >/dev/null && ab mouse down middle >/dev/null || return 1
   for step in 1 2 3 4 5; do
     ab mouse move $((CX - step * CORNER_VIEW_DRAG_LEFT_PX / 5)) $((CY + 100)) >/dev/null || return 1
@@ -968,30 +979,30 @@ drive_corner() {
 }
 
 drive_boss_pathing() {
-  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
-  walk_by_click $((CX + PATHING_WEST_CLICK_RIGHT_PX)) $((CY - PATHING_WEST_CLICK_UP_PX)) "$PATHING_WEST_TILE" || return 1
-  click_after_tick "$PATHING_UNDER_TICK" "-$PATHING_ACROSS_PX" 0 || { log "the walk under the landed boss was not clicked"; return 1; }
-  click_after_tick "$PATHING_AROUND_TICK" "$PATHING_ACROSS_PX" "$PATHING_BACK_CLICK_DOWN_PX" || { log "the walk past the boss in the outer void was not clicked"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 || return 1
+  walk_to_tile pathing "$PATHING_WEST_TILE" "$PATHING_WEST_TILE" || return 1
+  click_tile pathing "$PATHING_EAST_TILE" "$PATHING_UNDER_TICK" || return 1
+  click_tile pathing "$PATHING_BACK_TILE" "$PATHING_AROUND_TICK" || return 1
   shot_after_tick $((PATHING_AROUND_TICK + 2)) 300 pathing-around.png || { log "the pathing drill never reached P4 tick $((PATHING_AROUND_TICK + 2))"; return 1; }
   fight_tick_at_least "$PATHING_LAST_TICK" 30000 || { log "the pathing drill never stepped to P4 tick ${PATHING_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/pathing.json"
   ab console >"$VERIFY_DIR/pathing-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/pathing-page-errors.json" || { log "page error capture failed"; return 1; }
-  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
-  click_after_tick "$PATHING_REROUTE_TICK" 0 "-$PATHING_EDGE_CLICK_UP_PX" || { log "the walk onto the boss's north edge was not clicked"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 || return 1
+  click_tile pathing-reroute "$PATHING_EDGE_TILE" "$PATHING_REROUTE_TICK" || return 1
   fight_tick_at_least $((PATHING_REROUTE_TICK + 4)) 30000 || { log "the reroute drill never stepped to P4 tick $((PATHING_REROUTE_TICK + 4))"; return 1; }
   probe "log()" >"$VERIFY_DIR/pathing-reroute.json"
   ab console >"$VERIFY_DIR/pathing-reroute-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/pathing-reroute-page-errors.json" || { log "page error capture failed"; return 1; }
-  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
-  fight_tick_at_least "$PATHING_REROUTE_TICK" 90000 && control_click_at "$CX" $((CY - PATHING_EDGE_CLICK_UP_PX)) || { log "the Control-click onto the boss's north edge was not sent"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 || return 1
+  click_tile pathing-control "$PATHING_EDGE_TILE" "$PATHING_REROUTE_TICK" control || return 1
   fight_tick_at_least $((PATHING_REROUTE_TICK + 4)) 30000 || { log "the Control-click reroute drill never stepped to P4 tick $((PATHING_REROUTE_TICK + 4))"; return 1; }
   probe "log()" >"$VERIFY_DIR/pathing-control.json"
   ab console >"$VERIFY_DIR/pathing-control-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/pathing-control-page-errors.json" || { log "page error capture failed"; return 1; }
-  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 && canvas_centre || return 1
-  walk_by_click "$CX" $((CY - PATHING_UNDER_CLICK_UP_PX)) "$PATHING_UNDER_TILE" || return 1
-  click_after_tick "$PATHING_OUT_TICK" 0 "$PATHING_OUT_CLICK_DOWN_PX" || { log "the walk out from under the boss was not clicked"; return 1; }
+  ab open "${URL}${PATHING_QUERY}" >/dev/null && fight_tick_at_least 0 120000 || return 1
+  walk_to_tile pathing-out "$PATHING_UNDER_TILE" "$PATHING_UNDER_TILE" || return 1
+  click_tile pathing-out "$PATHING_OUT_TILE" "$PATHING_OUT_TICK" || return 1
   shot_after_tick $((PATHING_OUT_TICK + 1)) 300 pathing-out.png || { log "the walk-out drill never reached P4 tick $((PATHING_OUT_TICK + 1))"; return 1; }
   fight_tick_at_least $((PATHING_OUT_TICK + 4)) 30000 || { log "the walk-out drill never stepped to P4 tick $((PATHING_OUT_TICK + 4))"; return 1; }
   probe "log()" >"$VERIFY_DIR/pathing-out.json"
@@ -1000,11 +1011,11 @@ drive_boss_pathing() {
 }
 
 drive_floor_holes() {
-  ab open "${URL}${HOLES_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  ab open "${URL}${HOLES_QUERY}" >/dev/null && wait_until_ticking || return 1
   ab wait 1200 >/dev/null && ab screenshot "$VERIFY_DIR/holes-drawn.png" >/dev/null || { log "holes screenshot failed"; return 1; }
   shot_after_tick "$HOLE_FLOOD_SHOT_TICK" 300 holes-flood.png || { log "the holes drill never reached P4 tick ${HOLE_FLOOD_SHOT_TICK}"; return 1; }
-  echo "{\"x\":$((CX - HOLE_CLICK_LEFT_PX)),\"y\":$((CY - HOLE_CLICK_UP_PX))}" >"$VERIFY_DIR/hole-click.json"
-  walk_by_click $((CX - HOLE_CLICK_LEFT_PX)) $((CY - HOLE_CLICK_UP_PX)) "$HOLE_TILE" || return 1
+  walk_to_tile holes "$HOLE_TILE" "$HOLE_TILE" || return 1
+  echo "{\"x\":${CLICK_X},\"y\":${CLICK_Y}}" >"$VERIFY_DIR/hole-click.json"
   ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.events).filter((e) => e.kind === 'hole-hit').length >= ${HOLE_HITS}" \
     --timeout 15000 >/dev/null || log "the player on the hole never took ${HOLE_HITS} hits"
   ab screenshot "$VERIFY_DIR/hole-hit.png" >/dev/null || { log "hole hit screenshot failed"; return 1; }
@@ -1726,7 +1737,7 @@ drive() {
     seed-fresh.png seed.json seed.png seed-console.log seed-page-errors.json \
     holes-drawn.png holes-flood.png hole-click.json hole-hit.png holes.json holes-console.log holes-page-errors.json \
     orb-off-holes.png orb-off-holes.json orb-off-holes-console.log orb-off-holes-page-errors.json \
-    walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
+    tile-clicks.jsonl walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
     walkway-run-end.json walkway-run-end-log.json walkway-run-end.png walkway-run-end-page-errors.json \
     control-walk.png control-walk-menu.json control-walk-log.json control-walk-right-click.json control-walk-console.log control-walk-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
@@ -1750,9 +1761,10 @@ drive() {
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
-      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected] = process.argv.slice(1);
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
+    const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const [hidden, before, after, edgeArrived, edge, errors, cycle, snapshot, focus, focusAudio, focusErrors, voidLog, voidErrors, shot, shotErrors] =
       ["hidden.json", "before.json", "after.json", "edge-arrived.json", "edge.json", "page-errors.json", "cycle.json", "cycle-snapshot.json", "focus.json", "focus-audio.json", "focus-page-errors.json", "void-floor.json", "void-page-errors.json", "void-shot.json", "void-shot-page-errors.json"].map(read);
     const [dressed, switched, spec, selector, loadoutErrors, selectorErrors] =
@@ -2314,12 +2326,13 @@ drive() {
         sameJson(invincible.orb.returned, JSON.stringify(expectedRevival.returned)) &&
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
+      projectedClicksOrderTheirTiles: tileClicks.length === Number(projectedTileClicks) && tileClicks.every(({ tile, ordered }) => same(ordered, tile)),
       noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
     }
-    console.log(JSON.stringify({ hidden, before, after, target: targetTile, edge: { order: edgeOrderTile, stop: edgeStopTile }, observed, checks }, null, 2));
+    console.log(JSON.stringify({ hidden, before, after, target: targetTile, edge: { order: edgeOrderTile, stop: edgeStopTile }, observed, tileClicks, checks }, null, 2));
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
   ' "$VERIFY_DIR" "$SPAWN_TILE" "$WALK_TARGET_TILE" "$EDGE_ORDER_TILE" "$EDGE_STOP_TILE" "$EDGE_HOLD_TICKS" "$BOSS_NPC" "$CYCLE_LAST_HIDDEN_TICK" "$CYCLE_LAST_TICK" "$CYCLE_STAGE_ENTRIES" "$CYCLE_OVERHEAD_SWITCHES" "$CYCLE_SPECIAL_HITS" "$FOCUS_DRILL" "$FOCUS_EXPECTED" \
     "$NEAR_SQUARE" "$FLOOD_DAMAGE_TICK" "$FLOOD_LAST_TICK" "$VOID_FLOOR_HITS" "$VOID_RUN_END" "$VOID_PIXEL" \
@@ -2337,7 +2350,7 @@ drive() {
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
-    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" >"$VERIFY_DIR/observed.json"
+    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

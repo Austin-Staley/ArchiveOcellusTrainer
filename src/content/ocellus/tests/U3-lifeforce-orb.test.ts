@@ -6,6 +6,7 @@ const ORB_DRILL = { focus: "lifeforce-orb" } as const;
 const INNER_ORB_SEED = 75;
 const INNER_ORB: At = { x: 9, y: 4 };
 const BESIDE_INNER_ORB: At = { x: 9, y: 3 };
+const PAST_INNER_ORB: At = { x: 9, y: 5 };
 const OUTER_ORB_FROM_SPAWN: At = { x: 4, y: 3 };
 const NEAR_PLAYER_OUTER_ORB = { outerOrbTile: "safe-floor" } as const;
 const V1_TURN = { floorHoleLayout: "v1-turn" } as const;
@@ -65,6 +66,26 @@ describe("U3 lifeforce hit and orb", () => {
     expect(drill.events("orb-returned").map((e) => [e.at, e.tile, e.receipt])).toEqual([[25, { x: 9, y: 4 }, { requested: 49, applied: 49, beforeHp: 50, afterHp: 99 }]]);
     expect(drill.row(25).playerAtPostTick.hp).toBe(99);
     drill.dispose();
+  });
+
+  test("guard: a run collects the orb only where it ends the tick: crossing the glowing (9, 4) from (9, 3) to (9, 5) on 25 returns nothing, and stopping on it at 28 returns the HP at 29", async () => {
+    const drill = startDrill({ seed: INNER_ORB_SEED, selection: ORB_DRILL });
+    drill.tickTo(13);
+    await drill.click(BESIDE_INNER_ORB);
+    drill.tickTo(24);
+    await drill.click(PAST_INNER_ORB);
+    drill.tickTo(27);
+    await drill.click(INNER_ORB);
+    drill.tickTo(30);
+    const observed = {
+      tiles: [24, 25, 28].map((t) => [t, drill.row(t).playerAtPostTick.tile]),
+      returned: drill.events("orb-returned").map((e) => [e.at, e.receipt]),
+    };
+    drill.dispose();
+    expect(observed).toEqual({
+      tiles: [[24, { x: 9, y: 3 }], [25, { x: 9, y: 5 }], [28, { x: 9, y: 4 }]],
+      returned: [[29, { requested: 49, applied: 49, beforeHp: 50, afterHp: 99 }]],
+    });
   });
 
   test("guard: the inner orb stays 5 ticks after the inner void clears at 30: its last pickup returns at 35, and arriving at the end of 35 is too late", async () => {

@@ -1,7 +1,8 @@
 import { Collision, Player, Random } from "osrs-sdk";
 import type { Location, MovePace, Region } from "osrs-sdk";
-import type { InputObservation, PlayerObservation, Style } from "./P4Types";
+import type { InputObservation, PlayerObservation } from "./P4Types";
 import { tile } from "../../../sim/brands";
+import type { Style } from "../../../sim/combat";
 import { Ocellus } from "./mobs/Ocellus";
 import type { CombatStream } from "./p4/roll";
 

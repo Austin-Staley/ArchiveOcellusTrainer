@@ -4,7 +4,8 @@ import { paintedFills } from "../../../../test/paintedTiles";
 import { OcellusRegion } from "../js/OcellusRegion";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { OCELLUS_P4, parseDrillRequest } from "../js/OcellusTimings";
-import type { FightEvent, Style, TickRow } from "../js/P4Types";
+import type { Style } from "../../../sim/combat";
+import type { FightEvent, TickRow } from "../js/P4Types";
 
 export type DrillOptions = Readonly<{ seed?: number; selection?: DrillSelection }>;
 export type At = Readonly<{ x: number; y: number }>;

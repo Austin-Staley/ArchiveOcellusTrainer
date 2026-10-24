@@ -1,10 +1,11 @@
 import type { TwistedBow } from "osrs-sdk";
 import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
 import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { Style } from "../../../sim/combat";
 import type { Basis, Citations, Evidence, WikiRef } from "../../../sim/provenance";
 import { noWiki, wiki } from "../../../sim/provenance";
 import type { DrillStart, Focus } from "../../../sim/schedule";
-import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, Style, TransitionKind, VoidKind } from "./P4Types";
+import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, TransitionKind, VoidKind } from "./P4Types";
 import { roll } from "./p4/roll";
 
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";

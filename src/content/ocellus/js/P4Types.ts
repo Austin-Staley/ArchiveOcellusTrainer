@@ -1,5 +1,6 @@
 import type { MovePace } from "osrs-sdk";
 import type { Brand, Cycle, Seed, Tick, TickSpan, Tile, Unbranded, WorldTick } from "../../../sim/brands";
+import type { HitReceipt, IncomingStyle, Style } from "../../../sim/combat";
 import type { GearSlot, ResolvedChoices, SpecialStyle, TransitionCue } from "./OcellusTimings";
 import { isCount } from "../../../sim/brands";
 
@@ -26,7 +27,6 @@ export type TransitionKind = "after-inner" | "after-outer";
 export type BossState = Phase["boss"];
 export type BossOverhead = NonNullable<Phase["overhead"]>;
 
-export type Style = "melee" | "ranged" | "magic";
 export type Special = "vortex" | "spike-disk" | "black-disk";
 export type Mechanic = "void-floor" | "floor-holes" | "lifeforce-orb" | "explosions" | "transition-attacks" | "rifts";
 
@@ -49,7 +49,6 @@ export type Beat =
   | Readonly<{ kind: "rifts-spawn"; forCycle: Cycle }>
   | Readonly<{ kind: "rift-charge-ends"; forCycle: Cycle }>;
 
-export type IncomingStyle = Style | "typeless";
 export type RunEnd = "kill" | "death";
 
 export type RiftId = `rift-${number}-${number}`;
@@ -57,7 +56,6 @@ export function riftId(spawnedAt: Tick, slot: number): RiftId {
   return `rift-${spawnedAt}-${slot}`;
 }
 
-export type HitReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number; prayer: Style | null }>;
 export type HealReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number }>;
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }> | Readonly<{ kind: "soul-split"; ordinal: Ordinal }>;
 /** `attackDelay` is the player's SDK attack clock at the impact, before and after a dodge cuts it. */

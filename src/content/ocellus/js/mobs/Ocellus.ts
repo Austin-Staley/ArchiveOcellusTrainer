@@ -5,14 +5,13 @@ import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile, worldTick } from "../../../../sim/brands";
+import type { HitReceipt, IncomingStyle, Style } from "../../../../sim/combat";
 import type {
   Beat,
   BossState,
   ExplosionOutcome,
   FightEvent,
   HealCause,
-  HitReceipt,
-  IncomingStyle,
   InputObservation,
   Mechanic,
   Ordinal,
@@ -24,7 +23,6 @@ import type {
   RunState,
   Special,
   SpecialAttack,
-  Style,
   TickRow,
   VoidKind,
 } from "../P4Types";

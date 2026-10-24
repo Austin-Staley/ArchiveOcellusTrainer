@@ -265,6 +265,19 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.dispose();
   });
 
+  test.each([
+    { lands: "on the tick it bursts", delays: [2], logged: [[90, "rift-67-1", "ranged", 44]] },
+    { lands: "on the tick it is destroyed, after the hit that killed it", delays: [1, 2], logged: [[89, "rift-67-1", "ranged", 44], [90, "rift-67-1", "ranged", 44]] },
+  ] as const)("guard: a hit landing on the north-east rift $lands logs its rift-hit", ({ delays, logged }) => {
+    const drill = startDrill({ selection: { focus: "rifts" } });
+    drill.tickTo(88);
+    const northEast = northEastRift(drill);
+    delays.forEach((delay) => drill.hit(drill.player(), northEast, 44, "range", delay));
+    drill.tickTo(91);
+    expect(drill.events("rift-hit").map((e) => [e.at, e.rift, e.style, e.damage])).toEqual(logged);
+    drill.dispose();
+  });
+
   test("under each rift's HP bar a yellow timer bar of the same size fills from the left as the rift charges, full on the burst tick", () => {
     const drill = startDrill({ selection: { focus: "rifts" } });
     const drawn: Record<number, readonly Fill[]> = {};

@@ -108,13 +108,10 @@ describe("U1 cycle skeleton", () => {
   });
 
   test("GET READY ticks write no row, and the first boss step is P4 tick 0", () => {
-    const drill = startDrill({ keepGetReady: true });
-    drill.region.world.tickWorld(3);
-    expect(drill.rows()).toEqual([]);
-    drill.region.world.getReadyTimer = 0;
+    const drill = startDrill();
     drill.tickTo(0);
     expect(drill.rows().map((row) => [row.tick, row.worldTick, row.phase])).toEqual([
-      [0, 4, { stage: "lead-in", boss: "hidden", overhead: null }],
+      [0, 6, { stage: "lead-in", boss: "hidden", overhead: null }],
     ]);
     drill.dispose();
   });

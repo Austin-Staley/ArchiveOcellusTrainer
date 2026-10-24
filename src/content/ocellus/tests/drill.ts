@@ -7,7 +7,7 @@ import { OCELLUS_P4, resolveDrill } from "../js/OcellusTimings";
 import type { FightEvent, Style, TickRow } from "../js/P4Types";
 import { seed } from "../js/P4Types";
 
-export type DrillOptions = Readonly<{ seed?: number; selection?: DrillSelection; keepGetReady?: boolean }>;
+export type DrillOptions = Readonly<{ seed?: number; selection?: DrillSelection }>;
 export type At = Readonly<{ x: number; y: number }>;
 
 export const SPAWN_ON_FLOOD: At = OCELLUS_P4.geometry.playerSpawn.value;
@@ -32,8 +32,9 @@ export function startDrill(options: DrillOptions = {}) {
   const region = new OcellusRegion(resolveDrill({ seed: seed(options.seed ?? 1), selection: options.selection }));
   const trainer = new TrainerInstance(region, { force2d: true });
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
-  // The SDK counts GET READY down only in its browser loop, never in tickWorld.
-  if (!options.keepGetReady) region.world.getReadyTimer = 0;
+  // The world tick after the last held one ends GET READY and is the boss's first step, P4 tick 0.
+  const tickThroughGetReady = () => region.world.tickWorld(region.world.getReadyTimer - 1);
+  tickThroughGetReady();
   Viewport.viewport.resize(800, 600);
 
   const rows = (): readonly TickRow[] => region.fightLog().rows;
@@ -139,7 +140,7 @@ export function startDrill(options: DrillOptions = {}) {
     },
     restart() {
       region.reset(false);
-      region.world.getReadyTimer = 0;
+      tickThroughGetReady();
     },
     dispose() {
       trainer.dispose();

@@ -73,8 +73,7 @@ describe("Settings menu", () => {
     const region = built.mock.contexts.at(-1);
     built.mockRestore();
     if (!(region instanceof OcellusRegion)) throw new Error("the page built no region");
-    region.world.getReadyTimer = 0;
-    region.world.tickWorld();
+    region.world.tickWorld(region.world.getReadyTimer);
     const firstStep = region.snapshot()?.run;
     drillPage.close();
 

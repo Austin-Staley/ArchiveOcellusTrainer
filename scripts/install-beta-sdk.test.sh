@@ -47,7 +47,7 @@ cat >"$WORK/bin/npm" <<'EOF'
 #!/usr/bin/env bash
 case "$PWD:$1" in
   "$APP:ci") echo ci >>"$T/registry-installs"; rm -rf node_modules ;;
-  *:ci | *:run) ;;
+  */osrs-sdk:ci | */osrs-sdk:run) ;;
   *) exec "$REAL_NPM" "$@" ;;
 esac
 EOF
@@ -60,7 +60,8 @@ setup() {
   export T APP HOME="$T/home" VERIFY_DIR="$T/verify"
   mkdir -p "$APP/scripts" "$HOME"
   cp "$SCRIPTS/install-beta-sdk.sh" "$SCRIPTS/verify.sh" "$APP/scripts/"
-  echo '{"name":"app","version":"0.0.0","private":true}' >"$APP/package.json"
+  echo '{"name":"app","version":"0.0.0","private":true,"scripts":{"build":"node build.js"}}' >"$APP/package.json"
+  echo 'for (const name of ["osrs-sdk", "osrs-sdk-assets", "osrs-sdk-react"]) require(name);' >"$APP/build.js"
   : >"$T/fetches"
   : >"$T/registry-installs"
 }
@@ -137,6 +138,17 @@ install_from_another_commit_is_replaced() {
   expect_reinstalled_at_the_pin
 }
 
+unreadable_installed_manifest_is_replaced() {
+  setup
+  installed_from_packs "$PIN" || return 1
+  echo '{' >"$APP/node_modules/osrs-sdk/package.json"
+  ready
+  bash "$APP/scripts/verify.sh" build >"$T/out.txt" 2>&1
+  local status=$?
+  expect_reinstalled_at_the_pin
+  [[ $status == 0 ]] || { cat "$T/out.txt"; fail "verify.sh build failed"; }
+}
+
 unrecorded_packs_are_refused() {
   setup
   packs "$T/prebuilt" "" || return 1
@@ -167,6 +179,7 @@ for t in \
   install_at_the_pin_is_reused \
   unrecorded_install_is_replaced \
   install_from_another_commit_is_replaced \
+  unreadable_installed_manifest_is_replaced \
   unrecorded_packs_are_refused \
   packs_from_another_commit_are_refused \
   packs_at_the_pin_are_used; do

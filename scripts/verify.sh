@@ -74,6 +74,12 @@ WALKWAY_RUN_END_TILE='{"x":11,"y":3}'
 WALKWAY_RUN_TILES='[{"x":7,"y":1},{"x":9,"y":1},{"x":11,"y":2}]'
 CONTROL_MODIFIER=2
 CONTROL_WALK_TILES='[{"x":6,"y":1},{"x":7,"y":1},{"x":8,"y":1},{"x":9,"y":1},{"x":10,"y":1},{"x":11,"y":2}]'
+BACK_WALL_START_TILE='{"x":10,"y":3}'
+BACK_WALL_END_TILE='{"x":7,"y":6}'
+BACK_WALL_TOWARD_TILES='[{"x":9,"y":4},{"x":8,"y":5},{"x":7,"y":6}]'
+BACK_WALL_BACK_TILES='[{"x":8,"y":5},{"x":9,"y":4},{"x":10,"y":3}]'
+BACK_WALL_TOP_DOWN_DRAG_PX=720
+CAMERA_SETTLE_MS=1200
 CORNER_QUERY="?seed=2&focus=${FOCUS_DRILL}"
 CORNER_HOLE_TILE='{"x":3,"y":8}'
 CORNER_NUB_TILE='{"x":4,"y":9}'
@@ -106,8 +112,8 @@ HOLE_FLOOD_SHOT_TICK=45
 HOLE_TILE='{"x":11,"y":2}'
 HOLE_HITS=3
 HOLE_DAMAGE='{"min":9,"max":11}'
-PROJECTED_TILE_CLICKS=14
-ORB_HOLES_QUERY="?seed=5&floorHoleLayout=v1-turn"
+PROJECTED_TILE_CLICKS=18
+ORB_HOLES_QUERY="?seed=86&floorHoleLayout=v1-turn"
 ORB_HOLES_SHOT_TICK=13
 ORB_HOLES_EXPECTED='[[12,"inner-void",{"x":2,"y":5}]]'
 ORB_HOLES_LAYOUT='{"key":"v1-turn","tiles":[{"x":1,"y":5},{"x":1,"y":6},{"x":2,"y":8},{"x":2,"y":9},{"x":4,"y":9},{"x":8,"y":5}]}'
@@ -136,6 +142,7 @@ INVINCIBLE_ORB_CLICK_UP_PX=75
 INVINCIBLE_ORB_LAST_TICK=26
 INVINCIBLE_ORB_EXPECTED='{"revived":[15,"floor-hit",38],"returned":[[25,{"requested":0,"applied":0,"beforeHp":99,"afterHp":99}]],"hp":[25,99],"maxHp":99}'
 ORB_DRILL="lifeforce-orb"
+ORB_SEED=75
 ORB_DORMANT_TICK=20
 ORB_GLOW_TICK=24
 ORB_LAST_TICK=30
@@ -260,7 +267,7 @@ RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
 RIFT_KILL_SOUND='[0.27,12640]'
 RIFT_BURST_SOUNDS='[[90.13,12641],[90.93,12642]]'
 RIFT_SOUND_WINDOW='[66,92]'
-CUE_QUERY="?seed=1&focus=${ORB_DRILL}&drillStart=cycle-start&outerOrbTile=safe-floor"
+CUE_QUERY="?seed=${ORB_SEED}&focus=${ORB_DRILL}&drillStart=cycle-start&outerOrbTile=safe-floor"
 CUE_TOGGLE_TICK=6
 CUE_CHAT_BEFORE_TICK=10
 CUE_CHAT_TICK=11
@@ -647,13 +654,18 @@ open_settings() {
   [[ "$(ab --json is visible "#settings_menu" | json data.visible)" == true ]] || ab click "#settings" >/dev/null || { log "the Settings button did not respond"; return 1; }
 }
 
+type_seed() {
+  open_settings || return 1
+  ab fill "#seed" "$1" >/dev/null || { log "the seed box did not take seed $1"; return 1; }
+}
+
 keep_seed() {
   open_settings || return 1
-  ab fill "#seed" "$(ab --json get value "#seed" | json data.value)" >/dev/null || { log "the seed box did not take the run's own seed"; return 1; }
+  type_seed "$(ab --json get value "#seed" | json data.value)"
 }
 
 choose_focus() {
-  keep_seed || return 1
+  if [[ -n "${2:-}" ]]; then type_seed "$2"; else keep_seed; fi || return 1
   ab select "#focus" "$1" >/dev/null || { log "focus control did not accept $1"; return 1; }
   ab wait --fn "new URLSearchParams(location.search).get('focus') === '$1'" --timeout 30000 >/dev/null || { log "choosing $1 did not load focus=$1 without Restart"; return 1; }
 }
@@ -889,7 +901,7 @@ click_tile() {
 }
 
 walk_to_tile() {
-  click_tile "$1" "$2" now || return 1
+  click_tile "$1" "$2" now "${4:-none}" || return 1
   ab wait --fn "(() => { const s = window.__archiveOcellusProbe.snapshot(), to = $3; return s.player.x === to.x && s.player.y === to.y; })()" \
     --timeout 15000 >/dev/null || log "player never stood on $3"
 }
@@ -971,6 +983,33 @@ drive_control_walk() {
   ab --json errors | json data.errors >"$VERIFY_DIR/control-walk-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+top_down_view() {
+  local step
+  ab mouse move "$CX" $((CY - BACK_WALL_TOP_DOWN_DRAG_PX / 2)) >/dev/null && ab mouse down middle >/dev/null || return 1
+  for step in 1 2 3 4 5 6; do
+    ab mouse move "$CX" $((CY - BACK_WALL_TOP_DOWN_DRAG_PX / 2 + step * BACK_WALL_TOP_DOWN_DRAG_PX / 6)) >/dev/null || return 1
+  done
+  ab mouse up middle >/dev/null && ab wait "$CAMERA_SETTLE_MS" >/dev/null
+}
+
+drive_back_wall() {
+  ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  walk_to_tile back-wall-view "$BACK_WALL_START_TILE" "$BACK_WALL_START_TILE" || return 1
+  top_down_view || return 1
+  ab screenshot "$VERIFY_DIR/back-wall-top-down.png" >/dev/null || { log "back wall screenshot failed"; return 1; }
+  ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking || return 1
+  walk_to_tile back-wall "$BACK_WALL_START_TILE" "$BACK_WALL_START_TILE" || return 1
+  ab wait "$CAMERA_SETTLE_MS" >/dev/null
+  walk_to_tile back-wall-toward "$BACK_WALL_END_TILE" "$BACK_WALL_END_TILE" control || return 1
+  ab wait "$CAMERA_SETTLE_MS" >/dev/null
+  walk_to_tile back-wall-back "$BACK_WALL_START_TILE" "$BACK_WALL_START_TILE" control || return 1
+  probe "log()" >"$VERIFY_DIR/back-wall-log.json"
+  top_down_view || return 1
+  ab screenshot "$VERIFY_DIR/back-wall-flood.png" >/dev/null || { log "back wall flood screenshot failed"; return 1; }
+  ab console >"$VERIFY_DIR/back-wall-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/back-wall-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
 drive_corner() {
   local step
   ab open "${URL}${CORNER_QUERY}" >/dev/null && wait_until_ticking && canvas_centre || return 1
@@ -1050,14 +1089,14 @@ drive_orb_off_holes() {
 }
 
 drive_orb_late_and_entry() {
-  ab open "${URL}?seed=1&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  ab open "${URL}?seed=${ORB_SEED}&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
   shot_after_tick "$ORB_LATE_SHOT_TICK" 300 orb-late.png || { log "the orb drill never reached P4 tick ${ORB_LATE_SHOT_TICK}"; return 1; }
   click_at $((CX + ORB_CLICK_RIGHT_PX)) $((CY - ORB_CLICK_UP_PX)) || return 1
   fight_tick_at_least "$ORB_LATE_LAST_TICK" 30000 || { log "the orb drill never stepped to P4 tick ${ORB_LATE_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/orb-late.json"
   ab --json errors | json data.errors >"$VERIFY_DIR/orb-late-page-errors.json" || { log "page error capture failed"; return 1; }
 
-  ab open "${URL}?seed=1&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
+  ab open "${URL}?seed=${ORB_SEED}&focus=${ORB_DRILL}" >/dev/null && wait_until_ticking && canvas_centre || return 1
   click_after_tick "$ORB_ENTRY_CLICK_TICK" "$ORB_ENTRY_CLICK_RIGHT_PX" "-$ORB_ENTRY_CLICK_UP_PX" || { log "the walk into the 5x5 was not clicked"; return 1; }
   shot_after_tick "$ORB_ENTRY_LAST_TICK" 300 orb-entry.png || { log "the orb drill never reached P4 tick ${ORB_ENTRY_LAST_TICK}"; return 1; }
   probe "log()" >"$VERIFY_DIR/orb-entry.json"
@@ -1079,7 +1118,7 @@ drive_void_floor() {
 
 drive_lifeforce_orb() {
   local box ox oy frame
-  choose_focus "$ORB_DRILL" || return 1
+  choose_focus "$ORB_DRILL" "$ORB_SEED" || return 1
   fight_tick_at_least 12 120000 || { log "the orb drill never reached the lifeforce hit"; return 1; }
   ab screenshot "$VERIFY_DIR/orb-hit.png" >/dev/null || { log "lifeforce hit screenshot failed"; return 1; }
   box="$(ab --json get box "#world")"
@@ -1103,7 +1142,7 @@ drive_lifeforce_orb() {
   ab console >"$VERIFY_DIR/orb-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/orb-page-errors.json" || { log "page error capture failed"; return 1; }
 
-  ab open "${URL}?seed=1&focus=${ORB_DRILL}" >/dev/null || return 1
+  ab open "${URL}?seed=${ORB_SEED}&focus=${ORB_DRILL}" >/dev/null || return 1
   fight_tick_at_least "$ORB_SKIP_LAST_TICK" 120000 || { log "the orb-skipping drill never stepped to P4 tick ${ORB_SKIP_LAST_TICK}"; return 1; }
   ab screenshot "$VERIFY_DIR/orb-skip.png" >/dev/null || { log "skipped orb screenshot failed"; return 1; }
   probe "log()" >"$VERIFY_DIR/orb-skip.json"
@@ -1732,7 +1771,7 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
+  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_back_wall && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
 
   local capture
   for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png boss-bar.json cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
@@ -1757,6 +1796,7 @@ drive() {
     tile-clicks.jsonl walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
     walkway-run-end.json walkway-run-end-log.json walkway-run-end.png walkway-run-end-page-errors.json \
     control-walk.png control-walk-menu.json control-walk-log.json control-walk-right-click.json control-walk-console.log control-walk-page-errors.json \
+    back-wall-log.json back-wall-top-down.png back-wall-flood.png back-wall-console.log back-wall-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
     pathing-around.png pathing.json pathing-console.log pathing-page-errors.json pathing-reroute.json pathing-reroute-console.log pathing-reroute-page-errors.json pathing-control.json pathing-control-console.log pathing-control-page-errors.json pathing-out.png pathing-out.json pathing-out-console.log pathing-out-page-errors.json \
     invincible-default.json invincible-linked.json invincible.png invincible-chat.json invincible.json invincible-console.log invincible-page-errors.json invincible-restarted.json \
@@ -1778,7 +1818,7 @@ drive() {
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
-      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction] = process.argv.slice(1);
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction, backWallStart, backWallEnd, backWallToward, backWallBack] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -1797,6 +1837,7 @@ drive() {
       ["walkway-arrived.json", "walkway.json", "walkway-log.json", "walkway-run-end.json", "walkway-run-end-log.json", "corner-hole.json", "corner-hole-log.json", "corner-nub.json", "corner-nub-log.json"].map(read);
     const [seedErrors, walkwayErrors, walkwayRunEndErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "walkway-run-end-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
     const [controlWalkMenu, controlWalkLog, controlWalkRightClick, controlWalkErrors] = ["control-walk-menu.json", "control-walk-log.json", "control-walk-right-click.json", "control-walk-page-errors.json"].map(read);
+    const [backWallLog, backWallErrors] = ["back-wall-log.json", "back-wall-page-errors.json"].map(read);
     const [holesLog, holesErrors] = ["holes.json", "holes-page-errors.json"].map(read);
     const [pathingLog, pathingErrors] = ["pathing.json", "pathing-page-errors.json"].map(read);
     const [rerouteLog, rerouteErrors, outLog, outErrors] = ["pathing-reroute.json", "pathing-reroute-page-errors.json", "pathing-out.json", "pathing-out-page-errors.json"].map(read);
@@ -1897,8 +1938,9 @@ drive() {
       });
     };
     const walkPaces = (log) => log.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.pace));
-    const tilesUntilStop = (log, stop) => {
-      const tiles = log.rows.slice(log.rows.findIndex((row) => row.inputs.some((i) => i.kind === "walk-ordered"))).map((row) => row.playerAtPostTick.tile);
+    const tilesUntilStop = (log, stop, order = 0) => {
+      const ordered = log.rows.flatMap((row, at) => (row.inputs.some((i) => i.kind === "walk-ordered") ? [at] : []));
+      const tiles = log.rows.slice(ordered[order]).map((row) => row.playerAtPostTick.tile);
       return tiles.slice(0, tiles.findIndex((tile) => same(tile, stop)) + 1);
     };
     const seedInUrl = (run) => new URLSearchParams(run.search).get("seed");
@@ -2085,6 +2127,12 @@ drive() {
         tiles: tilesUntilStop(controlWalkLog, JSON.parse(walkwayStop)),
         ...controlWalkMenu,
         rightClickMenu: controlWalkRightClick,
+      },
+      backWall: {
+        orders: walkOrders(backWallLog),
+        paces: walkPaces(backWallLog),
+        toward: tilesUntilStop(backWallLog, JSON.parse(backWallEnd), 1),
+        back: tilesUntilStop(backWallLog, JSON.parse(backWallStart), 2),
       },
       corner: { orders: [...walkOrders(cornerHoleLog), ...walkOrders(cornerNubLog)], stood: [cornerAtHole.player, cornerAtNub.player] },
       pathing: { orders: walkOrders(pathingLog), walks: walks(pathingLog) },
@@ -2321,6 +2369,8 @@ drive() {
         sameJson(observed.controlWalk.tiles, controlWalkTiles),
       controlClickOpensNoMenu: observed.controlWalk.menu === null && (!observed.controlWalk.platform.startsWith("Mac") || observed.controlWalk.contextMenus > 0),
       rightClickStillOpensMenu: Array.isArray(observed.controlWalk.rightClickMenu) && observed.controlWalk.rightClickMenu.includes("Walk Here"),
+      backWallWalksDiagonally: sameJson(observed.backWall.orders, `[${backWallStart},${backWallEnd},${backWallStart}]`) &&
+        sameJson(observed.backWall.paces, JSON.stringify(["run-setting", "walk", "walk"])) && sameJson(observed.backWall.toward, backWallToward) && sameJson(observed.backWall.back, backWallBack),
       cornerFilled: sameJson(observed.corner.orders, `[${cornerHole},${cornerNub}]`) && sameJson(observed.corner.stood, `[${cornerHole},${cornerNub}]`),
       holesDrawnOnLayout: sameJson(observed.holes.layout, holeLayout) && observed.holes.darkShare.every((box) => onHole(box.tile) && box.drawn >= Number(holeMinDark)) &&
         observed.holes.freeDarkShare.every((box) => !onHole(box.tile) && box.drawn <= Number(holeMaxDark)),
@@ -2359,7 +2409,7 @@ drive() {
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
       projectedClicksOrderTheirTiles: tileClicks.length === Number(projectedTileClicks) && tileClicks.every(({ tile, ordered }) => same(ordered, tile)),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -2382,7 +2432,8 @@ drive() {
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
-    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" >"$VERIFY_DIR/observed.json"
+    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" \
+    "$BACK_WALL_START_TILE" "$BACK_WALL_END_TILE" "$BACK_WALL_TOWARD_TILES" "$BACK_WALL_BACK_TILES" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

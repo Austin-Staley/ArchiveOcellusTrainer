@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.24",
+    notes: [
+      "Ocellus has 5,250 HP for a solo or duo team, as the wiki lists, so phase 4 starts at 1,312.",
+      "While the void explosions are going off, Ocellus takes 60% less damage, as the wiki describes.",
+      "The back wall by the brazier is one smooth diagonal up to the jut, so you walk along it instead of around each corner.",
+    ],
+  },
+  {
     version: "2026.10.23",
     notes: [
       "Hold Control and click a tile to walk there instead of running, like in game.",

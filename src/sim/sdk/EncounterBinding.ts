@@ -68,6 +68,14 @@ type Run<T extends Encounter> =
   | Readonly<{ kind: "between"; last: Tick; inputs: readonly T["input"][] }>
   | Readonly<{ kind: "ended"; at: Tick; reason: T["end"] }>;
 
+declare const inFlight: unique symbol;
+export type InFlight = Projectile & { readonly [inFlight]: true };
+
+/** The SDK lands a projectile on the tick its delay reaches 0, then keeps it in `incomingProjectiles` for its hitsplat. */
+export function isInFlight(projectile: Projectile): projectile is InFlight {
+  return projectile.remainingDelay > 0;
+}
+
 export function incomingStyle(attackStyle: string): IncomingStyle {
   switch (attackStyle) {
     case "stab":
@@ -224,7 +232,7 @@ export class EncounterBinding<T extends Encounter> {
     if (projectile.weapon) this.rolls.set(projectile, projectile.weapon.damageRoll);
   }
 
-  landing(projectile: Projectile): Readonly<{ hit: IncomingHit; at: Tick }> {
+  landing(projectile: InFlight): Readonly<{ hit: IncomingHit; at: Tick }> {
     const at = tick(this.nextNpcTurn() + projectile.remainingDelay - 1);
     return { hit: this.incoming(projectile, at), at };
   }

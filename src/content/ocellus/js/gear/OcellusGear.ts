@@ -23,6 +23,8 @@ import type { StanceSpeeds, TrainerItemKey } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import { itemIconFile } from "../../../../assets";
 import { Ocellus } from "../mobs/Ocellus";
+import type { InFlight } from "../../../../sim/sdk/EncounterBinding";
+import { isInFlight } from "../../../../sim/sdk/EncounterBinding";
 
 const { gear } = OCELLUS_P4;
 
@@ -169,12 +171,12 @@ function afterGlaive(target: Unit, defence: number, damage: number): number {
   return damage > 0 ? Math.max(0, defence - Math.floor(target.currentStats.magic * gear.division.value.defenceDrainOfMagic)) : defence;
 }
 
-function landingDamage(target: Unit, projectile: Projectile): number {
+function landingDamage(target: Unit, projectile: InFlight): number {
   return target instanceof Ocellus ? target.landingDamage(projectile) : projectile.damage;
 }
 
 function defenceAfterGlaivesInFlight(target: Unit): number {
-  return target.incomingProjectiles.reduce((defence, projectile) => (projectile instanceof DivisionGlaive ? afterGlaive(target, defence, landingDamage(target, projectile)) : defence), target.currentStats.defence);
+  return target.incomingProjectiles.filter(isInFlight).reduce((defence, projectile) => (projectile instanceof DivisionGlaive ? afterGlaive(target, defence, landingDamage(target, projectile)) : defence), target.currentStats.defence);
 }
 
 function rollingAgainst<T>(target: Unit, defence: number, roll: () => T): T {

@@ -6,7 +6,7 @@ import type { OcellusPlayer } from "../OcellusPlayer";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { HitReceipt, IncomingStyle, Style } from "../../../../sim/combat";
-import type { FrameOf, HitRequest, Hooks, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
+import type { FrameOf, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
 import { EncounterBinding, incomingStyle } from "../../../../sim/sdk/EncounterBinding";
 import type {
   Beat,
@@ -281,7 +281,7 @@ export class Ocellus extends Mob {
     return { outputs: [...phased, ...destroyed, ...reactions, ...this.strikeHole(at, player)], ending: null };
   }
 
-  landingDamage(projectile: Projectile): number {
+  landingDamage(projectile: InFlight): number {
     const { hit, at } = this.binding.landing(projectile);
     return landedDamage(this.judge(at, hit.style, hit.launchedAt), hit);
   }

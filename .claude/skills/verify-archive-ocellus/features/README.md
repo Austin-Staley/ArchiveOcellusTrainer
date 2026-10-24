@@ -1,6 +1,6 @@
 # Archive Ocellus Trainer verification map
 
-This directory is the maintained source for verifying what a user of the trainer can see and do. Read this index before driving the app, then use the matching feature file as the recipe. Add a file here when a mechanic ships, and change the file when its user path changes.
+This directory is the maintained source for verifying what a user of the trainer can see and do. Read this index before driving the app, then use the matching feature file as the recipe. Add a file here when a mechanic ships, and change the file when its user path changes. Add its scenarios and oracles to [scenarios.md](../scenarios.md) in the same change.
 
 ## Baseline preconditions
 

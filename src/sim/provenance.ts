@@ -1,0 +1,23 @@
+export type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "community-tested" | "owner-estimated" | "inferred" | "assumption";
+
+export type WikiRef = Readonly<{ kind: "wiki"; page: string; oldid: number | null }>;
+export type NoWiki = Readonly<{ kind: "no-wiki"; why: string }>;
+
+/** The first entry says which OSRS wiki revision states the value, or why none is cited. */
+export type Citations<Source> = readonly [WikiRef, ...(WikiRef | Source)[]] | readonly [NoWiki, ...Source[]];
+
+export type Evidence<Source, Scale extends string> = Readonly<{
+  status: "unverified";
+  basis: Basis;
+  scale: Scale;
+  note: string;
+  sources: Citations<Source>;
+}>;
+
+export function wiki(page: string, oldid: number | null): WikiRef {
+  return { kind: "wiki", page, oldid };
+}
+
+export function noWiki(why: string): NoWiki {
+  return { kind: "no-wiki", why };
+}

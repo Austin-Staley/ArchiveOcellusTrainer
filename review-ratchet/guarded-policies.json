@@ -61,6 +61,10 @@
         {
           "policy": "a finding fails the check",
           "mutation": [{ "find": "process.exit(findings.length === 0 ? 0 : 1);", "replace": "process.exit(0);" }]
+        },
+        {
+          "policy": "a src/sim file that imports from outside src/sim is a finding",
+          "mutation": [{ "find": "      if (insideSim && target && !target.startsWith(SIM + path.sep)) {\n", "replace": "      if (false) {\n" }]
         }
       ]
     },

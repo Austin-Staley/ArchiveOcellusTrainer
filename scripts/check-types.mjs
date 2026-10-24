@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const ts = createRequire(import.meta.url)("typescript");
 const root = path.resolve(process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const FIGHT = path.join(root, "src/content/ocellus/js");
+const SIM = path.join(root, "src/sim");
 const PUBLIC = new Set(["OcellusRegion.ts", "OcellusTimings.ts", "P4Types.ts"].map((file) => path.join(FIGHT, file)));
 const SUPPRESSION = /@ts-(ignore|expect-error|nocheck)\b/;
 const TEST_FILE = /(^|[/\\])__tests__[/\\]|\.(test|spec)(-d)?\.[cm]?[jt]sx?$/;
@@ -32,6 +33,7 @@ for (const file of [...sources(path.join(root, "src")), ...sources(path.join(roo
   const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const inSrc = file.startsWith(path.join(root, "src") + path.sep);
   const insideFight = file.startsWith(FIGHT + path.sep);
+  const insideSim = file.startsWith(SIM + path.sep);
   const report = (pos, rule) => {
     const { line, character } = sf.getLineAndCharacterOfPosition(pos);
     findings.push(`${path.relative(root, file)}:${line + 1}:${character + 1} ${rule}`);
@@ -61,10 +63,13 @@ for (const file of [...sources(path.join(root, "src")), ...sources(path.join(roo
         report(node.getStart(sf), "definite assignment assertion");
       }
     }
-    if (!insideFight && ts.isStringLiteralLike(node)) {
+    if (ts.isStringLiteralLike(node)) {
       const target = resolveImport(file, node.text);
-      if (target && target.startsWith(FIGHT + path.sep) && !PUBLIC.has(target)) {
+      if (!insideFight && target && target.startsWith(FIGHT + path.sep) && !PUBLIC.has(target)) {
         report(node.getStart(sf), `import of fight internal ${path.relative(root, target)}`);
+      }
+      if (insideSim && target && !target.startsWith(SIM + path.sep)) {
+        report(node.getStart(sf), `sim import from outside src/sim ${path.relative(root, target)}`);
       }
     }
     ts.forEachChild(node, visit);

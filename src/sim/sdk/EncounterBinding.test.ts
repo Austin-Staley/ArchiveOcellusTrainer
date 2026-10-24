@@ -1,7 +1,7 @@
 import { DelayedAction, Player, Projectile, Settings, TestNpc, TestRegion, Viewport, World } from "osrs-sdk";
 import type { Location, MovePace, Region } from "osrs-sdk";
 import type { Tick } from "../brands";
-import { seed, tick } from "../brands";
+import { seed, span, tick } from "../brands";
 import type { EncounterBinding, Hooks } from "./EncounterBinding";
 
 type Probe = Readonly<{ input: string; event: string; cause: string; snapshot: number; row: string; end: "kill" }>;
@@ -78,10 +78,10 @@ async function encounter(start: Tick, judged: number) {
         outputs: [...incoming.map((hit) => ({ kind: "judge-incoming", hit, damage: judged } as const)), { kind: "event", event: `judged ${incoming.length}` }],
       };
     },
-    "npc-turn": ({ kind, time, snapshot }) => {
-      frames.push(`${time.encounter} ${kind} from ${snapshot} hp`);
+    "npc-turn": ({ kind, time, snapshot, player: { attackDelay } }) => {
+      frames.push(`${time.encounter} ${kind} from ${snapshot} hp at attack delay ${attackDelay}`);
       return {
-        outputs: [{ kind: "event", event: "turned" }, { kind: "hit", damage: { kind: "fixed", amount: 3 }, cause: `strike ${time.encounter}` }],
+        outputs: [{ kind: "event", event: "turned" }, { kind: "hit", damage: { kind: "fixed", amount: 3 }, cause: `strike ${time.encounter}` }, { kind: "cut-attack-delay", by: span(3) }],
         ending: npc.currentStats.hitpoint <= 0 ? "kill" : null,
       };
     },
@@ -111,10 +111,11 @@ describe("EncounterBinding", () => {
     DelayedAction.reset();
   });
 
-  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order and settlement heals applied up to max HP before the player moves", async () => {
+  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order, the NPC turn's attack-delay cut applied to the player, and settlement heals applied up to max HP before the player moves", async () => {
     const { world, player, npc, binding, frames } = await encounter(tick(5), 7);
     world.getReadyTimer = 2;
     player.running = false;
+    player.attackDelay = 9;
     player.moveTo(23, 20);
     world.tickWorld(2);
     npc.addProjectile(new Projectile(null, 20, player, npc, "slash", { setDelay: 1 }));
@@ -124,14 +125,14 @@ describe("EncounterBinding", () => {
       frames: [
         "5 tick-opened at world tick 2",
         "5 before-npc-hits ",
-        "5 npc-turn from 125 hp",
+        "5 npc-turn from 125 hp at attack delay 9",
         "5 hit-applied strike 5: 99 to 96",
         "5 player-hits-settled strike 5 at 96 of 99 hp",
         "5 player-moved (22, 20) to (22, 20) at 99 hp",
         "5 tick-ended",
         "6 tick-opened at world tick 3",
         "6 before-npc-hits melee 20 from 5",
-        "6 npc-turn from 125 hp",
+        "6 npc-turn from 125 hp at attack delay 5",
         "6 hit-applied strike 6: 99 to 96",
         "6 player-hits-settled strike 6 at 96 of 99 hp",
         "6 player-moved (23, 20) to (23, 20) at 99 hp",
@@ -153,7 +154,7 @@ describe("EncounterBinding", () => {
       frames: [
         "0 tick-opened at world tick 1",
         "0 before-npc-hits melee 20 from 0",
-        "0 npc-turn from 125 hp",
+        "0 npc-turn from 125 hp at attack delay 0",
         "0 hit-applied strike 0: 99 to 96",
         "0 tick-ended kill",
       ],

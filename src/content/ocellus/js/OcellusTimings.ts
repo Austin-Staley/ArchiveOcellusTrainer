@@ -831,7 +831,7 @@ export const OCELLUS_P4 = {
       ),
     }),
     bossMaxHp: choice("footage-fit", {
-      "footage-fit": selected(5420, "inferred", "team-4-and-5", "9820 at 4 and 12020 at 5 is 2200 per player plus 1020, at the 2-player scale solo uses", BOSS_INFOBOX, vod("V1", "HUD 9820"), vod("V2", "HUD 12020"), SOLO_SCALE),
+      "footage-fit": selected(5420, "inferred", "team-4-and-5", "9820 at 4 and 12020 at 5 is 2200 per player plus 1020, at the 2-player scale solo uses", noWiki("the Ocellus hitpoints table (rev 15380968) lists 9,820 at 4 and 12,020 at 5 but 5,250, not 5,420, for a team of 1 or 2"), vod("V1", "HUD 9820"), vod("V2", "HUD 12020"), SOLO_SCALE),
       cache: selected(5250, "spec-confirmed", "unscaled", "cache hitpoints; matched neither team bar", BOSS_INFOBOX, cache("npc 16677 stats")),
     }),
     entryHpFraction: choice("quarter", {

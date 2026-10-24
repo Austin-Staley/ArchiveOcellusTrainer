@@ -9,11 +9,11 @@ The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD ar
 
 ```sh
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
-scripts/verify.sh                    # build types test assets browser
+scripts/verify.sh                    # build types test assets browser production
 scripts/verify.sh test browser       # any subset, in the order given
 ```
 
-Run it from the repository root or a worktree. A passing run prints five `PASS` lines and ends with `verify: stop: PID <n> is gone; evidence kept in <dir>`.
+Run it from the repository root or a worktree. A passing run prints six `PASS` lines and ends with `verify: stop: PID <n> is gone; evidence kept in <dir>`.
 
 ## Preconditions
 
@@ -30,6 +30,10 @@ scripts/verify.sh serve      # webpack dev server on 127.0.0.1:8002
 ```
 
 It refuses ports 8000 and 8001, which belong to other trainers, and refuses any port that already has a listener. It records the PID, the process start time, the port, the git revision and the evidence directory in `.verify/current-server`. Ready means `/` answers HTTP 200 and `server.log` contains `compiled successfully`. Set `VERIFY_PORT` for another port. One checkout holds one recorded instance at a time; a second worktree has its own `.verify/`.
+
+## Production
+
+The `production` stage builds the production bundle into `<evidence>/production/`, serves it with `python3 -m http.server` on 127.0.0.1:8003, and opens `?seed=1&invincible=on` in its own session. Set `VERIFY_PRODUCTION_PORT` for another port; it refuses 8000, 8001, `VERIFY_PORT` and any port with a listener, and stops the static server by its PID. A production build has no probe, so an init script records the four minimap orb numbers (hitpoints, prayer, run, special) that each frame draws. The page is watched for 20 s after the orbs first draw. It is then reopened with every request for a root-level `.png`, the SDK's bundled images, aborted until the page first requests one. Each check fails on a page error, on a frame since the first that drew no orb numbers, or on a first frame other than `["99","99","100","100"]`. The dropped images must each be requested again and answer 200.
 
 ## Doctor
 
@@ -158,6 +162,10 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `cue-fresh-console.log`, `cue-fresh-page-errors.json`, `cue-toggle-console.log`, `cue-toggle-page-errors.json`, `cue-console.log`, `cue-page-errors.json` | Console and page errors of the three cue pages |
 | `observed.json` | Lead-in, before and after state, the first two walk orders and the edge stop, the cycle's stage, overhead and transition attack ticks, the focused beats and the boss's sounds at the focus drill's entry, the bow shot across the flood, the floor hits, the void pixel shares, the orb events and teal shares, the late inner-orb return and the outer orb opposite the entry corner, the explosion dodges, late step, under-boss hits, sounds, the shards' position under the player, the share and position of the mark's purple glow on the grey floor and the inner void, the bow's attack ticks and attack delays through one-tile dodges, the transition hits, tells, tell pixel shares, centre shares and landing and style sounds, the worn setups, special energy and boss Defence, the boss Defence and glaives of the two Divisions, the carried supplies, the item menu, the brew's heal, the open tabs and bound keys, the overhead icon colour shares, the overhead sprites drawn around each void, the melee player's tile and the boss HP while he hovers, the judged melee hits, the Soul Split heals, the rift events and hits, the Ralos throws on a rift, the timer bar's yellow shares, the reflected hits and their hitsplat red shares, chat text and spawn, kill and burst sounds, the three runs' seeds, the hole layout, each hole box's dark share before and under the flood, each hole page row's start tile and hole hits, the hole layout and orb tiles of the seed 5 full fight, the walkway order, stop, pixel share, the order and stop on the straight east edge's third tile, pace and tiles per tick, the Control-click's order, pace, tiles per tick, `contextmenu` count, menu and right-click menu, the back wall's three walk orders, their paces and the tiles per tick toward the 5x5 and back, the corner orders and stops, the walk orders and per-walk tiles across the boss in the after-inner stage and the outer void, onto his edge the tick before the outer void by click and by Control-click and out from under him in it, the sound checkboxes, saved sound choices and audio context states, the cue sounds and the lifeforce chat line, the Invincible checkbox, the invincible run's floor hits, prevented death, HP, chat line and Restart search, the invincible full fight's walk orders, prevented deaths with the orb HP they cleared, orb return and HP per tick, and each check's result |
 | `cleanup.log` | Confirmation that the recorded PID stopped |
+| `production-build.log`, `production-server.log`, `production/` | The `production` stage's webpack output, the static server's request log, and the bundle it served |
+| `production.json`, `production.png`, `production-page-errors.json` | The production page after 20 s: its text, the first and last frames' orb numbers with the count of frames since the first and of those that drew none, its screen and page errors |
+| `production-dropped-images.json`, `production-dropped-images.png`, `production-dropped-images-page-errors.json`, `production-dropped-images.har` | The same after the SDK images' first requests were aborted, with the HAR of every attempt |
+| `production-checks.json` | Each production check's result and the attempts of every dropped image |
 
 A browser proof captures the action and the resulting state, not only the last screen. A test count of zero fails the `test` stage. A page error fails the `browser` stage, and so does a failed or empty screenshot, state, console or page-error capture. Prove that a new or changed browser check can fail: break the product or the check on purpose, run `scripts/verify.sh browser`, record that the check fails, then restore it.
 
@@ -174,7 +182,7 @@ scripts/verify.sh stop
 
 ## Helpers
 
-- `scripts/verify.sh [build] [types] [test] [assets] [browser]`: the stages; no argument runs all five. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, imports of the fight's internal modules from outside `src/content/ocellus/js`, test files inside it, and imports in `src/sim` of anything outside `src/sim`. Tests live in `src/content/ocellus/tests` and drive the region.
+- `scripts/verify.sh [build] [types] [test] [assets] [browser] [production]`: the stages; no argument runs all six. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, imports of the fight's internal modules from outside `src/content/ocellus/js`, test files inside it, and imports in `src/sim` of anything outside `src/sim`. Tests live in `src/content/ocellus/tests` and drive the region.
 - `scripts/check-types.test.sh`: planted violations and a clean control for `check-types.mjs`. Run it after changing the rule check; CI runs it too.
 - `scripts/verify.sh serve | doctor | stop`: a manual instance, as above.
 - `scripts/install-beta-sdk.sh`: installs the beta SDK packages with `--no-save`. A build stamps the commit it checked out into each pack's `gitHead`, and the install ends by checking that every installed package names `OSRS_SDK_COMMIT`. `--check` runs only that check. CI calls it without `OSRS_SDK_PACKS`, so it builds from the pinned commit.

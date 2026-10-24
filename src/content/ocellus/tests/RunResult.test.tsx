@@ -124,12 +124,12 @@ describe("Run result", () => {
 
   test.each([
     { bosshp: "50", hp: 50 },
-    { bosshp: "5420", hp: 5420 },
-  ])("a link with bosshp=$bosshp starts P4 at $hp boss hitpoints", ({ bosshp, hp }) => {
+    { bosshp: "5250", hp: 5250 },
+  ])("guard: a link with bosshp=$bosshp starts P4 at $hp boss hitpoints", ({ bosshp, hp }) => {
     expect(startingBossHp(bosshp)).toEqual({ hp, rejected: [] });
   });
 
-  test.each(["5421", "0", "1e3"])("guard, invalid values keep the normal entry HP: a link with bosshp=%s starts P4 at 1355 and lists it as rejected", (bosshp) => {
-    expect(startingBossHp(bosshp)).toEqual({ hp: 1355, rejected: [`bosshp=${bosshp}`] });
+  test.each(["5251", "0", "1e3"])("guard, invalid values keep the normal entry HP: a link with bosshp=%s starts P4 at 1312 and lists it as rejected", (bosshp) => {
+    expect(startingBossHp(bosshp)).toEqual({ hp: 1312, rejected: [`bosshp=${bosshp}`] });
   });
 });

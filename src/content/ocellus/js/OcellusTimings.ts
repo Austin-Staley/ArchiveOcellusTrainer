@@ -142,6 +142,7 @@ type BossHealRecipe = Readonly<{ soulSplitAfterHit: Selected<TickSpan> }>;
 type RiftOffset = Readonly<{ dx: number; dy: number }>;
 type RiftPose = "idle" | "spawn" | "despawn" | "detonate";
 type RiftRecipe = Readonly<{
+  firstCycle: Selected<Cycle>;
   spawnBeforeOnset: Selected<TickSpan>;
   chargeAfterSpawn: Selected<TickSpan>;
   timerBar: Selected<Readonly<{ background: string; fill: string }>>;
@@ -378,6 +379,7 @@ const BOSS_HEALS: BossHealRecipe = {
 };
 
 const RIFTS: RiftRecipe = {
+  firstCycle: selected(cycle(2), "footage-repeated", "team-5", "rifts before every inner void after the first (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
   spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", NO_WIKI_TICKS, vod("V1", "G152"), vod("V2", "k107, k167, k227")),
   chargeAfterSpawn: selected(
     span(23),
@@ -561,14 +563,12 @@ const FLOOR_HOLE_DAMAGE = choice("flood-rate", {
   harmless: selected<HoleRule>({ kind: "harmless" }, "assumption", "unscaled", "no capture shows a hole's effect", NO_WIKI_P4, HOLE_FRAMES),
 });
 
-export type OrbFloor = "safe-floor" | "any-floor";
-export type OuterOrbTile = Readonly<{ kind: "near-player"; floor: OrbFloor }> | Readonly<{ kind: "opposite-entry" }>;
+export type OuterOrbTile = Readonly<{ kind: "near-player" }> | Readonly<{ kind: "opposite-entry" }>;
 type OrbVisual = "innerSpawn" | "outerSpawn" | "idle" | "despawn" | "tell" | "regain";
 
 type LifeforceOrbRecipe = Readonly<{
   drainDivisor: Selected<number>;
   orbDistance: Selected<Readonly<{ min: number; max: number }>>;
-  innerOrbFloor: Selected<"safe-floor">;
   returnAfterStep: Selected<TickSpan>;
   look: Readonly<Record<OrbVisual, Selected<number>>>;
   marker: Selected<Readonly<{ dormant: string; ready: string }>>;
@@ -580,7 +580,6 @@ const spotAnim = (id: number, name: string, basis: Basis, note: string): Selecte
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", STRATEGIES, vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles")),
   orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", STRATEGIES, vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
-  innerOrbFloor: selected("safe-floor", "footage-repeated", "team-4-and-5", "safe floor: inner orbs appear off the void and off the holes", STRATEGIES_P4, vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
   returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", NO_WIKI_TICKS, vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
   look: {
     innerSpawn: selected(
@@ -831,9 +830,9 @@ export const OCELLUS_P4 = {
         RANCOUR_PAGE, TREADS_PAGE, owner("melee setup"), owner("melee amulet"), owner("boots"),
       ),
     }),
-    bossMaxHp: choice("footage-fit", {
+    bossMaxHp: choice("cache", {
       "footage-fit": selected(5420, "inferred", "team-4-and-5", "9820 at 4 and 12020 at 5 is 2200 per player plus 1020, at the 2-player scale solo uses", noWiki("the Ocellus hitpoints table (rev 15380968) lists 9,820 at 4 and 12,020 at 5 but 5,250, not 5,420, for a team of 1 or 2"), vod("V1", "HUD 9820"), vod("V2", "HUD 12020"), SOLO_SCALE),
-      cache: selected(5250, "spec-confirmed", "unscaled", "cache hitpoints; matched neither team bar", BOSS_INFOBOX, cache("npc 16677 stats")),
+      cache: selected(5250, "spec-confirmed", "unscaled", "the Ocellus hitpoints table lists 5,250 after phase 1 for a team of 1 or 2, the size a solo trainer plays at, and the cache's hitpoints match; the footage's 4- and 5-player bars do not apply", BOSS_INFOBOX, cache("npc 16677 stats")),
     }),
     entryHpFraction: choice("quarter", {
       quarter: selected(0.25, "inferred", "team-4-and-5", "halfway between the two observations", NO_WIKI_P4, vod("V1", "2445 / 9820"), vod("V2", "3118 / 12020")),
@@ -842,8 +841,17 @@ export const OCELLUS_P4 = {
     }),
     explosions: choice("v2-tell-then-six", {
       "wiki-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "spec-single", "unscaled", "six marks every 2 ticks, damage a tick later; first mark from k55; 16 from one teammate splat (inferred)", STRATEGIES, vod("V2", "k55-k65, k62")),
-      "v2-seven": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 7, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "footage-once", "team-5", "bursts on every odd tick k55 to k67 (C4)", noWiki("the wiki's phase 4 steps say six (Strategies rev 15381030); seven is V2's count"), vod("V2", "k55-k67")),
       "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-4-and-5", "k55 read as a tell, marks k57 to k67 (C4); the default because sound 12537 plays at hit + 5 to hit + 15 in every void of both clips and the marks are taken to sit on it", STRATEGIES_P4, vod("V2", "k55-k67"), vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
+    }),
+    explosionDamageReduction: choice("wiki-60", {
+      "wiki-60": selected(
+        60,
+        "spec-single",
+        "unscaled",
+        "the boss takes 60% less damage while the explosions are occurring: from the first mark, when the first explosion begins on the player's tile, to the last impact, when the last one deals its damage; the series start before it only signals the attack; a hit counts on the tick it lands, and each hit rounds down; the window's ends, the landing tick and the rounding are inferred; the wiki tags the figure citation needed and says it is for 5-tick weapons and may differ with attack speed, so every weapon takes it here (inferred)",
+        STRATEGIES_P4,
+      ),
+      "wiki-50": selected(50, "spec-single", "unscaled", "the Ocellus page: Ocellus takes 50% reduced damage while the void explosions are happening; the same window, landing tick and rounding as wiki-60 (inferred)", BOSS_INFOBOX),
     }),
     specialSelection: choice("random-uniform", {
       "random-uniform": selected<SpecialSelection>({ kind: "random-uniform" }, "inferred", "unscaled", "V1 repeats melee, so no fixed rotation explains both clips (C3)", NO_WIKI_P4, vod("V1", "G62, G90"), vod("V2", "k77-k257")),
@@ -854,10 +862,6 @@ export const OCELLUS_P4 = {
     unclaimedOuterOrb: choice("heals-boss", {
       "heals-boss": selected<UnclaimedOrbRule>({ kind: "heals-boss", afterHit: span(19) }, "inferred", "team-4-and-5", "three heals 19 ticks after an outer hit; +51 equals a teammate's 51 (C17)", NO_WIKI_P4, vod("V1", "G147"), vod("V2", "k102, k222")),
       off: selected<UnclaimedOrbRule>({ kind: "off" }, "assumption", "unscaled", "the mechanism is inferred only", NO_WIKI_P4, vod("V1", "G147")),
-    }),
-    riftFirstCycle: choice("cycle-2", {
-      "cycle-2": selected<Cycle>(cycle(2), "footage-repeated", "team-5", "rifts before every inner void after the first (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
-      "cycle-3": selected<Cycle>(cycle(3), "footage-once", "team-4", "none in view before cycle 2, two before cycle 3", noWiki("the wiki's phase 4 steps spawn rifts at every rise but the first (Strategies rev 15381030); cycle 3 is V1's reading"), vod("V1", "G90-G95, G152")),
     }),
     innerVoidFloor: INNER_VOID_FLOOR,
     floorHoleLayout: FLOOR_HOLE_LAYOUT,
@@ -889,8 +893,7 @@ export const OCELLUS_P4 = {
         "on the 5x5 rim tile farthest in a straight line from the tile where the player last stepped into the 5x5, or from the player when they are outside it at the hit, never on a hole; ties are a seeded pick; a guide says the orb is pretty much always on the opposite side of where you enter, and its frame shows the orb on the far edge",
         NO_WIKI_P4, owner("the orb opposite of where you enter", "2026-10-23"),
       ),
-      "safe-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "safe-floor" }, "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", STRATEGIES_P4, vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
-      "any-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "any-floor" }, "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", noWiki("the wiki's phase 4 steps put the orb on a safe tile (Strategies rev 15381030); any floor is V2's reading"), vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
+      "safe-floor": selected<OuterOrbTile>({ kind: "near-player" }, "footage-repeated", "team-4", "safe floor: outer orbs on the 5x5 edge, off the void and off the holes, collected without leaving the square", STRATEGIES_P4, vod("V1", "G74, G79, G128, G135"), ORB_OFF_HOLES),
     }),
     focus: choice("full-fight", {
       "full-fight": selected<Focus<Mechanic>>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", NO_WIKI_PRACTICE, PRACTICE),
@@ -958,9 +961,9 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     bossMaxHp: pick("bossMaxHp"),
     entryHpFraction: pick("entryHpFraction"),
     explosions: pick("explosions"),
+    explosionDamageReduction: pick("explosionDamageReduction"),
     specialSelection: pick("specialSelection"),
     unclaimedOuterOrb: pick("unclaimedOuterOrb"),
-    riftFirstCycle: pick("riftFirstCycle"),
     innerVoidFloor: pick("innerVoidFloor"),
     floorHoleLayout: lookup("floorHoleLayout") === SCATTERED ? new ResolvedChoice("floorHoleLayout", scatteredHoleLayout(runSeed)) : pick("floorHoleLayout"),
     floorHoleDamage: pick("floorHoleDamage"),

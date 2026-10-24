@@ -78,7 +78,6 @@ describe("U1 cycle skeleton", () => {
     [{ focus: "transition-attacks" }, 27],
     [{ focus: "boss-heals" }, 6],
     [{ focus: "rifts" }, 62],
-    [{ focus: "rifts", riftFirstCycle: "cycle-3" }, 122],
     [{ focus: "floor-holes" }, 0],
     [{ focus: "rifts", drillStart: "cycle-start" }, 0],
   ] as const)("the run under %o starts on P4 tick %i", (selection, start) => {
@@ -123,9 +122,9 @@ describe("U1 cycle skeleton", () => {
       drill.dispose();
       return boss;
     };
-    expect(entry({})).toEqual({ npcId: 16677, hp: 1355, maxHp: 5420, visible: false, defence: 250 });
-    expect(entry({ selection: { bossMaxHp: "cache" } })).toEqual({ npcId: 16677, hp: 1312, maxHp: 5250, visible: false, defence: 250 });
-    expect(entry({ selection: { entryHpFraction: "v1-observed" } })).toEqual({ npcId: 16677, hp: 1349, maxHp: 5420, visible: false, defence: 250 });
+    expect(entry({})).toEqual({ npcId: 16677, hp: 1312, maxHp: 5250, visible: false, defence: 250 });
+    expect(entry({ selection: { bossMaxHp: "footage-fit" } })).toEqual({ npcId: 16677, hp: 1355, maxHp: 5420, visible: false, defence: 250 });
+    expect(entry({ selection: { entryHpFraction: "v1-observed" } })).toEqual({ npcId: 16677, hp: 1307, maxHp: 5250, visible: false, defence: 250 });
   });
 
   test("guard: a restart starts a new run: entry HP again and a log from P4 tick 0", async () => {
@@ -133,10 +132,10 @@ describe("U1 cycle skeleton", () => {
     drill.tickTo(4);
     await drill.click(UNDER_BOSS);
     drill.tickTo(9);
-    expect(drill.region.snapshot()?.boss.hp).toBe(1301);
+    expect(drill.region.snapshot()?.boss.hp).toBe(1258);
     drill.restart();
     drill.tickTo(1);
-    expect([drill.region.snapshot()?.boss.hp, drill.rows().map((row) => row.tick)]).toEqual([1355, [0, 1]]);
+    expect([drill.region.snapshot()?.boss.hp, drill.rows().map((row) => row.tick)]).toEqual([1312, [0, 1]]);
     drill.dispose();
   });
 
@@ -159,8 +158,8 @@ describe("U1 cycle skeleton", () => {
       return landed;
     };
     expect([await shotFromTheRing(4), await shotFromTheRing(5)]).toEqual([
-      [[[7, "invulnerable", 54]], { atBossStep: 1355, atPostTick: 1355 }],
-      [[[8, "passed", 54]], { atBossStep: 1355, atPostTick: 1301 }],
+      [[[7, "invulnerable", 54]], { atBossStep: 1312, atPostTick: 1312 }],
+      [[[8, "passed", 54]], { atBossStep: 1312, atPostTick: 1258 }],
     ]);
   });
 
@@ -268,13 +267,13 @@ describe("U1 cycle skeleton", () => {
     Random.setRandom(original);
     expect([low.after, high.after]).toEqual([0.25, 0.75]);
     expect(low.bossHp).toEqual(high.bossHp);
-    expect([low.bossHp[low.bossHp.length - 1], low.draws]).toEqual([1310, 9]);
+    expect([low.bossHp[low.bossHp.length - 1], low.draws]).toEqual([1267, 9]);
   });
 
   test("the URL selects data-file options and lists unknown keys, options and seeds by name", () => {
-    const parsed = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=7&explosions=v2-seven&focus=everything&nope=1"), () => 99);
+    const parsed = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=7&explosions=wiki-six&focus=everything&nope=1"), () => 99);
     expect([parsed.config.seed, parsed.config.choices.explosions.key, parsed.config.choices.focus.key, parsed.rejected]).toEqual([
-      7, "v2-seven", "full-fight", ["nope=1", "focus=everything"],
+      7, "wiki-six", "full-fight", ["nope=1", "focus=everything"],
     ]);
     const unseeded = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=-3"), () => 99);
     expect([unseeded.config.seed, unseeded.rejected]).toEqual([99, ["seed=-3"]]);

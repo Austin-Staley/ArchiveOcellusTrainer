@@ -1,4 +1,4 @@
-import type { OrbFloor, OuterOrbTile, ResolvedChoices } from "../OcellusTimings";
+import type { OuterOrbTile, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Seed, Tick, Tile } from "../../../../sim/brands";
 import type { VoidKind } from "../P4Types";
@@ -7,7 +7,7 @@ import { reach } from "../../../../sim/tiles";
 import { FOOTPRINT, NEAR_SQUARE, PLATFORM, VOID_MASKS } from "./floor";
 import { roll } from "./roll";
 
-const { orbDistance, innerOrbFloor } = OCELLUS_P4.lifeforceOrb;
+const { orbDistance } = OCELLUS_P4.lifeforceOrb;
 const RIM = NEAR_SQUARE.minus(FOOTPRINT);
 
 const straightLine = (a: Tile, b: Tile) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
@@ -19,7 +19,7 @@ export function enteredSquare(entered: Tile | null, player: Tile): Tile | null {
 function placement(kind: VoidKind, choices: ResolvedChoices): OuterOrbTile {
   switch (kind) {
     case "inner-void":
-      return { kind: "near-player", floor: innerOrbFloor.value };
+      return { kind: "near-player" };
     case "outer-void":
       return choices.outerOrbTile.option.value;
     default: {
@@ -29,10 +29,10 @@ function placement(kind: VoidKind, choices: ResolvedChoices): OuterOrbTile {
   }
 }
 
-function nearPlayer(player: Tile, kind: VoidKind, floor: OrbFloor, holes: TileSet): readonly Tile[] {
+function nearPlayer(player: Tile, kind: VoidKind, holes: TileSet): readonly Tile[] {
   const { min, max } = orbDistance.value;
   const allowed = PLATFORM.tiles().filter(
-    (candidate) => !FOOTPRINT.contains(candidate) && !holes.contains(candidate) && !(floor === "safe-floor" && VOID_MASKS[kind].contains(candidate)) && reach(candidate, player) >= min,
+    (candidate) => !FOOTPRINT.contains(candidate) && !holes.contains(candidate) && !VOID_MASKS[kind].contains(candidate) && reach(candidate, player) >= min,
   );
   const nearest = Math.min(...allowed.map((candidate) => reach(candidate, player)));
   return allowed.filter((candidate) => reach(candidate, player) <= Math.max(max, nearest));
@@ -47,7 +47,7 @@ function oppositeEntry(entered: Tile, holes: TileSet): readonly Tile[] {
 function allowedTiles(rule: OuterOrbTile, player: Tile, entered: Tile, kind: VoidKind, holes: TileSet): readonly Tile[] {
   switch (rule.kind) {
     case "near-player":
-      return nearPlayer(player, kind, rule.floor, holes);
+      return nearPlayer(player, kind, holes);
     case "opposite-entry":
       return oppositeEntry(entered, holes);
     default: {

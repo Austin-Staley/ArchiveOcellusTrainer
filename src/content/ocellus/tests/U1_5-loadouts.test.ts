@@ -1,6 +1,6 @@
 import { AttackStyle, AttackStylesController, TestNpc } from "osrs-sdk";
-import type { IncomingAttackRoll, IncomingAttackRollModifiers, Location, Projectile, Region } from "osrs-sdk";
-import { startDrill } from "./drill";
+import type { AttackBonuses, IncomingAttackRoll, IncomingAttackRollModifiers, Location, Projectile, Region } from "osrs-sdk";
+import { startDrill, UNDER_BOSS } from "./drill";
 
 type Target = Readonly<{ magic: number; defence: number; size: number }>;
 
@@ -51,6 +51,26 @@ function firstAttack(drill: Drill, at: Location, target: Target, maxedHits = Inf
   drill.player().setAggro(dummy);
   for (let tick = 0; tick < 12 && (dummy.received.length === 0 || dummy.landed < dummy.received.length); tick++) drill.region.world.tickWorld();
   return dummy;
+}
+
+async function divisionInTheExplosions(seed: number, throwAfter: number) {
+  const drill = startDrill({ seed });
+  await drill.click({ x: 5, y: 2 });
+  drill.tickTo(throwAfter);
+  drill.clickInventory(28922);
+  drill.player().useSpecialAttack = true;
+  const boss = drill.boss();
+  const rolledAgainst = new Map<AttackBonuses, number>();
+  const observe = boss.incomingAttackRollModifiers.bind(boss);
+  vi.spyOn(boss, "incomingAttackRollModifiers").mockImplementation((attack) => {
+    if (!rolledAgainst.has(attack.bonuses)) rolledAgainst.set(attack.bonuses, boss.currentStats.defence);
+    return observe(attack);
+  });
+  await drill.click(UNDER_BOSS);
+  drill.tickTo(throwAfter + 4);
+  const judged = drill.events("player-hit-judged").map((event) => [event.at, event.outcome, event.requested]);
+  drill.dispose();
+  return { firstGlaive: judged[0], glaives: judged.length, rolledAgainst: [...rolledAgainst.values()] };
 }
 
 const RANGED_TARGET: Target = { magic: 300, defence: 0, size: 1 };
@@ -160,7 +180,7 @@ describe("U1.5 loadouts", () => {
     drill.dispose();
   });
 
-  test("Division drains Ocellus's Defence only for glaives that land damage, so a spec into the invulnerable lead-in drains nothing", () => {
+  test("Division drains Ocellus's Defence only for glaives that land damage, so a spec into the invulnerable lead-in drains nothing, nor does a glaive the explosion reduction cuts to 0", () => {
     const spec = (throwAt: number, landedBy: number) => {
       const drill = startDrill({ seed: 4 });
       drill.walkTo({ x: 5, y: 2 });
@@ -174,9 +194,59 @@ describe("U1.5 loadouts", () => {
       drill.dispose();
       return outcome;
     };
-    expect([spec(4, 7), spec(9, 12)]).toEqual([
-      [["invulnerable", "invulnerable"], 1355, 250, 50],
-      [["passed", "passed"], 1340, 176, 50],
+    expect([spec(4, 7), spec(9, 12), spec(16, 20)]).toEqual([
+      [["invulnerable", "invulnerable"], 1312, 250, 50],
+      [["passed", "passed"], 1297, 176, 50],
+      [["reduced", "reduced"], 1307, 213, 50],
     ]);
+  });
+
+  test.each([
+    { throwAfter: 16, landsAt: 19 },
+    { throwAfter: 14, landsAt: 17 },
+  ])("in the explosions Division's second glaive rolls against the Defence the first glaive leaves: seed 4's first glaive lands at $landsAt, requests 2 and keeps 0, so nothing drains before the second roll", async ({ throwAfter, landsAt }) => {
+    expect(await divisionInTheExplosions(4, throwAfter)).toEqual({ firstGlaive: [landsAt, "reduced", 2], glaives: 2, rolledAgainst: [250, 250] });
+  });
+
+  test("guard: in the explosions a first glaive that keeps damage drains the Defence the second glaive rolls against: seed 37's first glaive requests 17 and keeps 6", async () => {
+    expect(await divisionInTheExplosions(37, 16)).toEqual({ firstGlaive: [19, "reduced", 17], glaives: 2, rolledAgainst: [250, 213] });
+  });
+
+  test("guard, main filtered landed glaives: an attack after Division's glaives land rolls against the Defence they left, while a glaive still in flight counts: on seed 37 the second glaive at 18 rolls against 213, both land at 21 to leave 176, and the dodge-sped attack at 22 rolls against 176", async () => {
+    const drill = startDrill({ seed: 37, selection: { focus: "explosions" } });
+    drill.tickTo(16);
+    drill.clickInventory(28922);
+    await drill.click({ x: 6, y: 1 });
+    drill.tickTo(17);
+    drill.player().useSpecialAttack = true;
+    const boss = drill.boss();
+    const rolledAgainst = new Map<AttackBonuses, [number, number]>();
+    const observe = boss.incomingAttackRollModifiers.bind(boss);
+    vi.spyOn(boss, "incomingAttackRollModifiers").mockImplementation((attack) => {
+      const run = drill.region.snapshot()?.run;
+      if (!rolledAgainst.has(attack.bonuses)) rolledAgainst.set(attack.bonuses, [run?.kind === "running" ? run.tick : -1, boss.currentStats.defence]);
+      return observe(attack);
+    });
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(18);
+    await drill.click({ x: 5, y: 1 });
+    drill.tickTo(19);
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(20);
+    await drill.click({ x: 6, y: 1 });
+    drill.tickTo(21);
+    const leftByGlaives = boss.currentStats.defence;
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(22);
+    drill.dispose();
+    expect({ leftByGlaives, rolledAgainst: [...rolledAgainst.values()] }).toEqual({
+      leftByGlaives: 176,
+      rolledAgainst: [
+        [18, 250],
+        [18, 213],
+        [22, 176],
+        [22, 176],
+      ],
+    });
   });
 });

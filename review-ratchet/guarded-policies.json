@@ -19,6 +19,38 @@
       ]
     },
     {
+      "path": "scripts/install-beta-sdk.sh",
+      "tests": ["scripts/install-beta-sdk.test.sh"],
+      "policies": [
+        {
+          "policy": "prebuilt packs from another commit are refused",
+          "mutation": [{ "find": "    if [[ \"${commit}\" != \"${OSRS_SDK_COMMIT}\" ]]; then\n", "replace": "    if false; then\n" }]
+        },
+        {
+          "policy": "a build stamps the commit it checked out into every pack",
+          "mutation": [{ "find": "    npm pkg set \"gitHead=${built}\" --workspaces --include-workspace-root\n", "replace": "" }]
+        },
+        {
+          "policy": "prebuilt packs at the pin are used",
+          "mutation": [{ "find": "if [[ -n \"${OSRS_SDK_PACKS}\" ]] && packs_at_pin", "replace": "if false && packs_at_pin" }]
+        },
+        {
+          "policy": "the check fails unless every installed package is at the pin",
+          "mutation": [{ "find": "  if [[ \"${installed}\" == \"${OSRS_SDK_COMMIT}\" ]]; then\n", "replace": "  if true; then\n" }]
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify.sh",
+      "tests": ["scripts/install-beta-sdk.test.sh"],
+      "policies": [
+        {
+          "policy": "verify reinstalls unless the installed SDK is at the pin",
+          "mutation": [{ "find": "  scripts/install-beta-sdk.sh --check && return 0\n", "replace": "  return 0\n" }]
+        }
+      ]
+    },
+    {
       "path": "scripts/check-types.mjs",
       "tests": ["scripts/check-types.test.sh"],
       "policies": [

@@ -289,13 +289,8 @@ json() {
 }
 
 ensure_deps() {
-  if node -e 'require.resolve("osrs-sdk-react"); require.resolve("osrs-sdk-assets/package.json")' 2>/dev/null; then
-    return 0
-  fi
+  scripts/install-beta-sdk.sh --check && return 0
   log "installing dependencies and the beta SDK"
-  if [[ -z "${OSRS_SDK_PACKS:-}" && -d "$HOME/osrs-sims/packs" ]]; then
-    export OSRS_SDK_PACKS="$HOME/osrs-sims/packs"
-  fi
   npm ci --no-audit --no-fund && scripts/install-beta-sdk.sh
 }
 

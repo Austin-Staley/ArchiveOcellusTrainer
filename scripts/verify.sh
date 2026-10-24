@@ -845,7 +845,6 @@ wait_until_ticking() {
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" --timeout 90000 >/dev/null || { log "the drill never started ticking"; return 1; }
 }
 
-# The point is the SDK's own projection of the tile at the current camera, read once P4 tick $3 has started ("now" reads it at once).
 click_tile() {
   local page="$1" tile="$2" after="$3" modifier="${4:-none}" read orders
   read="$(ab --json eval "new Promise((done) => {

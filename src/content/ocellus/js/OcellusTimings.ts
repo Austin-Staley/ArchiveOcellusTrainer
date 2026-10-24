@@ -928,7 +928,6 @@ class ResolvedChoice<K extends ChoiceName> {
 }
 export type ResolvedChoices = { readonly [K in ChoiceName]: ResolvedChoice<K> };
 
-type DrillRequest = Readonly<{ seed: Seed; selection?: DrillSelection }>;
 export type DrillConfig = Readonly<{ seed: Seed; choices: ResolvedChoices; bossEntryHp: number | null }>;
 type ParsedDrill = Readonly<{ config: DrillConfig; invincible: boolean; rejected: readonly string[] }>;
 
@@ -975,11 +974,6 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
 
 function isChoiceName(name: string): name is ChoiceName {
   return hasKey(OCELLUS_P4.choices, name);
-}
-
-export function resolveDrill(request: DrillRequest): DrillConfig {
-  const selection: Readonly<Record<string, string | undefined>> = request.selection ?? {};
-  return { seed: request.seed, choices: resolveChoices((name) => selection[name], [], request.seed), bossEntryHp: null };
 }
 
 export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {

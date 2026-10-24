@@ -37,7 +37,7 @@ import type { Moment } from "../p4/schedule";
 import { Schedule } from "../p4/schedule";
 import { VoidRift } from "./VoidRift";
 
-type RowDraft = Omit<TickRow, "playerAtPostTick" | "bossHp" | "combatDraws"> & Readonly<{ bossHpAtBossStep: number; drawsAtBossStep: number }>;
+type RowDraft = Omit<TickRow, "playerAtPostTick" | "bossHp" | "combatDraws"> & Readonly<{ bossHpAtBossStep: number; drawsAtBossStep: number; riftsAtBossStep: readonly Rift[] }>;
 
 type Run =
   | Readonly<{ kind: "waiting"; inputs: readonly InputObservation[] }>
@@ -325,10 +325,14 @@ export class Ocellus extends Mob {
         return null;
       case "stepping":
       case "killed": {
-        const { bossHpAtBossStep, drawsAtBossStep, ...draft } = run.draft;
+        const { bossHpAtBossStep, drawsAtBossStep, riftsAtBossStep, ...draft } = run.draft;
         const playerAtPostTick = this.target.observe();
         const died = run.kind === "stepping" && playerAtPostTick.hp <= 0;
-        const events: readonly FightEvent[] = died ? [...draft.events, { kind: "run-ended", at: draft.tick, reason: "death" }] : draft.events;
+        const riftHits = riftsAtBossStep.flatMap((rift) =>
+          rift.mob.hitsThisTick.map((hit): FightEvent => ({ kind: "rift-hit", at: draft.tick, rift: rift.id, style: incomingStyle(hit.attackStyle), damage: hit.damage })),
+        );
+        const landed = [...draft.events, ...riftHits];
+        const events: readonly FightEvent[] = died ? [...landed, { kind: "run-ended", at: draft.tick, reason: "death" }] : landed;
         const row: TickRow = {
           ...draft,
           playerAtPostTick,
@@ -401,9 +405,10 @@ export class Ocellus extends Mob {
       inputs,
       bossHpAtBossStep: this.currentStats.hitpoint,
       drawsAtBossStep: this.target.combatDraws,
+      riftsAtBossStep: this.rifts,
     };
     this.healSplats = this.healSplats.filter((splat) => splat.lastShown >= moment.tick);
-    const judged = [...this.judgeLandingHits(moment), ...this.riftHitsLanded(moment.tick)];
+    const judged = this.judgeLandingHits(moment);
     super.queueStep();
     const logged = [...judged, ...phaseEvents(last, moment.phase, moment.tick)];
     if (this.currentStats.hitpoint <= 0) {
@@ -429,15 +434,6 @@ export class Ocellus extends Mob {
         if (verdict.outcome === "blocked") this.reflect(verdict, requested, moment.tick);
         return { kind: "player-hit-judged", at: moment.tick, style, outcome: verdict.outcome, requested };
       });
-  }
-
-  /** The SDK steps newer mobs first, so a rift's hits for this tick have landed before the boss steps. */
-  private riftHitsLanded(at: Tick): FightEvent[] {
-    return this.rifts.flatMap((rift) =>
-      rift.mob.incomingProjectiles
-        .filter((projectile) => projectile.remainingDelay === 0)
-        .map((projectile): FightEvent => ({ kind: "rift-hit", at, rift: rift.id, style: incomingStyle(projectile.attackStyle), damage: projectile.damage })),
-    );
   }
 
   private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): Verdict {

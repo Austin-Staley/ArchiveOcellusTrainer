@@ -53,7 +53,7 @@ describe("U6 boss overheads, heals and rifts", () => {
   test.each([
     { target: "the size-1 north-east rift once", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 71, hits: [35], hpAfter: 9 },
     { target: "the size-1 north-east rift once more on its next swing", seed: 2, selection: { focus: "rifts", setup: "melee" }, aggroAt: 68, pick: northEastRift, swingAt: 76, hits: [9], hpAfter: 0 },
-    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee", deflect: "none", hoverMeleeReach: "reachable" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1331 },
+    { target: "the size-3 boss three times", seed: 4, selection: { focus: "rifts", drillStart: "cycle-start", setup: "melee", deflect: "none", hoverMeleeReach: "reachable" }, aggroAt: 12, pick: (drill: Drill) => drill.boss(), swingAt: 13, hits: [4, 12, 8], hpAfter: 1288 },
   ] as const)("one scythe swing hits $target", ({ seed, selection, aggroAt, pick, swingAt, hits, hpAfter }) => {
     const drill = startDrill({ seed, selection });
     drill.tickTo(aggroAt);
@@ -204,8 +204,8 @@ describe("U6 boss overheads, heals and rifts", () => {
     const drill = startDrill({ selection: TRANSITIONS });
     drill.tickTo(68);
     expect(drill.events("boss-healed").map((e) => [e.at, e.cause, e.receipt])).toEqual([
-      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1355, afterHp: 1404 }],
-      [67, { kind: "soul-split", ordinal: 1 }, { requested: 47, applied: 47, beforeHp: 1404, afterHp: 1451 }],
+      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1312, afterHp: 1361 }],
+      [67, { kind: "soul-split", ordinal: 1 }, { requested: 47, applied: 47, beforeHp: 1361, afterHp: 1408 }],
     ]);
     drill.dispose();
   });
@@ -219,8 +219,8 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.tickTo(68);
     expect(drill.events("special-hit").map((e) => [e.at, e.style, e.receipt.prayer, e.receipt.applied])).toEqual([[37, "magic", null, 49], [65, "ranged", "ranged", 7]]);
     expect(drill.events("boss-healed").map((e) => [e.at, e.cause, e.receipt])).toEqual([
-      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1355, afterHp: 1404 }],
-      [62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1404, afterHp: 1429 }],
+      [39, { kind: "soul-split", ordinal: 0 }, { requested: 49, applied: 49, beforeHp: 1312, afterHp: 1361 }],
+      [62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1361, afterHp: 1386 }],
     ]);
     drill.dispose();
   });

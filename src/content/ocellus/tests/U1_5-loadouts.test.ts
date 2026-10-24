@@ -175,8 +175,8 @@ describe("U1.5 loadouts", () => {
       return outcome;
     };
     expect([spec(4, 7), spec(9, 12)]).toEqual([
-      [["invulnerable", "invulnerable"], 1355, 250, 50],
-      [["passed", "passed"], 1340, 176, 50],
+      [["invulnerable", "invulnerable"], 1312, 250, 50],
+      [["passed", "passed"], 1297, 176, 50],
     ]);
   });
 });

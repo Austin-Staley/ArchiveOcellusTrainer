@@ -86,7 +86,7 @@ Each run writes to `.verify/<UTC timestamp>/` (gitignored; override with `VERIFY
 | `after.json`, `after.png` | State and screenshot after the walk |
 | `edge-click.json`, `edge-arrived.json`, `edge.json`, `edge.png` | Canvas pixel of the click past the platform's north edge, the state when the player stops on the edge tile and again 3 ticks later, and the screen with the player on the edge |
 | `console.log`, `page-errors.json` | Browser console and uncaught page errors of the first page |
-| `boss.png` | The default 3D view once the boss is present (P4 tick 12 or later) |
+| `boss.png`, `boss-bar.json` | The default 3D view once the boss is present (P4 tick 12 or later), and every boss HP bar text the canvas drew, by P4 tick, up to then |
 | `cycle-ring-click.json` | Canvas pixel of the click at P4 tick 39 that walks the player into the ring before the flood |
 | `cycle-snapshot.json`, `cycle.json` | Probe snapshot and fight log once P4 tick 70 has run |
 | `focus.json`, `focus.png` | Fight log and screen after the focus control reloaded the drill on `transition-attacks`, whose first row must be P4 tick 27, 5 ticks before its first tell |

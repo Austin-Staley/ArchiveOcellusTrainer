@@ -22,6 +22,7 @@ EDGE_ORDER_TILE='{"x":8,"y":0}'
 EDGE_STOP_TILE='{"x":8,"y":1}'
 EDGE_HOLD_TICKS=3
 CYCLE_LAST_HIDDEN_TICK=3
+BOSS_BAR_AT_ENTRY="1312 / 5250 (25.0%)"
 CYCLE_RING_TICK=39
 CYCLE_LAST_TICK=70
 CYCLE_STAGE_ENTRIES='[[0,"lead-in"],[8,"inner-void"],[30,"after-inner"],[39,"outer-void"],[59,"after-outer"],[68,"inner-void"]]'
@@ -198,7 +199,7 @@ STYLE_SOUNDS='[[34.2,12554],[64.4,12555],[65.1,12556],[92.1,12572],[97.1,12567]]
 STYLE_WINDOWS='[[32,37.5],[60,65.5],[92,97.5]]'
 SOUND_TOLERANCE_TICKS=0.2
 SPECIAL_EXPECTED='{"protected":[37,"magic",{"requested":8,"applied":8,"beforeHp":99,"afterHp":91,"prayer":"magic"}],"late":[37,"magic",{"requested":49,"applied":49,"beforeHp":99,"afterHp":50,"prayer":null}],"told":[[32,"vortex","magic"],[60,"spike-disk","ranged"],[92,"black-disk","melee"]]}'
-ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[12,{"x":9,"y":4},49]],"matured":[[24,{"x":9,"y":4}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[35,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1355,"afterHp":1380}]]}'
+ORB_EXPECTED='{"told":[[11,"inner-void"]],"drained":[[12,49,50]],"spawned":[[12,{"x":9,"y":4},49]],"matured":[[24,{"x":9,"y":4}]],"returned":{"requested":49,"applied":49,"beforeHp":50,"afterHp":99},"skipExpired":[[35,"inner-void"],[61,"outer-void"]],"skipHeal":[[62,{"kind":"unclaimed-orb"},{"requested":25,"applied":25,"beforeHp":1312,"afterHp":1337}]]}'
 RIFT_QUERY="?seed=1&focus=rifts&drillStart=cycle-start"
 OVERHEAD_SHOT_TICKS="5 31 35 45"
 OVERHEAD_GAP_DRAWS='{"37":["440-11"],"38":[],"39":["440-16"],"66":["440-11"],"67":[],"68":["440-15"]}'
@@ -251,7 +252,7 @@ REFLECT_MIN_SPLAT_SHARE=5
 REFLECT_MAX_CLEAR_SHARE=1
 SOUL_SPLIT_HEAL_TICK=39
 RIFT_EXPECTED='{"spawned":[[67,"rift-67-0",{"x":2,"y":2}],[67,"rift-67-1",{"x":10,"y":2}]],"destroyed":"rift-67-1","bursts":[[90,"rift-67-0",{"requested":14,"applied":14,"beforeHp":99,"afterHp":85,"prayer":null}]]}'
-SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1355,"afterHp":1404}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1404,"afterHp":1451}]]'
+SOUL_SPLIT_EXPECTED='[[39,{"kind":"soul-split","ordinal":0},{"requested":49,"applied":49,"beforeHp":1312,"afterHp":1361}],[67,{"kind":"soul-split","ordinal":1},{"requested":47,"applied":47,"beforeHp":1361,"afterHp":1408}]]'
 KILL_CHAT="Destroying the void rift empowers you!"
 RIFT_SOUND_SAMPLES='{"12640":11025,"12641":14332,"12642":26460,"12643":7717}'
 RIFT_SPAWN_SOUNDS='[[67.2,12643],[67.2,12643]]'
@@ -583,7 +584,21 @@ drive_edge() {
   ab screenshot "$VERIFY_DIR/edge.png" >/dev/null || { log "edge screenshot failed"; return 1; }
 }
 
+record_boss_bar() {
+  ab eval '(() => {
+    const bar = {};
+    window.__bossBar = bar;
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      const t = /^\d+ \/ \d+ \(\d+\.\d%\)$/.test(String(text)) ? window.__archiveOcellusProbe?.snapshot().fight?.run.tick : undefined;
+      if (t !== undefined && !(bar[t] ??= []).includes(String(text))) bar[t].push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  })()' >/dev/null
+}
+
 drive_lead_in() {
+  record_boss_bar || { log "the boss bar probe was not installed"; return 1; }
   fight_tick_at_least 0 90000 || { log "the boss never took its first P4 step"; return 1; }
   ab screenshot "$VERIFY_DIR/hidden.png" >/dev/null || { log "lead-in screenshot failed"; return 1; }
   probe "snapshot()" >"$VERIFY_DIR/hidden.json"
@@ -609,6 +624,7 @@ drive_cycle() {
   local cx cy
   fight_tick_at_least 12 30000 || { log "the boss never stepped to P4 tick 12"; return 1; }
   ab screenshot "$VERIFY_DIR/boss.png" >/dev/null || { log "boss screenshot failed"; return 1; }
+  ab --json eval "window.__bossBar" | json data.result >"$VERIFY_DIR/boss-bar.json" || { log "boss bar capture failed"; return 1; }
   canvas_centre || { log "canvas box unreadable"; return 1; }
   step_south_and_back_on_marks $EXPLOSION_INNER_MARKS || { log "the steps on the inner explosion marks were not clicked"; return 1; }
   click_after_tick "$SPECIAL_PRAY_TICK" "$PROTECT_MAGIC_RIGHT_PX" "$PROTECT_DOWN_PX" || { log "Protect from Magic was not clicked before the vortex"; return 1; }
@@ -1717,7 +1733,7 @@ drive() {
   drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
 
   local capture
-  for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
+  for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png boss-bar.json cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
     void-inner.png void-flood.png void-floor.json void-console.log void-page-errors.json \
     attack-click.json ring-click.json flood-ring.png void-shot.json void-shot-console.log void-shot-page-errors.json \
     orb-hit.png $(seq -f "orb-dormant-%g.png" 1 "$ORB_FRAMES") $(seq -f "orb-glow-%g.png" 1 "$ORB_FRAMES") orb-click.json orb.json orb-console.log orb-page-errors.json orb-skip.png orb-skip.json orb-skip-console.log orb-skip-page-errors.json \
@@ -1760,7 +1776,7 @@ drive() {
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
-      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks] = process.argv.slice(1);
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -1964,7 +1980,9 @@ drive() {
     const cueExpected = JSON.parse(cueSounds).map(([at, id]) => [at, cueSamplesOf[id]]);
     const savedSound = cueSaved?.values ?? {};
     const savedSoundOff = savedOff?.values ?? {};
+    const bossBar = Object.entries(read("boss-bar.json")).map(([t, texts]) => [Number(t), texts]).sort(([a], [b]) => a - b);
     const observed = {
+      bossBar,
       firstWalkOrders: cycle.rows.flatMap((row) => row.inputs.filter((i) => i.kind === "walk-ordered").map((i) => i.destination)).slice(0, 2),
       edge: { arrived: [edgeArrived.tick, edgeArrived.player], held: [edge.tick, edge.player] },
       stageEntries: events(cycle.rows, "stage-entered", (e) => [e.at, e.stage]),
@@ -2194,6 +2212,7 @@ drive() {
       bossIsExpectedNpc: snapshot.fight?.boss.npcId === Number(bossNpc),
       bossHiddenInLeadIn: hidden.fight?.run.kind === "running" && hidden.fight.run.tick <= Number(lastHiddenTick) && hidden.fight.boss.visible === false,
       bossDrawnOncePresent: snapshot.fight?.boss.visible === true,
+      bossBarReadsEntryHpOncePresent: bossBar.some(([t]) => t === 12) && bossBar.filter(([t]) => t <= 12).every(([, texts]) => sameJson(texts, JSON.stringify([bossBarAtEntry]))),
       logHasEveryTick: cycle.rows.every((row, index) => row.tick === index) && cycle.rows.length > Number(lastTick),
       stagesOnSchedule: sameJson(observed.stageEntries, stages),
       overheadsOnSchedule: sameJson(observed.overheadSwitches, overheads),
@@ -2349,7 +2368,7 @@ drive() {
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
-    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" >"$VERIFY_DIR/observed.json"
+    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

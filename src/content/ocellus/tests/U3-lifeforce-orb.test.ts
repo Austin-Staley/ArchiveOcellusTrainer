@@ -148,9 +148,9 @@ describe("U3 lifeforce hit and orb", () => {
     };
     const expired = [[35, "inner-void", { x: 9, y: 4 }, 49], [61, "outer-void", { x: 4, y: 3 }, 25]];
     expect([run({}), run({ unclaimedOuterOrb: "off" }), run({}, true)]).toEqual([
-      [expired, [[62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1355, afterHp: 1380 }]], { atBossStep: 1355, atPostTick: 1380 }],
-      [expired, [], { atBossStep: 1355, atPostTick: 1355 }],
-      [[expired[0]], [], { atBossStep: 1355, atPostTick: 1355 }],
+      [expired, [[62, { kind: "unclaimed-orb" }, { requested: 25, applied: 25, beforeHp: 1312, afterHp: 1337 }]], { atBossStep: 1312, atPostTick: 1337 }],
+      [expired, [], { atBossStep: 1312, atPostTick: 1312 }],
+      [[expired[0]], [], { atBossStep: 1312, atPostTick: 1312 }],
     ]);
   });
 

@@ -2,11 +2,12 @@ import { DelayedAction, Player, Projectile, Settings, TestNpc, TestRegion, Viewp
 import type { Location, MovePace, Region } from "osrs-sdk";
 import type { Tick } from "../brands";
 import { seed, tick } from "../brands";
-import type { Hooks } from "./EncounterBinding";
-import { EncounterBinding } from "./EncounterBinding";
+import type { EncounterBinding, Hooks } from "./EncounterBinding";
 
 type Probe = Readonly<{ input: string; event: string; cause: string; snapshot: number; row: string; end: "kill" }>;
 type Bound = () => EncounterBinding<Probe>;
+
+const loadBindingInEachTest = () => vi.importActual<typeof import("./EncounterBinding")>("./EncounterBinding");
 
 class ProbeRegion extends TestRegion {
   constructor(private readonly binding: Bound) {
@@ -52,7 +53,8 @@ class ProbePlayer extends Player {
   }
 }
 
-function encounter(start: Tick, judged: number) {
+async function encounter(start: Tick, judged: number) {
+  const { EncounterBinding: Binding } = await loadBindingInEachTest();
   const frames: string[] = [];
   const region: ProbeRegion = new ProbeRegion(() => binding);
   const world = new World();
@@ -99,7 +101,7 @@ function encounter(start: Tick, judged: number) {
       return { row: `${time.encounter}: [${inputs.join(", ")}] ${events.join(", ")}`, ending };
     },
   };
-  const binding: EncounterBinding<Probe> = new EncounterBinding(seed(1), start, player, hooks);
+  const binding: EncounterBinding<Probe> = new Binding(seed(1), start, player, hooks);
   return { world, player, npc, binding, frames };
 }
 
@@ -109,8 +111,8 @@ describe("EncounterBinding", () => {
     DelayedAction.reset();
   });
 
-  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order", () => {
-    const { world, player, npc, binding, frames } = encounter(tick(5), 7);
+  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order", async () => {
+    const { world, player, npc, binding, frames } = await encounter(tick(5), 7);
     world.getReadyTimer = 2;
     player.running = false;
     player.moveTo(23, 20);
@@ -141,8 +143,8 @@ describe("EncounterBinding", () => {
     });
   });
 
-  test("an ending on the NPC turn still lands that tick's hits and closes its row, then nothing runs", () => {
-    const { world, player, npc, binding, frames } = encounter(tick(0), 125);
+  test("an ending on the NPC turn still lands that tick's hits and closes its row, then nothing runs", async () => {
+    const { world, player, npc, binding, frames } = await encounter(tick(0), 125);
     npc.addProjectile(new Projectile(null, 20, player, npc, "slash", { setDelay: 1 }));
     player.moveTo(22, 20);
     world.tickWorld(2);

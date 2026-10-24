@@ -65,7 +65,15 @@ export type ExplosionOutcome =
   | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
 export type HitJudgement = "passed" | "invulnerable" | "blocked";
-export type PlayerHitSource = "deflect-reflected" | "floor-hit" | "hole-hit" | "lifeforce-drained" | "explosion-resolved" | "special-hit" | "rift-burst";
+export type PlayerHit =
+  | Readonly<{ kind: "deflect-reflected"; at: Tick; style: Style }>
+  | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile }>
+  | Readonly<{ kind: "hole-hit"; at: Tick; tile: Tile }>
+  | Readonly<{ kind: "lifeforce-drained"; at: Tick; void: VoidKind; orb: Tile }>
+  | Readonly<{ kind: "explosion-resolved"; at: Tick; void: VoidKind; pulse: number; tile: Tile; underBoss: boolean }>
+  | (Readonly<{ kind: "special-hit" }> & SpecialAttack)
+  | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile }>;
+export type PlayerHitSource = PlayerHit["kind"];
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>

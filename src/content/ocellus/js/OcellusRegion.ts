@@ -5,12 +5,11 @@ import { OCELLUS_P4 } from "./OcellusTimings";
 import { dress } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { SoundId, Tile } from "../../../sim/brands";
-import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, TickRow, VoidKind } from "./P4Types";
+import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, VoidKind } from "./P4Types";
 import { BossLook, ExplosionViews, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
 import { BossFootprint, Ocellus } from "./mobs/Ocellus";
 import { BRAZIERS, PLATFORM, WALKWAY, voidUnder } from "./p4/floor";
-import { CombatStream } from "./p4/roll";
 
 const GRID = PLATFORM.extent();
 
@@ -49,7 +48,7 @@ function playCue(id: SoundId, at: Tile, delayMs = 0): void {
 
 type Mounted =
   | Readonly<{ kind: "unmounted" }>
-  | Readonly<{ kind: "mounted"; ocellus: Ocellus; player: OcellusPlayer; views: Views; rows: TickRow[] }>;
+  | Readonly<{ kind: "mounted"; ocellus: Ocellus; player: OcellusPlayer; views: Views }>;
 
 function present(event: FightEvent, views: Views, player: Tile): void {
   switch (event.kind) {
@@ -155,13 +154,7 @@ export class OcellusRegion extends Region {
   }
 
   initialiseRegion(): { player: Player } {
-    const player: OcellusPlayer = new OcellusPlayer(
-      this,
-      { ...OCELLUS_P4.geometry.playerSpawn.value },
-      new CombatStream(this.config.seed),
-      (input) => ocellus.recordInput(input),
-      () => ocellus.settlePlayerHits(),
-    );
+    const player: OcellusPlayer = new OcellusPlayer(this, { ...OCELLUS_P4.geometry.playerSpawn.value }, () => ocellus.binding);
     const ocellus: Ocellus = new Ocellus(this, this.config, player, () => this.invincible);
     dress(player, this.config.choices.setup);
     Object.values(sounds).forEach((sound) => SoundCache.preload(cacheSound(sound.value)));
@@ -182,7 +175,7 @@ export class OcellusRegion extends Region {
     this.addPlayer(player);
     this.addMob(ocellus);
     this.setBoss(ocellus);
-    this.mounted = { kind: "mounted", ocellus, player, views, rows: [] };
+    this.mounted = { kind: "mounted", ocellus, player, views };
     return { player };
   }
 
@@ -194,11 +187,14 @@ export class OcellusRegion extends Region {
     return result;
   }
 
+  override beforeNpcTurns(): void {
+    if (this.mounted.kind === "mounted") this.mounted.ocellus.binding.openTick();
+  }
+
   override postTick(): void {
     if (this.mounted.kind === "unmounted") return;
-    const row = this.mounted.ocellus.completeTick();
+    const row = this.mounted.ocellus.binding.finishTick();
     if (!row) return;
-    this.mounted.rows.push(row);
     const { views } = this.mounted;
     const floor = voidUnder(row.phase);
     views.field.show(floor);
@@ -238,7 +234,7 @@ export class OcellusRegion extends Region {
   }
 
   fightLog(): FightLog {
-    const rows = this.mounted.kind === "mounted" ? [...this.mounted.rows] : [];
+    const rows = this.mounted.kind === "mounted" ? [...this.mounted.ocellus.binding.rows] : [];
     return { header: { seed: this.config.seed, choices: this.config.choices }, rows };
   }
 }

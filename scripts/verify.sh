@@ -277,6 +277,11 @@ CUE_SOUNDS='[[5,12490],[12.4,12624],[15.87,12621],[19.8,12622],[22.8,12623],[39,
 CUE_SOUND_WINDOW='[4,50]'
 CUE_CHAT="Ocellus manipulates your lifeforce!"
 AUTOPLAY_POLICY_JS='(() => { const Native = window.AudioContext; if (!Native) return; const made = []; window.__audioContexts = made; window.AudioContext = class extends Native { constructor(...args) { super(...args); made.push(this); void this.suspend(); } }; })();'
+PRODUCTION_PORT="${VERIFY_PRODUCTION_PORT:-8003}"
+PRODUCTION_QUERY="?seed=1&invincible=on"
+PRODUCTION_WATCH_SECONDS=20
+PRODUCTION_ORBS='["99","99","100","100"]'
+PRODUCTION_ORBS_JS='(() => { const orbs = { framesSinceFirst: 0, blankSinceFirst: 0, first: null, last: null }; window.__orbs = orbs; let frame = []; const fillText = CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) { if (this.textAlign === "center" && this.font.endsWith("px Stats_11") && this.fillStyle !== "#000000" && /^\d+$/.test(String(text))) frame.push(String(text)); return fillText.call(this, text, ...rest); }; const close = () => { if (frame.length > 0) { orbs.first ??= frame; orbs.last = frame; } if (orbs.first) { orbs.framesSinceFirst++; if (frame.length === 0) orbs.blankSinceFirst++; } frame = []; requestAnimationFrame(close); }; requestAnimationFrame(close); })();'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
 log() { echo "verify: $*"; }
@@ -2461,6 +2466,117 @@ stage_browser() {
   return $result
 }
 
+production_listener() {
+  VERIFY_PORT=$PRODUCTION_PORT port_listener
+}
+
+watch_production_page() {
+  local name=$1
+  ab wait --fn "window.__orbs?.first !== null" --timeout 90000 >/dev/null || log "${name}: the minimap orbs never drew their numbers"
+  sleep "$PRODUCTION_WATCH_SECONDS"
+  ab --json eval "({ text: document.body.innerText, orbs: window.__orbs })" | json data.result >"$VERIFY_DIR/${name}.json" || { log "${name}: page state capture failed"; return 1; }
+  ab screenshot "$VERIFY_DIR/${name}.png" >/dev/null || { log "${name}: screenshot failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/${name}-page-errors.json" || { log "${name}: page error capture failed"; return 1; }
+}
+
+drive_production() {
+  local url="http://127.0.0.1:${PRODUCTION_PORT}/${PRODUCTION_QUERY}" opened deadline
+  echo "$PRODUCTION_ORBS_JS" >"$VERIFY_DIR/production-orbs.js"
+  ab --init-script "$VERIFY_DIR/production-orbs.js" set viewport 1280 800 >/dev/null || { log "the production session did not start"; return 1; }
+  ab open "$url" >/dev/null || return 1
+  watch_production_page production || return 1
+
+  ab open about:blank >/dev/null || return 1
+  ab network har start --content none >/dev/null || { log "HAR recording did not start"; return 1; }
+  ab network route "http://127.0.0.1:${PRODUCTION_PORT}/*.png" --abort >/dev/null || { log "the SDK image route was not set"; return 1; }
+  ab network requests --clear >/dev/null || return 1
+  ab open "$url" >/dev/null &
+  opened=$!
+  deadline=$((SECONDS + 90))
+  until [[ "$(ab --json network requests --filter ".png" | json data.requests.length)" -gt 0 ]]; do
+    (( SECONDS < deadline )) || { log "the page never requested an SDK image"; ab network unroute >/dev/null; wait "$opened"; return 1; }
+  done
+  ab network unroute >/dev/null || { log "the SDK image route was not lifted"; return 1; }
+  wait "$opened" || return 1
+  watch_production_page production-dropped-images || return 1
+  ab network har stop "$VERIFY_DIR/production-dropped-images.har" >/dev/null || { log "HAR capture failed"; return 1; }
+
+  node -e '
+    const fs = require("fs"), [dir, port, expectedOrbs] = process.argv.slice(1);
+    const read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, "utf8"));
+    const statuses = {};
+    for (const { request, response } of read("production-dropped-images.har").log.entries) {
+      if (new RegExp(`^http://127\\.0\\.0\\.1:${port}/[^/]+\\.png$`).test(request.url)) (statuses[request.url] ??= []).push(response.status);
+    }
+    const dropped = Object.entries(statuses).filter(([, attempts]) => attempts[0] === 0);
+    const page = (name) => {
+      const { text, orbs } = read(`${name}.json`);
+      return {
+        loaded: !text.includes("Loading failed"),
+        orbs,
+        errors: read(`${name}-page-errors.json`).map((error) => error.text ?? error.message ?? String(error)).slice(0, 3),
+        errorCount: read(`${name}-page-errors.json`).length,
+      };
+    };
+    const [clean, retried] = ["production", "production-dropped-images"].map(page);
+    const orbsDrawn = ({ orbs }) => orbs.first !== null && JSON.stringify(orbs.first) === expectedOrbs && orbs.last.length === 4 && orbs.blankSinceFirst === 0;
+    const checks = {
+      productionLoads: clean.loaded,
+      productionOrbsShowNumbers: orbsDrawn(clean),
+      noProductionPageErrors: clean.errorCount === 0,
+      droppedSdkImagesRetried: dropped.length > 0 && dropped.every(([, attempts]) => attempts[attempts.length - 1] === 200),
+      productionLoadsAfterDroppedImages: retried.loaded,
+      orbsShowNumbersAfterDroppedImages: orbsDrawn(retried),
+      noPageErrorsAfterDroppedImages: retried.errorCount === 0,
+    };
+    console.log(JSON.stringify({ clean, retried, dropped: dropped.map(([url, attempts]) => ({ url, attempts })), checks }, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$PRODUCTION_PORT" "$PRODUCTION_ORBS" >"$VERIFY_DIR/production-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/production-checks.json"
+  [[ $verdict -eq 0 ]] || log "a production check failed"
+  return $verdict
+}
+
+release_production() {
+  ab close >/dev/null 2>&1
+  [[ -n "$PRODUCTION_PID" ]] || return 0
+  kill "$PRODUCTION_PID" 2>/dev/null
+  wait "$PRODUCTION_PID" 2>/dev/null
+  [[ -z "$(production_listener)" ]] || { log "port ${PRODUCTION_PORT} is still held by $(production_listener)"; return 1; }
+  log "production: static server PID ${PRODUCTION_PID} is gone"
+}
+
+stage_production() {
+  case "$PRODUCTION_PORT" in 8000 | 8001 | "$VERIFY_PORT")
+    log "port ${PRODUCTION_PORT} belongs to another server; refusing to use it"
+    return 1
+    ;;
+  esac
+  [[ -z "$(production_listener)" ]] || { log "port ${PRODUCTION_PORT} is already in use by PID $(production_listener)"; return 1; }
+  manifest_ready || { log "assets missing: run scripts/verify.sh assets"; return 1; }
+  node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/production" >"$VERIFY_DIR/production-build.log" 2>&1 || { log "the production build failed"; return 1; }
+
+  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-production" result=1
+  python3 -m http.server "$PRODUCTION_PORT" --bind 127.0.0.1 --directory "$VERIFY_DIR/production" >"$VERIFY_DIR/production-server.log" 2>&1 &
+  PRODUCTION_PID=$!
+  trap 'release_production; exit 130' INT TERM
+  log "started static server PID ${PRODUCTION_PID} on http://127.0.0.1:${PRODUCTION_PORT}/"
+  for _ in $(seq 1 30); do
+    curl -sf -o /dev/null "http://127.0.0.1:${PRODUCTION_PORT}/" && break
+    sleep 0.5
+  done
+  if curl -sf -o /dev/null "http://127.0.0.1:${PRODUCTION_PORT}/"; then
+    drive_production
+    result=$?
+  else
+    log "the static server never answered"
+  fi
+  release_production || result=1
+  trap - INT TERM
+  return $result
+}
+
 case "${1:-}" in
   serve) mkdir -p "$VERIFY_DIR" && ensure_deps && serve && doctor && log "drive ${URL}; evidence in ${VERIFY_DIR}; stop with scripts/verify.sh stop"; exit $? ;;
   doctor) doctor; exit $? ;;
@@ -2468,9 +2584,9 @@ case "${1:-}" in
 esac
 
 stages=("$@")
-[[ ${#stages[@]} -gt 0 ]] || stages=(build types test assets browser)
+[[ ${#stages[@]} -gt 0 ]] || stages=(build types test assets browser production)
 for stage in "${stages[@]}"; do
-  case "$stage" in build | types | test | assets | browser) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
+  case "$stage" in build | types | test | assets | browser | production) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
 done
 
 mkdir -p "$VERIFY_DIR"

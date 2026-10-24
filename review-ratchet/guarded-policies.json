@@ -37,6 +37,10 @@
         {
           "policy": "the check fails unless every installed package is at the pin",
           "mutation": [{ "find": "  if [[ \"${installed}\" == \"${OSRS_SDK_COMMIT}\" ]]; then\n", "replace": "  if true; then\n" }]
+        },
+        {
+          "policy": "an unreadable installed manifest fails the check",
+          "mutation": [{ "find": " 2>/dev/null || echo unreadable\n", "replace": "\n" }]
         }
       ]
     },

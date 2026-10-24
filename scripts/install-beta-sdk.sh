@@ -17,7 +17,7 @@ installed_commit() {
   local name
   for name in "${PACKAGES[@]}"; do
     if [[ -f "node_modules/${name}/package.json" ]]; then
-      built_commit <"node_modules/${name}/package.json"
+      built_commit <"node_modules/${name}/package.json" 2>/dev/null || echo unreadable
     else
       echo missing
     fi

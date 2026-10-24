@@ -6,12 +6,11 @@ import type { OcellusPlayer } from "../OcellusPlayer";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { IncomingStyle, Style } from "../../../../sim/combat";
-import type { FrameOf, Heal, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
+import type { AttackDelayCut, FrameOf, Heal, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
 import { EncounterBinding, incomingStyle } from "../../../../sim/sdk/EncounterBinding";
 import type {
   Beat,
   BossState,
-  ExplosionOutcome,
   FightEvent,
   HealCause,
   InputObservation,
@@ -31,7 +30,9 @@ import type {
 import { riftId } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
 import type { Schedule } from "../../../../sim/schedule";
-import { reach, TileSet } from "../../../../sim/tiles";
+import { TileSet } from "../../../../sim/tiles";
+import type { ExplosionStep, Marks, Reduction } from "../p4/explosions";
+import { damageReduction, explode, explosionHit, NO_MARKS } from "../p4/explosions";
 import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
 import type { Orbs, OrbStep } from "../p4/orb";
 import { drain, expireOrb, forgiveOrbDebt, formOrb, matureOrb, moveOver, NO_ORBS, releaseUnclaimedOuterOrb, returnDueOrbs } from "../p4/orb";
@@ -46,14 +47,11 @@ type P4Run = Readonly<{ input: InputObservation; event: FightEvent; cause: Playe
 export type OcellusBinding = EncounterBinding<P4Run>;
 
 type Output = Logged<FightEvent> | HitRequest<PlayerHit>;
+type TurnOutput = Output | AttackDelayCut;
 
-type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
+type PlayerAtTurn = PlayerObservation & Readonly<{ attackDelay: number }>;
 
-type Verdict =
-  | Readonly<{ outcome: "passed" }>
-  | Readonly<{ outcome: "invulnerable" }>
-  | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>
-  | Readonly<{ outcome: "reduced"; percentLess: number }>;
+type Verdict = Reduction | Readonly<{ outcome: "invulnerable" }> | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>;
 
 type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number; spawnedAt: Tick }>;
 
@@ -138,7 +136,7 @@ export class Ocellus extends Mob {
   readonly holes: TileSet;
   readonly binding: OcellusBinding;
   private orbs: Orbs = NO_ORBS;
-  private marks: readonly Mark[] = [];
+  private marks: Marks = NO_MARKS;
   private stolen: readonly Readonly<{ ordinal: Ordinal; credit: number }>[] = [];
   private rifts: readonly Rift[] = [];
   private healSplats: readonly Readonly<{ amount: number; lastShown: Tick }>[] = [];
@@ -151,7 +149,7 @@ export class Ocellus extends Mob {
       snapshot: { player: this.target.observe(), bossHp: this.currentStats.hitpoint, rifts: this.rifts },
       outputs: incoming.flatMap((landing) => this.judgeIncoming(landing, time.encounter)),
     }),
-    "npc-turn": ({ time, snapshot }) => this.turn(time.encounter, snapshot.player),
+    "npc-turn": ({ time, snapshot, player }) => this.turn(time.encounter, { ...snapshot.player, attackDelay: player.attackDelay }),
     "hit-applied": ({ hit }) => this.landed(hit),
     "player-hits-settled": ({ time, landed, player }) => this.settlePlayerHits(time.encounter, landed, player),
     "player-moved": ({ time, steps, at }) => {
@@ -264,7 +262,7 @@ export class Ocellus extends Mob {
     return this.schedule.at(this.binding.view().at).phase;
   }
 
-  private turn(at: Tick, player: PlayerObservation): Readonly<{ outputs: readonly Output[]; ending: RunEnd | null }> {
+  private turn(at: Tick, player: PlayerAtTurn): Readonly<{ outputs: readonly TurnOutput[]; ending: RunEnd | null }> {
     const moment = this.schedule.at(at);
     const phased = logs(...phaseEvents(at > 0 ? this.schedule.at(tick(at - 1)).phase : null, moment.phase, at));
     if (this.currentStats.hitpoint <= 0) return { outputs: [...phased, ...logs({ kind: "run-ended", at, reason: "kill" })], ending: "kill" };
@@ -288,14 +286,15 @@ export class Ocellus extends Mob {
 
   private judge(at: Tick, style: IncomingStyle, launchedAt: Tick): Verdict {
     if (!damageable(this.schedule.at(at).phase.boss)) return { outcome: "invulnerable" };
+    const unblocked = damageReduction(this.config.choices, this.schedule.at(at).beats);
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":
-        return this.unblocked(at);
+        return unblocked;
       case "block": {
         const { overhead } = this.schedule.at(launchedAt).phase;
         const deflected = overhead === null ? null : OCELLUS_P4.deflects[overhead].value;
-        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : this.unblocked(at);
+        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : unblocked;
       }
       default: {
         const unhandled: never = rule;
@@ -304,17 +303,12 @@ export class Ocellus extends Mob {
     }
   }
 
-  private unblocked(at: Tick): Verdict {
-    if (!this.schedule.at(at).beats.some((beat) => beat.kind === "explosions-occurring")) return { outcome: "passed" };
-    return { outcome: "reduced", percentLess: this.config.choices.explosionDamageReduction.option.value };
-  }
-
   private reflect({ style, reflectPercent }: Extract<Verdict, { outcome: "blocked" }>, blocked: number, at: Tick): readonly Output[] {
     const requested = Math.floor((blocked * reflectPercent) / 100);
     return requested === 0 ? [] : [fixedHit(requested, { kind: "deflect-reflected", at, style })];
   }
 
-  private react(beat: Beat, at: Tick, player: PlayerObservation): readonly Output[] {
+  private react(beat: Beat, at: Tick, player: PlayerAtTurn): readonly TurnOutput[] {
     switch (beat.kind) {
       case "boss-shouts":
         this.setOverheadText(beat.text);
@@ -335,13 +329,10 @@ export class Ocellus extends Mob {
       case "unclaimed-orb-heals":
         return logs(...this.stepOrbs(releaseUnclaimedOuterOrb(this.orbs)).map(({ amount }) => this.healBoss({ kind: "unclaimed-orb" }, amount, at)));
       case "explosion-series-starts":
-        return logs({ kind: "explosion-series-started", at, void: beat.void });
       case "explosion-mark":
-        return logs(this.markExplosion(beat.void, beat.pulse, at, player.tile));
       case "explosion-impact":
-        return this.detonate(beat.void, beat.pulse, at, player.tile);
       case "explosions-occurring":
-        return [];
+        return this.stepMarks(explode(this.config, this.marks, beat, at, player));
       case "special-tell":
         return logs({ kind: "special-told", ...specialAttack(at, beat.ordinal, beat.variant) });
       case "special-hit":
@@ -427,29 +418,6 @@ export class Ocellus extends Mob {
     return { kind: "boss-healed", at, cause, receipt: { requested, applied: afterHp - beforeHp, beforeHp, afterHp } };
   }
 
-  private markExplosion(kind: VoidKind, pulse: number, at: Tick, player: Tile): FightEvent {
-    this.marks = [...this.marks, { void: kind, pulse, tile: player }];
-    return { kind: "explosion-marked", at, void: kind, pulse, tile: player };
-  }
-
-  private detonate(kind: VoidKind, pulse: number, at: Tick, player: Tile): readonly Output[] {
-    const mark = this.marks.find((pending) => pending.void === kind && pending.pulse === pulse);
-    if (!mark) return [];
-    this.marks = this.marks.filter((pending) => pending !== mark);
-    const impact: Extract<PlayerHit, { kind: "explosion-resolved" }> = { kind: "explosion-resolved", at, void: kind, pulse, tile: mark.tile, underBoss: FOOTPRINT.contains(mark.tile) };
-    const resolved = (outcome: ExplosionOutcome) => logs({ ...impact, outcome });
-    const distance = reach(mark.tile, player);
-    const { radius, attackDelayCut } = OCELLUS_P4.explosion.dodge.value;
-    if (distance > radius) return resolved({ kind: "avoided" });
-    if (distance > 0) {
-      const before = this.target.attackDelay;
-      const after = Math.max(Math.min(before, 0), before - attackDelayCut);
-      this.target.attackDelay = after;
-      return resolved({ kind: "dodged", attackDelay: { before, after } });
-    }
-    return [fixedHit(rollInt(this.config.seed, "explosionDamage", at, this.config.choices.explosions.option.value.damage, 0), impact)];
-  }
-
   private landed({ cause, receipt }: Landed<PlayerHit>): readonly FightEvent[] {
     switch (cause.kind) {
       case "deflect-reflected":
@@ -461,7 +429,7 @@ export class Ocellus extends Mob {
         if (receipt.prayer !== cause.style) this.stolen = [...this.stolen, { ordinal: cause.ordinal, credit: receipt.applied }];
         return [{ ...cause, receipt }];
       case "explosion-resolved":
-        return [{ ...cause, outcome: { kind: "hit", receipt } }];
+        return [explosionHit(cause, receipt)];
       case "lifeforce-drained":
         return this.stepOrbs(formOrb(this.orbs, cause, receipt));
       default: {
@@ -473,6 +441,11 @@ export class Ocellus extends Mob {
 
   private stepOrbs<O>(step: OrbStep<O>): readonly O[] {
     this.orbs = step.orbs;
+    return step.outputs;
+  }
+
+  private stepMarks(step: ExplosionStep): ExplosionStep["outputs"] {
+    this.marks = step.marks;
     return step.outputs;
   }
 

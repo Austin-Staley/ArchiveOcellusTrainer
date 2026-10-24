@@ -6,7 +6,7 @@ import type { OcellusPlayer } from "../OcellusPlayer";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { HitReceipt, IncomingStyle, Style } from "../../../../sim/combat";
-import type { FrameOf, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
+import type { FrameOf, Heal, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
 import { EncounterBinding, incomingStyle } from "../../../../sim/sdk/EncounterBinding";
 import type {
   Beat,
@@ -160,7 +160,7 @@ export class Ocellus extends Mob {
     }),
     "npc-turn": ({ time, snapshot }) => this.turn(time.encounter, snapshot.player),
     "hit-applied": ({ hit }) => this.landed(hit),
-    "player-hits-settled": ({ time, landed }) => this.settlePlayerHits(time.encounter, landed),
+    "player-hits-settled": ({ time, landed, player }) => this.settlePlayerHits(time.encounter, landed, player),
     "player-moved": ({ steps }) => {
       this.entered = steps.reduce(enteredSquare, this.entered);
     },
@@ -525,25 +525,23 @@ export class Ocellus extends Mob {
   }
 
   /** Runs after the player's hits land and before the SDK latches death, so a return must not reach a player at 0 HP. */
-  private settlePlayerHits(at: Tick, landed: readonly Landed<PlayerHit>[]): readonly FightEvent[] {
+  private settlePlayerHits(at: Tick, landed: readonly Landed<PlayerHit>[], player: Readonly<{ hp: number; maxHp: number }>): readonly (Logged<FightEvent> | Heal)[] {
     const isDue = (orb: Orb): orb is Extract<Orb, { kind: "claimed" }> => orb.kind === "claimed" && orb.returnsAt === at;
     const due = this.orbs.filter(isDue);
     this.orbs = this.orbs.filter((orb) => !isDue(orb));
-    const events: FightEvent[] = [];
+    const outputs: (Logged<FightEvent> | Heal)[] = [];
+    let hp = player.hp;
     for (const orb of due) {
-      const beforeHp = this.target.currentStats.hitpoint;
-      if (beforeHp <= 0) continue;
-      const afterHp = beforeHp + orb.owed;
-      this.target.currentStats.hitpoint = afterHp;
-      events.push({ kind: "orb-returned", at, void: orb.void, tile: orb.tile, receipt: { requested: orb.owed, applied: orb.owed, beforeHp, afterHp } });
+      if (hp <= 0) continue;
+      outputs.push({ kind: "heal", amount: orb.owed, limit: "allow-overheal" }, ...logs({ kind: "orb-returned", at, void: orb.void, tile: orb.tile, receipt: { requested: orb.owed, applied: orb.owed, beforeHp: hp, afterHp: hp + orb.owed } }));
+      hp += orb.owed;
     }
-    if (!this.invincible()) return events;
+    if (!this.invincible()) return outputs;
     const lethal = landed.find(({ receipt }) => receipt.beforeHp > 0 && receipt.afterHp === 0);
-    if (!lethal) return events;
+    if (!lethal) return outputs;
     const clearedOrbCredit = this.orbs.reduce((sum, orb) => sum + (orb.kind === "expired" ? 0 : orb.owed), 0);
     this.orbs = this.orbs.map((orb) => (orb.kind === "expired" ? orb : { ...orb, owed: 0 }));
-    this.target.currentStats.hitpoint = this.target.stats.hitpoint;
-    return [...events, { kind: "death-prevented", at, source: lethal.cause.kind, clearedOrbCredit }];
+    return [...outputs, { kind: "heal", amount: player.maxHp, limit: "max-hp" }, ...logs({ kind: "death-prevented", at, source: lethal.cause.kind, clearedOrbCredit })];
   }
 
   private closeRow({ time, inputs, snapshot, events, combatDraws, ending }: FrameOf<P4Run, "tick-ended">): Readonly<{ row: TickRow; ending: RunEnd | null }> {

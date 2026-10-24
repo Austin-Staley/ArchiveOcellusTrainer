@@ -12,7 +12,6 @@ function openFight(url: string) {
   const region = built.mock.contexts.at(-1);
   built.mockRestore();
   if (!(region instanceof OcellusRegion)) throw new Error("the page built no region");
-  region.world.getReadyTimer = 0;
   const run = () => region.snapshot()?.run;
   const tickTo = (t: number) => {
     for (let guard = 0; guard < 400; guard++) {

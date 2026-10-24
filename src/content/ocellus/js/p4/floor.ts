@@ -1,10 +1,11 @@
 import type { FloorRule, FloorShape, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
+import type { Tile } from "../../../../sim/brands";
 import { tile } from "../../../../sim/brands";
-import { TileSet } from "../../../../sim/tiles";
+import { TileSet, beside } from "../../../../sim/tiles";
 import type { Phase, VoidKind } from "../P4Types";
 
-const ARENA_GLYPHS = ["#", ".", "?", "w", "b"] as const;
+const ARENA_GLYPHS = ["#", ".", "?", "w", "b", "/"] as const;
 
 const { geometry, boss, floor } = OCELLUS_P4;
 const anchor = geometry.bossAnchor.value;
@@ -17,8 +18,30 @@ const aroundBoss = (grow: number) => TileSet.area(tile(anchor.x - grow, anchor.y
 export const NEAR_SQUARE = aroundBoss(ring);
 export const FOOTPRINT = aroundBoss(0);
 export const PLATFORM = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "#");
-export const WALKWAY = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "w", "b");
+export const WALKWAY = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "w", "b", "/");
 export const BRAZIERS = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "b");
+
+const FLOOR_SIDES = ["west", "north"] as const;
+const CURB_SIDES = ["east", "south"] as const;
+
+type GridCorner = Readonly<{ x: number; y: number }>;
+type DiagonalCurb = Readonly<{ shape: "diagonal"; at: Tile; cut: readonly [GridCorner, GridCorner]; floorCorner: GridCorner; wallCorner: GridCorner }>;
+export type CurbTile = Readonly<{ shape: "square"; at: Tile }> | DiagonalCurb;
+
+function diagonal(at: Tile): DiagonalCurb {
+  const floorSides = FLOOR_SIDES.every((side) => PLATFORM.contains(beside(at, side)));
+  const curbSides = CURB_SIDES.every((side) => WALKWAY.contains(beside(at, side)));
+  if (!floorSides || !curbSides) throw new RangeError(`diagonal wall (${at.x}, ${at.y}) needs floor west and north of it and walkway east and south`);
+  const { x, y } = at;
+  return { shape: "diagonal", at, cut: [{ x: x + 1, y }, { x, y: y + 1 }], floorCorner: { x, y }, wallCorner: { x: x + 1, y: y + 1 } };
+}
+
+const DIAGONALS = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "/");
+export const CURB: readonly CurbTile[] = WALKWAY.tiles().map((at) => (DIAGONALS.contains(at) ? diagonal(at) : { shape: "square", at }));
+
+export function floodedHalves(mask: TileSet): readonly DiagonalCurb[] {
+  return CURB.flatMap((curb) => (curb.shape === "diagonal" && FLOOR_SIDES.every((side) => mask.contains(beside(curb.at, side))) ? [curb] : []));
+}
 
 function shaped(shape: FloorShape): TileSet {
   switch (shape) {

@@ -103,7 +103,7 @@ describe("Invincible", () => {
       const drill = startDrill({ selection: { focus: "lifeforce-orb" } });
       drill.region.invincible = invincible;
       drill.tickTo(12);
-      drill.walkTo({ x: 9, y: 4 });
+      drill.walkTo(drill.innerOrb());
       drill.tickTo(25);
       const observed = { returned: drill.events("orb-returned").map((e) => [e.at, e.receipt]), hp: drill.row(25).playerAtPostTick.hp };
       drill.dispose();

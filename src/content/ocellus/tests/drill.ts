@@ -110,6 +110,11 @@ export function startDrill(options: DrillOptions = {}) {
         if (dodging && (stage === "inner-void" || stage === "outer-void")) stepOffMarkedTile(home, besideOnSameFloor(home, stage === "outer-void"));
       });
     },
+    innerOrb(): At {
+      const spawned = this.events("orb-spawned").filter((event) => event.void === "inner-void");
+      if (spawned.length === 0) throw new Error("no inner orb has formed");
+      return spawned[spawned.length - 1].tile;
+    },
     row(t: number): TickRow {
       const found = rows().find((row) => row.tick === t);
       if (!found) throw new Error(`no row for P4 tick ${t}`);

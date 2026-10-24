@@ -5,8 +5,9 @@ import { spriteFile } from "../../../../assets";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Tile } from "../../../../sim/brands";
 import type { BossOverhead, Special, Stage, VoidKind } from "../P4Types";
-import type { Side, TileSet } from "../../../../sim/tiles";
-import { VOID_MASKS } from "../p4/floor";
+import type { Side } from "../../../../sim/tiles";
+import { TileSet, beside } from "../../../../sim/tiles";
+import { VOID_MASKS, floodedHalves } from "../p4/floor";
 
 const LOOK = OCELLUS_P4.floor.look.value;
 const RIM_DEPTH = 0.18;
@@ -16,6 +17,7 @@ const STAR_PX_PER_TILE = 32;
 
 type Point = Readonly<{ x: number; z: number }>;
 type Edge = Readonly<{ at: Tile; side: Side; from: Point; to: Point; inward: Point }>;
+type Rim = Readonly<{ from: Point; to: Point; inward: Point }>;
 
 /** Tile (x, y) spans world x to x + 1 and z from y - 1 to y; lower y is north. */
 export function rimEdges(mask: TileSet): readonly Edge[] {
@@ -36,6 +38,17 @@ export function rimEdges(mask: TileSet): readonly Edge[] {
       }
     }
   });
+}
+
+function voidRim(mask: TileSet): readonly Rim[] {
+  const halves = floodedHalves(mask);
+  const flooded = TileSet.at(halves.map(({ at }) => at));
+  const cuts = halves.map(({ cut: [from, to], floorCorner }): Rim => {
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    const length = Math.hypot(floorCorner.x - mid.x, floorCorner.y - mid.y);
+    return { from: { x: from.x, z: from.y - 1 }, to: { x: to.x, z: to.y - 1 }, inward: { x: (floorCorner.x - mid.x) / length, z: (floorCorner.y - mid.y) / length } };
+  });
+  return [...rimEdges(mask).filter(({ at, side }) => !flooded.contains(beside(at, side))), ...cuts];
 }
 
 function starfield(): THREE.Texture {
@@ -66,12 +79,15 @@ function starfield(): THREE.Texture {
 function floorGeometry(mask: TileSet): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
+  const corner = (cx: number, cz: number) => {
+    positions.push(cx, GROUND_OVERLAY_Y, cz);
+    uvs.push(cx / STAR_TILES, cz / STAR_TILES);
+  };
   for (const { x, y } of mask.tiles()) {
-    const corners = [[x, y - 1], [x + 1, y], [x + 1, y - 1], [x, y - 1], [x, y], [x + 1, y]];
-    for (const [cx, cz] of corners) {
-      positions.push(cx, GROUND_OVERLAY_Y, cz);
-      uvs.push(cx / STAR_TILES, cz / STAR_TILES);
-    }
+    for (const [cx, cz] of [[x, y - 1], [x + 1, y], [x + 1, y - 1], [x, y - 1], [x, y], [x + 1, y]]) corner(cx, cz);
+  }
+  for (const { floorCorner, cut: [from, to] } of floodedHalves(mask)) {
+    for (const { x, y } of [floorCorner, to, from]) corner(x, y - 1);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -103,7 +119,7 @@ function rimGeometry(mask: TileSet): THREE.BufferGeometry {
     dark(far.from);
   };
   const floor = GROUND_OVERLAY_Y;
-  for (const { from, to, inward } of rimEdges(mask)) {
+  for (const { from, to, inward } of voidRim(mask)) {
     const edge: Segment = { from: [from.x, floor, from.z], to: [to.x, floor, to.z] };
     const stripInside: Segment = {
       from: [from.x + inward.x * RIM_DEPTH, floor, from.z + inward.z * RIM_DEPTH],
@@ -189,10 +205,18 @@ export class VoidField extends Entity {
     const scale = Settings.tileSize;
     context.fillStyle = LOOK.void;
     for (const { x, y } of mask.tiles()) context.fillRect(x * scale, y * scale, scale, scale);
+    for (const { floorCorner, cut: [from, to] } of floodedHalves(mask)) {
+      context.beginPath();
+      context.moveTo(floorCorner.x * scale, floorCorner.y * scale);
+      context.lineTo(from.x * scale, from.y * scale);
+      context.lineTo(to.x * scale, to.y * scale);
+      context.closePath();
+      context.fill();
+    }
     context.strokeStyle = LOOK.rim;
     context.lineWidth = 2;
     context.beginPath();
-    for (const { from, to } of rimEdges(mask)) {
+    for (const { from, to } of voidRim(mask)) {
       context.moveTo(from.x * scale, (from.z + 1) * scale);
       context.lineTo(to.x * scale, (to.z + 1) * scale);
     }

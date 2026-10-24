@@ -1,4 +1,7 @@
-import { paintedTiles } from "../../../../test/paintedTiles";
+import * as THREE from "three";
+import { Settings } from "osrs-sdk";
+import { paintedStyleAt, paintedTiles } from "../../../../test/paintedTiles";
+import { OCELLUS_P4 } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 import type { At } from "./drill";
 
@@ -46,9 +49,9 @@ describe("Ocellus arena", () => {
       "...##########ww.",
       "..###########ww.",
       "..###########ww.",
-      "..#########www..",
+      "..##########ww..",
+      "..#########ww...",
       "..########ww....",
-      "..#######ww.....",
       "..#######ww.....",
       "..######ww......",
       "..#####ww.......",
@@ -86,11 +89,11 @@ describe("Ocellus arena", () => {
       drill.region.world.tickWorld();
       trail.push({ ...drill.player().location });
     }
-    expect(trail).toEqual([{ x: 9, y: 3 }, { x: 7, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
+    expect(trail).toEqual([{ x: 10, y: 3 }, { x: 8, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
     drill.dispose();
   });
 
-  test("the east edge runs straight on x 11 for 3 rows, then steps through 2 diagonal tiles to the 5x5", () => {
+  test("the east edge runs straight on x 11 for 3 rows, then one tile in per row, (10, 4), (9, 5) and (8, 6), to the 5x5's corner", () => {
     const drill = startDrill({ selection: NON_LETHAL });
     const lastFloor = (y: number) => {
       for (let x = 13; x >= 0; x--) {
@@ -105,15 +108,157 @@ describe("Ocellus arena", () => {
       { x: 11, y: 1 },
       { x: 11, y: 2 },
       { x: 11, y: 3 },
-      { x: 9, y: 4 },
-      { x: 8, y: 5 },
-      { x: 7, y: 6 },
+      { x: 10, y: 4 },
+      { x: 9, y: 5 },
+      { x: 8, y: 6 },
       { x: 7, y: 7 },
     ]);
     drill.dispose();
   });
 
-  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner, because the walkway juts in to meet it", () => {
+  test("a Control-click along the back wall walks it one diagonal tile a tick, toward the jut and back", async () => {
+    const drill = startDrill({ selection: NON_LETHAL });
+    const walkClicked = async (to: At) => {
+      await drill.click(to, { ctrlKey: true });
+      const trail: At[] = [];
+      for (let tick = 0; tick < 3; tick++) {
+        drill.region.world.tickWorld();
+        trail.push({ ...drill.player().location });
+      }
+      return trail;
+    };
+    await drill.click({ x: 10, y: 3 });
+    drill.region.world.tickWorld(6);
+    const start = { ...drill.player().location };
+    const toward = await walkClicked({ x: 8, y: 5 });
+    const back = await walkClicked({ x: 10, y: 3 });
+    drill.dispose();
+    expect({ start, toward, back }).toEqual({
+      start: { x: 10, y: 3 },
+      toward: [{ x: 9, y: 4 }, { x: 8, y: 5 }, { x: 8, y: 5 }],
+      back: [{ x: 9, y: 4 }, { x: 10, y: 3 }, { x: 10, y: 3 }],
+    });
+  });
+
+  test("the back wall draws one straight diagonal from the end of the straight run to the jut, and the flood meets it along that diagonal on the map and from above in 3D", () => {
+    const drill = startDrill({ selection: { focus: "void-floor" } });
+    const { region } = drill;
+    const [wall, flood] = [OCELLUS_P4.geometry.walkway.value.top, OCELLUS_P4.floor.look.value.void];
+    const samples = [0.1, 0.4, 0.7];
+    const raster = (styleAt: (x: number, y: number) => string | null) => {
+      const rows: string[] = [];
+      for (let y = 2; y < 9; y++) {
+        for (const dy of samples) {
+          let row = "";
+          for (let x = 7; x < 13; x++) {
+            for (const dx of samples) {
+              const style = styleAt(x + dx, y + dy);
+              row += style === null ? "." : style === wall ? "w" : style === flood ? "v" : "#";
+            }
+          }
+          rows.push(row);
+        }
+      }
+      return rows;
+    };
+    const ground = raster(paintedStyleAt((context, scale) => region.drawWorldBackground(context, scale)));
+    drill.tickTo(45);
+    const flooded = raster(
+      paintedStyleAt((context, scale) => {
+        region.drawWorldBackground(context, scale);
+        region.entities.forEach((entity) => entity.draw(0, context));
+      }, Settings.tileSize),
+    );
+    const scene = new THREE.Scene();
+    region.entities.forEach((entity) => entity.get3dModel()?.draw(scene, 0, 0, entity.getPerceivedLocation(0), 0, 0, entity.visible(0), []));
+    scene.updateMatrixWorld(true);
+    const wallTop = new THREE.Color(wall).getHex();
+    const fromAbove = raster((x, y) => {
+      const hits = new THREE.Raycaster(new THREE.Vector3(x, 10, y - 1), new THREE.Vector3(0, -1, 0)).intersectObject(scene);
+      const seen = (hit: (typeof hits)[number]) => {
+        const { object, face } = hit;
+        if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshBasicMaterial)) return null;
+        const colours = object.geometry.getAttribute("color");
+        if (colours instanceof THREE.BufferAttribute && face && new THREE.Color().fromBufferAttribute(colours, face.a).getHex() === wallTop) return wall;
+        return object.material.map === null ? null : flood;
+      };
+      const styles = hits.map(seen);
+      return styles.find((style) => style === wall) ?? styles.find((style) => style === flood) ?? null;
+    });
+    drill.dispose();
+    expect(drill.row(45).phase.stage).toBe("outer-void");
+    expect(flooded).toEqual([
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvwwww",
+      "###vvvvvvvvvvwwwww",
+      "###vvvvvvvvvwww...",
+      "###vvvvvvvvwwww...",
+      "###vvvvvvvwwwww...",
+      "###vvvvvvwww......",
+      "###vvvvvwwww......",
+      "###vvvvwwwww......",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
+    expect(fromAbove).toEqual([
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvwwww",
+      "...vvvvvvvvvvwwwww",
+      "...vvvvvvvvvwww...",
+      "...vvvvvvvvwwww...",
+      "...vvvvvvvwwwww...",
+      "...vvvvvvwww......",
+      "...vvvvvwwww......",
+      "...vvvvwwwww......",
+      "...wwwwww.........",
+      "...wwwwww.........",
+      "...wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
+    expect(ground).toEqual([
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "##############wwww",
+      "#############wwwww",
+      "############www...",
+      "###########wwww...",
+      "##########wwwww...",
+      "#########www......",
+      "########wwww......",
+      "#######wwwww......",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
+  });
+
+  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner or beside the jut, because the walkway juts in to meet the corner", () => {
     const walk = (from: At, to: At) => {
       const drill = startDrill({ selection: NON_LETHAL });
       drill.walkTo(from);
@@ -127,10 +272,16 @@ describe("Ocellus arena", () => {
       drill.dispose();
       return trail;
     };
-    expect([walk({ x: 9, y: 4 }, { x: 8, y: 8 }), walk({ x: 9, y: 4 }, { x: 7, y: 8 }), walk({ x: 8, y: 5 }, { x: 8, y: 7 })]).toEqual([
-      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
-      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
-      [{ x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+    expect([
+      walk({ x: 9, y: 4 }, { x: 8, y: 8 }),
+      walk({ x: 9, y: 4 }, { x: 7, y: 8 }),
+      walk({ x: 8, y: 5 }, { x: 8, y: 7 }),
+      walk({ x: 8, y: 6 }, { x: 8, y: 8 }),
+    ]).toEqual([
+      [{ x: 8, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 8, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }],
+      [{ x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
     ]);
   });
 

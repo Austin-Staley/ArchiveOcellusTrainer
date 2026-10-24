@@ -46,9 +46,9 @@ describe("Ocellus arena", () => {
       "...##########ww.",
       "..###########ww.",
       "..###########ww.",
-      "..#########www..",
+      "..##########ww..",
+      "..#########ww...",
       "..########ww....",
-      "..#######ww.....",
       "..#######ww.....",
       "..######ww......",
       "..#####ww.......",
@@ -86,11 +86,11 @@ describe("Ocellus arena", () => {
       drill.region.world.tickWorld();
       trail.push({ ...drill.player().location });
     }
-    expect(trail).toEqual([{ x: 9, y: 3 }, { x: 7, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
+    expect(trail).toEqual([{ x: 10, y: 3 }, { x: 8, y: 5 }, { x: 6, y: 7 }, { x: 4, y: 9 }, { x: 3, y: 11 }, { x: 3, y: 11 }]);
     drill.dispose();
   });
 
-  test("the east edge runs straight on x 11 for 3 rows, then steps through 2 diagonal tiles to the 5x5", () => {
+  test("the east edge runs straight on x 11 for 3 rows, then one tile in per row, (10, 4), (9, 5) and (8, 6), to the 5x5's corner", () => {
     const drill = startDrill({ selection: NON_LETHAL });
     const lastFloor = (y: number) => {
       for (let x = 13; x >= 0; x--) {
@@ -105,15 +105,39 @@ describe("Ocellus arena", () => {
       { x: 11, y: 1 },
       { x: 11, y: 2 },
       { x: 11, y: 3 },
-      { x: 9, y: 4 },
-      { x: 8, y: 5 },
-      { x: 7, y: 6 },
+      { x: 10, y: 4 },
+      { x: 9, y: 5 },
+      { x: 8, y: 6 },
       { x: 7, y: 7 },
     ]);
     drill.dispose();
   });
 
-  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner, because the walkway juts in to meet it", () => {
+  test("a Control-click along the back wall walks it one diagonal tile a tick, toward the jut and back", async () => {
+    const drill = startDrill({ selection: NON_LETHAL });
+    const walkClicked = async (to: At) => {
+      await drill.click(to, { ctrlKey: true });
+      const trail: At[] = [];
+      for (let tick = 0; tick < 3; tick++) {
+        drill.region.world.tickWorld();
+        trail.push({ ...drill.player().location });
+      }
+      return trail;
+    };
+    await drill.click({ x: 10, y: 3 });
+    drill.region.world.tickWorld(6);
+    const start = { ...drill.player().location };
+    const toward = await walkClicked({ x: 8, y: 5 });
+    const back = await walkClicked({ x: 10, y: 3 });
+    drill.dispose();
+    expect({ start, toward, back }).toEqual({
+      start: { x: 10, y: 3 },
+      toward: [{ x: 9, y: 4 }, { x: 8, y: 5 }, { x: 8, y: 5 }],
+      back: [{ x: 9, y: 4 }, { x: 10, y: 3 }, { x: 10, y: 3 }],
+    });
+  });
+
+  test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner or beside the jut, because the walkway juts in to meet the corner", () => {
     const walk = (from: At, to: At) => {
       const drill = startDrill({ selection: NON_LETHAL });
       drill.walkTo(from);
@@ -127,10 +151,16 @@ describe("Ocellus arena", () => {
       drill.dispose();
       return trail;
     };
-    expect([walk({ x: 9, y: 4 }, { x: 8, y: 8 }), walk({ x: 9, y: 4 }, { x: 7, y: 8 }), walk({ x: 8, y: 5 }, { x: 8, y: 7 })]).toEqual([
-      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
-      [{ x: 8, y: 4 }, { x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
-      [{ x: 7, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+    expect([
+      walk({ x: 9, y: 4 }, { x: 8, y: 8 }),
+      walk({ x: 9, y: 4 }, { x: 7, y: 8 }),
+      walk({ x: 8, y: 5 }, { x: 8, y: 7 }),
+      walk({ x: 8, y: 6 }, { x: 8, y: 8 }),
+    ]).toEqual([
+      [{ x: 8, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 8, y: 5 }, { x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
+      [{ x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }, { x: 8, y: 6 }],
+      [{ x: 7, y: 6 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }, { x: 7, y: 7 }],
     ]);
   });
 

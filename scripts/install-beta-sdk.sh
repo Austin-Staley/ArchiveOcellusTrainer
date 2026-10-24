@@ -4,10 +4,64 @@ set -euo pipefail
 OSRS_SDK_REPO="${OSRS_SDK_REPO:-https://github.com/Julian-Dasilva/osrs-sdk.git}"
 OSRS_SDK_COMMIT="${OSRS_SDK_COMMIT:-7e08e7f54df2092a990c1fece4a0b593a8651bf1}"
 OSRS_SDK_PACKS="${OSRS_SDK_PACKS:-}"
+PACKAGES=(osrs-sdk osrs-sdk-assets osrs-sdk-react)
+PACKS=('osrs-sdk-[0-9]*.tgz' 'osrs-sdk-assets-*.tgz' 'osrs-sdk-react-*.tgz')
 
 cd "$(dirname "$0")/.."
 
-if [[ -n "${OSRS_SDK_PACKS}" ]]; then
+built_commit() {
+  node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).gitHead ?? "unrecorded"))'
+}
+
+installed_commit() {
+  local name
+  for name in "${PACKAGES[@]}"; do
+    if [[ -f "node_modules/${name}/package.json" ]]; then
+      built_commit <"node_modules/${name}/package.json" 2>/dev/null || echo unreadable
+    else
+      echo missing
+    fi
+  done | sort -u | paste -sd ' ' -
+}
+
+check_installed() {
+  local installed
+  installed="$(installed_commit)"
+  if [[ "${installed}" == "${OSRS_SDK_COMMIT}" ]]; then
+    echo "install-beta-sdk: installed osrs-sdk commit ${installed} matches the pin"
+  else
+    echo "install-beta-sdk: installed osrs-sdk commit ${installed} does not match the pin ${OSRS_SDK_COMMIT}"
+    return 1
+  fi
+}
+
+pack() {
+  local matches=("$1"/$2)
+  if [[ ${#matches[@]} -ne 1 || ! -f "${matches[0]}" ]]; then
+    echo "install-beta-sdk: expected exactly one $1/$2" >&2
+    exit 1
+  fi
+  echo "${matches[0]}"
+}
+
+packs_at_pin() {
+  local glob file commit
+  for glob in "${PACKS[@]}"; do
+    file="$(pack "$1" "${glob}")" || exit 1
+    commit="$(tar -xzOf "${file}" package/package.json | built_commit)"
+    if [[ "${commit}" != "${OSRS_SDK_COMMIT}" ]]; then
+      echo "install-beta-sdk: refusing ${file}, built from ${commit}, not the pin ${OSRS_SDK_COMMIT}"
+      return 1
+    fi
+  done
+}
+
+if [[ "${1:-}" == --check ]]; then
+  check_installed
+  exit
+fi
+
+if [[ -n "${OSRS_SDK_PACKS}" ]] && packs_at_pin "${OSRS_SDK_PACKS}"; then
   packs="${OSRS_SDK_PACKS}"
   echo "install-beta-sdk: using prebuilt packs from ${packs}"
 else
@@ -18,27 +72,21 @@ else
   git init --quiet "${work}/osrs-sdk"
   git -C "${work}/osrs-sdk" fetch --quiet --depth 1 "${OSRS_SDK_REPO}" "${OSRS_SDK_COMMIT}"
   git -C "${work}/osrs-sdk" checkout --quiet FETCH_HEAD
+  built="$(git -C "${work}/osrs-sdk" rev-parse HEAD)"
   (
     cd "${work}/osrs-sdk"
     npm ci --no-audit --no-fund
     npm run build
+    npm pkg set "gitHead=${built}" --workspaces --include-workspace-root
     npm pack --pack-destination "${packs}" --silent
     npm pack --workspace osrs-sdk-assets --pack-destination "${packs}" --silent
     npm pack --workspace osrs-sdk-react --pack-destination "${packs}" --silent
   )
 fi
 
-pack() {
-  local matches=("${packs}"/$1)
-  if [[ ${#matches[@]} -ne 1 || ! -f "${matches[0]}" ]]; then
-    echo "install-beta-sdk: expected exactly one ${packs}/$1" >&2
-    exit 1
-  fi
-  echo "${matches[0]}"
-}
-
-npm install --no-save --no-audit --no-fund \
-  "$(pack 'osrs-sdk-[0-9]*.tgz')" \
-  "$(pack 'osrs-sdk-assets-*.tgz')" \
-  "$(pack 'osrs-sdk-react-*.tgz')"
-node -p '"install-beta-sdk: osrs-sdk " + require("osrs-sdk/package.json").version + ", osrs-sdk-react " + require("osrs-sdk-react/package.json").version'
+files=()
+for glob in "${PACKS[@]}"; do
+  files+=("$(pack "${packs}" "${glob}")")
+done
+npm install --no-save --no-audit --no-fund "${files[@]}"
+check_installed

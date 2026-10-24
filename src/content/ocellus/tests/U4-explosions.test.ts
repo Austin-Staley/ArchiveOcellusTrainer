@@ -105,4 +105,18 @@ describe("U4 personal explosions", () => {
     expect(drill.events("player-hit-judged").map((e) => [e.at, e.outcome, e.requested, drill.row(e.at).bossHp.atPostTick])).toEqual(landed);
     drill.dispose();
   });
+
+  test.each([
+    { bossHp: 8, landed: [[17, "reduced", 8, 0]], splat: [8], ended: [[17, "kill"]] },
+    { bossHp: 10, landed: [[17, "reduced", 10, 1]], splat: [9], ended: [] },
+  ] as const)("a bow roll of 24 landing at 17 on a boss with $bossHp HP keeps floor(24 x 0.4) = 9 of the roll, capped to the HP left", async ({ bossHp, landed, splat, ended }) => {
+    const drill = startDrill({ seed: BOW_ROLLS_24_9_13_53, bossHp, selection: EXPLOSIONS });
+    await drill.click(RING_NORTH);
+    drill.tickTo(14);
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(17);
+    const judged = drill.events("player-hit-judged").map((e) => [e.at, e.outcome, e.requested, drill.row(e.at).bossHp.atPostTick]);
+    expect([judged, drill.boss().hitsThisTick.map((hit) => hit.damage), drill.events("run-ended").map((e) => [e.at, e.reason])]).toEqual([landed, splat, ended]);
+    drill.dispose();
+  });
 });

@@ -86,8 +86,8 @@ function floorGeometry(mask: TileSet): THREE.BufferGeometry {
   for (const { x, y } of mask.tiles()) {
     for (const [cx, cz] of [[x, y - 1], [x + 1, y], [x + 1, y - 1], [x, y - 1], [x, y], [x + 1, y]]) corner(cx, cz);
   }
-  for (const { floorCorner, cut } of floodedHalves(mask)) {
-    for (const { x, y } of [floorCorner, ...cut]) corner(x, y - 1);
+  for (const { floorCorner, cut: [from, to] } of floodedHalves(mask)) {
+    for (const { x, y } of [floorCorner, to, from]) corner(x, y - 1);
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));

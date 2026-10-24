@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { Settings } from "osrs-sdk";
 import { paintedStyleAt, paintedTiles } from "../../../../test/paintedTiles";
 import { OCELLUS_P4 } from "../js/OcellusTimings";
@@ -139,7 +140,7 @@ describe("Ocellus arena", () => {
     });
   });
 
-  test("the back wall draws one straight diagonal from the end of the straight run to the jut, and the flood meets it along that diagonal", () => {
+  test("the back wall draws one straight diagonal from the end of the straight run to the jut, and the flood meets it along that diagonal on the map and from above in 3D", () => {
     const drill = startDrill({ selection: { focus: "void-floor" } });
     const { region } = drill;
     const [wall, flood] = [OCELLUS_P4.geometry.walkway.value.top, OCELLUS_P4.floor.look.value.void];
@@ -168,6 +169,22 @@ describe("Ocellus arena", () => {
         region.entities.forEach((entity) => entity.draw(0, context));
       }, Settings.tileSize),
     );
+    const scene = new THREE.Scene();
+    region.entities.forEach((entity) => entity.get3dModel()?.draw(scene, 0, 0, entity.getPerceivedLocation(0), 0, 0, entity.visible(0), []));
+    scene.updateMatrixWorld(true);
+    const wallTop = new THREE.Color(wall).getHex();
+    const fromAbove = raster((x, y) => {
+      const hits = new THREE.Raycaster(new THREE.Vector3(x, 10, y - 1), new THREE.Vector3(0, -1, 0)).intersectObject(scene);
+      const seen = (hit: (typeof hits)[number]) => {
+        const { object, face } = hit;
+        if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshBasicMaterial)) return null;
+        const colours = object.geometry.getAttribute("color");
+        if (colours instanceof THREE.BufferAttribute && face && new THREE.Color().fromBufferAttribute(colours, face.a).getHex() === wallTop) return wall;
+        return object.material.map === null ? null : flood;
+      };
+      const styles = hits.map(seen);
+      return styles.find((style) => style === wall) ?? styles.find((style) => style === flood) ?? null;
+    });
     drill.dispose();
     expect(drill.row(45).phase.stage).toBe("outer-void");
     expect(flooded).toEqual([
@@ -189,6 +206,29 @@ describe("Ocellus arena", () => {
       "###wwwwww.........",
       "###wwwwww.........",
       "###wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
+    expect(fromAbove).toEqual([
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvvwww",
+      "...vvvvvvvvvvvwwww",
+      "...vvvvvvvvvvwwwww",
+      "...vvvvvvvvvwww...",
+      "...vvvvvvvvwwww...",
+      "...vvvvvvvwwwww...",
+      "...vvvvvvwww......",
+      "...vvvvvwwww......",
+      "...vvvvwwwww......",
+      "...wwwwww.........",
+      "...wwwwww.........",
+      "...wwwwww.........",
       "wwwwww............",
       "wwwwww............",
       "wwwwww............",

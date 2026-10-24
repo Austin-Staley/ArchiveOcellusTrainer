@@ -1,16 +1,31 @@
 import type { DrillSelection } from "../js/OcellusTimings";
 import type { At } from "./drill";
-import { RING_NORTH, startDrill } from "./drill";
+import { startDrill } from "./drill";
 
 const ORB_DRILL = { focus: "lifeforce-orb" } as const;
 const INNER_ORB: At = { x: 9, y: 4 };
 const BESIDE_INNER_ORB: At = { x: 9, y: 3 };
 const OUTER_ORB_FROM_SPAWN: At = { x: 4, y: 3 };
 const NEAR_PLAYER_OUTER_ORB = { outerOrbTile: "safe-floor" } as const;
-const ANY_FLOOR_SEED = 31;
-const ANY_FLOOR_INNER_ORB: At = { x: 10, y: 2 };
-const OUTER_ORB_ON_FLOOD: At = { x: 1, y: 2 };
+const SECOND_INNER_ORB: At = { x: 2, y: 2 };
+const WEST_OF_SECOND_ORB: At = { x: 1, y: 2 };
+const SOUTH_OF_WEST_TILE: At = { x: 1, y: 3 };
 const V1_TURN = { floorHoleLayout: "v1-turn" } as const;
+
+function claimSecondInnerOrbAsRiftsBurst(takeFirstExplosion: boolean) {
+  const drill = startDrill();
+  drill.playCorrectlyTo(72);
+  drill.walkTo(WEST_OF_SECOND_ORB);
+  const dodgeFrom = takeFirstExplosion ? 77 : 76;
+  drill.tickTo(dodgeFrom);
+  for (let t = dodgeFrom; t < 88; t++) {
+    drill.walkTo(t % 2 === 0 ? SOUTH_OF_WEST_TILE : WEST_OF_SECOND_ORB);
+    drill.tickTo(t + 1);
+  }
+  drill.walkTo(SECOND_INNER_ORB);
+  drill.tickTo(90);
+  return drill;
+}
 
 function returnsAfterWalkingAt(orderedAfter: number, selection: DrillSelection = {}) {
   const drill = startDrill({ selection: { ...ORB_DRILL, ...selection } });
@@ -149,67 +164,51 @@ describe("U3 lifeforce hit and orb", () => {
     drill.dispose();
   });
 
-  test("under any-floor the outer orb lands on the flood; a return due on the tick the floor kills the player is skipped", () => {
-    const retrieve = (collectInnerOrb: boolean) => {
-      const drill = startDrill({ seed: ANY_FLOOR_SEED, selection: { focus: "orb-retrieval", outerOrbTile: "any-floor" } });
-      drill.tickTo(13);
-      if (collectInnerOrb) drill.walkTo(ANY_FLOOR_INNER_ORB);
-      drill.tickTo(30);
-      drill.walkTo(RING_NORTH);
-      drill.tickTo(45);
-      drill.walkTo(OUTER_ORB_ON_FLOOD);
-      drill.tickTo(50);
+  test("guard: an orb return due on the tick the rift bursts kill the player is skipped", () => {
+    const retrieve = (takeFirstExplosion: boolean) => {
+      const drill = claimSecondInnerOrbAsRiftsBurst(takeFirstExplosion);
       const observed = {
-        outerOrb: drill.events("orb-spawned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.tile, e.credit]),
-        floorHits: drill.events("floor-hit").map((e) => [e.at, e.receipt.applied, e.receipt.afterHp]),
-        returned: drill.events("orb-returned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.receipt.beforeHp, e.receipt.afterHp]),
+        innerOrb: drill.events("orb-spawned").filter((e) => e.at === 72).map((e) => [e.tile, e.credit]),
+        explosionHits: drill.events("explosion-resolved").filter((e) => e.at > 72 && e.outcome.kind === "hit").map((e) => e.at),
+        bursts: drill.events("rift-burst").map((e) => [e.at, e.receipt.applied, e.receipt.afterHp]),
+        returned: drill.events("orb-returned").filter((e) => e.at > 72).map((e) => [e.at, e.receipt.beforeHp, e.receipt.afterHp]),
         ended: drill.events("run-ended").map((e) => [e.at, e.reason]),
-        hpAt50: drill.row(50).playerAtPostTick.hp,
+        hpAt90: drill.row(90).playerAtPostTick.hp,
       };
       drill.dispose();
       return observed;
     };
-    expect(retrieve(false)).toEqual({
-      outerOrb: [[43, { x: 1, y: 2 }, 25]],
-      floorHits: [[48, 10, 15], [49, 9, 6], [50, 6, 0]],
-      returned: [],
-      ended: [[50, "death"]],
-      hpAt50: 0,
-    });
     expect(retrieve(true)).toEqual({
-      outerOrb: [[43, { x: 1, y: 2 }, 49]],
-      floorHits: [[48, 10, 40], [49, 9, 31], [50, 10, 21]],
-      returned: [[50, 21, 70]],
+      innerOrb: [[{ x: 2, y: 2 }, 42]],
+      explosionHits: [78],
+      bursts: [[90, 14, 12], [90, 12, 0]],
+      returned: [],
+      ended: [[90, "death"]],
+      hpAt90: 0,
+    });
+    expect(retrieve(false)).toEqual({
+      innerOrb: [[{ x: 2, y: 2 }, 42]],
+      explosionHits: [],
+      bursts: [[90, 14, 28], [90, 14, 14]],
+      returned: [[90, 14, 56]],
       ended: [],
-      hpAt50: 70,
+      hpAt90: 56,
     });
   });
 
-  test("guard: on the tick an orb return falls due, the row lists the floor hit that landed before it", () => {
-    const drill = startDrill({ seed: ANY_FLOOR_SEED, selection: { focus: "orb-retrieval", outerOrbTile: "any-floor" } });
-    drill.tickTo(13);
-    drill.walkTo(ANY_FLOOR_INNER_ORB);
-    drill.tickTo(30);
-    drill.walkTo(RING_NORTH);
-    drill.tickTo(45);
-    drill.walkTo(OUTER_ORB_ON_FLOOD);
-    drill.tickTo(50);
-    const settled = drill.row(50).events.flatMap((e) => (e.kind === "floor-hit" || e.kind === "orb-returned" ? [[e.kind, e.receipt.beforeHp, e.receipt.afterHp]] : []));
+  test("guard: on the tick an orb return falls due, the row lists the rift bursts that landed before it", () => {
+    const drill = claimSecondInnerOrbAsRiftsBurst(false);
+    const settled = drill.row(90).events.flatMap((e) => (e.kind === "rift-burst" || e.kind === "orb-returned" ? [[e.kind, e.receipt.beforeHp, e.receipt.afterHp]] : []));
     drill.dispose();
-    expect(settled).toEqual([["floor-hit", 31, 21], ["orb-returned", 21, 70]]);
+    expect(settled).toEqual([["rift-burst", 42, 28], ["rift-burst", 28, 14], ["orb-returned", 14, 56]]);
   });
 
-  test("an orb never forms on a floor hole: seed 5's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
-    const orbs = (runSeed: number, selection: DrillSelection, until: number) => {
-      const drill = startDrill({ seed: runSeed, selection });
-      drill.playCorrectlyTo(until);
-      const observed = [drill.region.fightLog().header.choices.floorHoleLayout.key, drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile])];
-      drill.dispose();
-      return observed;
-    };
-    expect([orbs(5, V1_TURN, 12), orbs(2, { ...V1_TURN, outerOrbTile: "any-floor" }, 43)]).toEqual([
-      ["v1-turn", [[12, "inner-void", { x: 2, y: 5 }]]],
-      ["v1-turn", [[12, "inner-void", { x: 1, y: 4 }], [43, "outer-void", { x: 3, y: 8 }]]],
+  test("guard: an orb never forms on a floor hole: seed 5's inner orb from the spawn", () => {
+    const drill = startDrill({ seed: 5, selection: V1_TURN });
+    drill.playCorrectlyTo(12);
+    expect([drill.region.fightLog().header.choices.floorHoleLayout.key, drill.events("orb-spawned").map((e) => [e.at, e.void, e.tile])]).toEqual([
+      "v1-turn", [[12, "inner-void", { x: 2, y: 5 }]],
     ]);
+    drill.dispose();
   });
 });

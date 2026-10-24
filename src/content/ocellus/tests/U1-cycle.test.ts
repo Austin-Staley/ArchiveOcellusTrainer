@@ -78,7 +78,6 @@ describe("U1 cycle skeleton", () => {
     [{ focus: "transition-attacks" }, 27],
     [{ focus: "boss-heals" }, 6],
     [{ focus: "rifts" }, 62],
-    [{ focus: "rifts", riftFirstCycle: "cycle-3" }, 122],
     [{ focus: "floor-holes" }, 0],
     [{ focus: "rifts", drillStart: "cycle-start" }, 0],
   ] as const)("the run under %o starts on P4 tick %i", (selection, start) => {
@@ -272,9 +271,9 @@ describe("U1 cycle skeleton", () => {
   });
 
   test("the URL selects data-file options and lists unknown keys, options and seeds by name", () => {
-    const parsed = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=7&explosions=v2-seven&focus=everything&nope=1"), () => 99);
+    const parsed = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=7&explosions=wiki-six&focus=everything&nope=1"), () => 99);
     expect([parsed.config.seed, parsed.config.choices.explosions.key, parsed.config.choices.focus.key, parsed.rejected]).toEqual([
-      7, "v2-seven", "full-fight", ["nope=1", "focus=everything"],
+      7, "wiki-six", "full-fight", ["nope=1", "focus=everything"],
     ]);
     const unseeded = parseDrillRequest(new URL("http://127.0.0.1:8002/?seed=-3"), () => 99);
     expect([unseeded.config.seed, unseeded.rejected]).toEqual([99, ["seed=-3"]]);

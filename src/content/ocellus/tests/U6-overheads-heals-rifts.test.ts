@@ -225,18 +225,13 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.dispose();
   });
 
-  test("two rifts spawn north of the 5x5 one tick before each inner void from cycle 2, or from cycle 3 under cycle-3", () => {
-    const spawned = (selection: DrillSelection) => {
-      const drill = startDrill({ selection: { focus: "rifts", ...selection } });
-      drill.tickTo(127);
-      const observed = drill.events("rift-spawned").map((e) => [e.at, e.rift, e.tile]);
-      drill.dispose();
-      return observed;
-    };
-    expect([spawned({}), spawned({ riftFirstCycle: "cycle-3" })]).toEqual([
-      [[67, "rift-67-0", { x: 2, y: 2 }], [67, "rift-67-1", { x: 10, y: 2 }], [127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 10, y: 2 }]],
-      [[127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 10, y: 2 }]],
+  test("guard: two rifts spawn north of the 5x5 one tick before each inner void from cycle 2", () => {
+    const drill = startDrill({ selection: { focus: "rifts" } });
+    drill.tickTo(127);
+    expect(drill.events("rift-spawned").map((e) => [e.at, e.rift, e.tile])).toEqual([
+      [67, "rift-67-0", { x: 2, y: 2 }], [67, "rift-67-1", { x: 10, y: 2 }], [127, "rift-127-0", { x: 2, y: 2 }], [127, "rift-127-1", { x: 10, y: 2 }],
     ]);
+    drill.dispose();
   });
 
   test.each([

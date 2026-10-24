@@ -78,7 +78,6 @@ describe("U4 personal explosions", () => {
 
   test.each([
     { option: "wiki-six", marks: [15, 17, 19, 21, 23, 25] },
-    { option: "v2-seven", marks: [15, 17, 19, 21, 23, 25, 27] },
   ] as const)("the $option option sets the count and the first mark, each mark still lands a tick later, and the series still starts at hit + 2", ({ option, marks }) => {
     const drill = startDrill({ selection: { ...EXPLOSIONS, explosions: option } });
     drill.tickTo(30);

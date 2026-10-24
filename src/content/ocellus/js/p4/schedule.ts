@@ -139,7 +139,7 @@ export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<
   voidBeats(outer, outerStart);
   transitionBeats(afterOuter, afterOuterStart);
 
-  const firstRiftCycle = choices.riftFirstCycle.option.value;
+  const firstRiftCycle = rifts.firstCycle.value;
   if (firstRiftCycle < 2) throw new RangeError(`rifts cannot spawn before cycle 1 starts (first rift cycle ${firstRiftCycle})`);
   const riftSpawn = length - rifts.spawnBeforeOnset.value;
   put(riftSpawn, "rift spawn", (c) => (c + 1 >= firstRiftCycle ? { kind: "rifts-spawn", forCycle: cycle(c + 1) } : null));

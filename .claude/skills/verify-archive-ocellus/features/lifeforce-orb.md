@@ -13,14 +13,13 @@ Four ticks after each void forms, Ocellus takes half the player's current HP, ro
 - `unclaimed-orb-heal` logs `boss-healed` with cause `unclaimed-orb` at 62 when the outer orb was not collected.
 - `orb-opposite-entry` puts the default outer orb on the rim tile farthest in a straight line from the 5x5 entry tile. Equally far tiles are a seeded pick.
 - `orb-off-holes` keeps both orbs off every tile of the run's hole layout, under both `outerOrbTile` options. A focus drill without floor holes has no holes to avoid.
-- `orb-choices` select the pickup radius with `orbPickupRadius` (`on-tile` or `adjacent`), the outer orb's tile with `outerOrbTile` (`opposite-entry`, or the near-player picks `safe-floor` and `any-floor`), and the heal with `unclaimedOuterOrb` (`heals-boss` or `off`).
+- `orb-choices` select the pickup radius with `orbPickupRadius` (`on-tile` or `adjacent`), the outer orb's tile with `outerOrbTile` (`opposite-entry`, or the near-player pick `safe-floor`), and the heal with `unclaimedOuterOrb` (`heals-boss` or `off`).
 
 ## How to get to it (user POV)
 
 - Open `http://127.0.0.1:8002/` and watch the HP orb halve at P4 tick 12 and 43 in every cycle.
 - Click the orb's tile once it appears and stand on it until it glows. HP comes back the tick after.
 - Pick `Lifeforce orb` in the `Focus` selector and press `Restart` to practise the orb alone, or `Orb retrieval` to practise it with the void floor.
-- Add `outerOrbTile=any-floor` to the URL to make outer orbs land on the flood, as one VOD shows.
 
 ## Driving it with agent-browser
 

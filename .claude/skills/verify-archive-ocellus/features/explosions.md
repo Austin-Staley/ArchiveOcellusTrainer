@@ -9,7 +9,7 @@ Five ticks after each lifeforce hit, Ocellus marks the tile the player starts th
 - `explosion-impact` logs `explosion-resolved` a tick after each mark. The outcome is `hit` with a 16 receipt when the player starts the impact tick on the marked tile, `dodged` when the player starts it 1 tile away, and `avoided` when 2 or more tiles away. The mark bursts either way.
 - `explosion-dodge` cuts the player's attack delay by 3, never below 0, on each `dodged` impact, and records the delay before and after in the outcome's `attackDelay`. A Scythe or a Twisted bow on Rapid then attacks every 2 ticks while each mark is dodged. A hit or a 2-tile run leaves the delay alone.
 - `explosion-under-boss` records `underBoss: true` when the marked tile is under the boss. Such a mark still hits.
-- `explosion-choices` select the series with `explosions`: `v2-tell-then-six` (default, marks from hit + 5, 17 to 27, in step with sound 12537), `wiki-six` (marks from hit + 3, 15 to 25) or `v2-seven` (marks from hit + 3 with a seventh at 27).
+- `explosion-choices` select the series with `explosions`: `v2-tell-then-six` (default, marks from hit + 5, 17 to 27, in step with sound 12537), or `wiki-six` (marks from hit + 3, 15 to 25).
 
 ## How to get to it (user POV)
 
@@ -18,7 +18,7 @@ Five ticks after each lifeforce hit, Ocellus marks the tile the player starts th
 - Click the boss with the Twisted bow, then on each mark tick click one tile away and click the boss again. The bow fires every 2 ticks from 18 to 28. A click 2 tiles away runs, so it avoids the mark without the speed-up.
 - Listen for 12638 and 12537. **Sound effects** and **Area sounds** in the Settings menu start ticked until the player unticks one.
 - Pick `Explosions` in the `Focus` selector and press `Restart` to practise the explosions alone.
-- Add `explosions=wiki-six` or `explosions=v2-seven` to the URL for the other readings of the footage.
+- Add `explosions=wiki-six` to the URL for the other reading of the footage.
 
 ## Driving it with agent-browser
 

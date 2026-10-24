@@ -17,8 +17,7 @@ function insidePolygon(corners: readonly (readonly [number, number])[], x: numbe
   return inside;
 }
 
-/** Points are in tile units at any scale; the last fill covering a point wins. */
-export function paintedStyleAt(paint: (context: OffscreenCanvasRenderingContext2D, scale: number) => void, scale = 1): (x: number, y: number) => string | null {
+export function paintedStyleAt(paint: (context: OffscreenCanvasRenderingContext2D, scale: number) => void, scale = 1): (tileX: number, tileY: number) => string | null {
   const shapes: Shape[] = [];
   const state: Record<string | symbol, unknown> = { fillStyle: "", globalAlpha: 1 };
   const saved: Record<string | symbol, unknown>[] = [];
@@ -46,7 +45,7 @@ export function paintedStyleAt(paint: (context: OffscreenCanvasRenderingContext2
     },
   });
   paint(context as unknown as OffscreenCanvasRenderingContext2D, scale);
-  return (x, y) => [...shapes].reverse().find((shape) => shape.contains(x * scale, y * scale))?.style ?? null;
+  return (tileX, tileY) => [...shapes].reverse().find((shape) => shape.contains(tileX * scale, tileY * scale))?.style ?? null;
 }
 
 export type Fill = Readonly<{ style: string; x: number; y: number; width: number; height: number }>;

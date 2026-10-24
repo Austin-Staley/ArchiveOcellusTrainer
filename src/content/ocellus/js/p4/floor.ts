@@ -24,9 +24,8 @@ export const BRAZIERS = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "b")
 const FLOOR_SIDES = ["west", "north"] as const;
 const CURB_SIDES = ["east", "south"] as const;
 
-/** Corners are on the tile grid, where tile (x, y) covers x to x + 1 and y to y + 1. */
-type Corner = Readonly<{ x: number; y: number }>;
-type DiagonalCurb = Readonly<{ shape: "diagonal"; at: Tile; cut: readonly [Corner, Corner]; floorCorner: Corner; wallCorner: Corner }>;
+type GridCorner = Readonly<{ x: number; y: number }>;
+type DiagonalCurb = Readonly<{ shape: "diagonal"; at: Tile; cut: readonly [GridCorner, GridCorner]; floorCorner: GridCorner; wallCorner: GridCorner }>;
 export type CurbTile = Readonly<{ shape: "square"; at: Tile }> | DiagonalCurb;
 
 function diagonal(at: Tile): DiagonalCurb {

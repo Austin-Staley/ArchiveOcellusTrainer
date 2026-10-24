@@ -96,6 +96,27 @@ describe("U3 lifeforce hit and orb", () => {
     ]).toEqual([[{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 7, y: 7 }], [{ x: 7, y: 7 }], [{ x: 3, y: 7 }], [{ x: 6, y: 3 }]]);
   });
 
+  test("guard: clicks onto (3, 2) and then over the hidden boss's corner onto (5, 4) run in through (4, 3), so the outer orb forms on the rim tile farthest from it, (7, 7)", async () => {
+    const drill = startDrill({ selection: { ...ORB_DRILL, drillStart: "cycle-start" } });
+    drill.tickTo(0);
+    await drill.click({ x: 3, y: 2 });
+    drill.tickTo(2);
+    await drill.click({ x: 5, y: 4 });
+    drill.tickTo(43);
+    const walked = drill.rows().filter((row) => row.tick <= 3).map((row) => [row.tick, row.phase.boss, row.inputs.flatMap((input) => (input.kind === "walk-ordered" ? [input.destination] : [])), row.playerAtPostTick.tile]);
+    const outerOrb = drill.events("orb-spawned").filter((e) => e.void === "outer-void").map((e) => [e.at, e.tile]);
+    drill.dispose();
+    expect({ walked, outerOrb }).toEqual({
+      walked: [
+        [0, "hidden", [], { x: 5, y: 1 }],
+        [1, "hidden", [{ x: 3, y: 2 }], { x: 3, y: 2 }],
+        [2, "hidden", [], { x: 3, y: 2 }],
+        [3, "hidden", [{ x: 5, y: 4 }], { x: 5, y: 4 }],
+      ],
+      outerOrb: [[43, { x: 7, y: 7 }]],
+    });
+  });
+
   test("an unclaimed outer orb heals the boss by its credit at hit + 19 (62); an unclaimed inner orb or a collected outer orb does not", () => {
     const run = (selection: DrillSelection, collectOuterOrb = false) => {
       const drill = startDrill({ selection: { ...ORB_DRILL, ...NEAR_PLAYER_OUTER_ORB, ...selection } });

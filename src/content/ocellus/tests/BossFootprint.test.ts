@@ -60,9 +60,9 @@ describe("boss footprint", () => {
     ]);
   });
 
-  test("guard, main has no blocking: a player under the boss when the outer void starts walks out before an explosion mark bursts", () => {
+  test("guard, main has no blocking: a player under the boss when the outer void starts walks out before an explosion mark bursts", async () => {
     const drill = startDrill({ selection: { focus: "explosions", drillStart: "cycle-start" } });
-    drill.playCorrectlyTo(30);
+    await drill.playCorrectlyTo(30);
     drill.walkTo(UNDER_BOSS);
     drill.tickTo(47);
     drill.walkTo(RING_NORTH);

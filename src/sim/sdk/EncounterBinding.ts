@@ -14,14 +14,15 @@ export type Landed<C> = Readonly<{ cause: C; receipt: HitReceipt }>;
 export type Logged<E> = Readonly<{ kind: "event"; event: E }>;
 export type HitRequest<C> = Readonly<{ kind: "hit"; damage: Damage; cause: C }>;
 export type Judgement = Readonly<{ kind: "judge-incoming"; hit: IncomingHit; damage: number }>;
+export type Heal = Readonly<{ kind: "heal"; amount: number; limit: "max-hp" | "allow-overheal" }>;
 
 type FrameData<T extends Encounter> = {
   "tick-opened": Readonly<Record<never, never>>;
   "before-npc-hits": Readonly<{ incoming: readonly IncomingHit[] }>;
   "npc-turn": Readonly<{ snapshot: T["snapshot"] }>;
   "hit-applied": Readonly<{ hit: Landed<T["cause"]> }>;
-  "player-hits-settled": Readonly<{ landed: readonly Landed<T["cause"]>[] }>;
-  "player-moved": Readonly<{ steps: readonly Tile[] }>;
+  "player-hits-settled": Readonly<{ landed: readonly Landed<T["cause"]>[]; player: Readonly<{ hp: number; maxHp: number }> }>;
+  "player-moved": Readonly<{ steps: readonly Tile[]; at: Tile }>;
   "tick-ended": Readonly<{ inputs: readonly T["input"][]; snapshot: T["snapshot"]; events: readonly T["event"][]; combatDraws: number; ending: T["end"] | null }>;
 };
 
@@ -34,7 +35,7 @@ type Replies<T extends Encounter> = {
   "before-npc-hits": Readonly<{ snapshot: T["snapshot"]; outputs: readonly (Logged<T["event"]> | Judgement | HitRequest<T["cause"]>)[] }>;
   "npc-turn": Readonly<{ outputs: readonly (Logged<T["event"]> | HitRequest<T["cause"]>)[]; ending: T["end"] | null }>;
   "hit-applied": readonly T["event"][];
-  "player-hits-settled": readonly T["event"][];
+  "player-hits-settled": readonly (Logged<T["event"]> | Heal)[];
   "player-moved": void;
   "tick-ended": Readonly<{ row: T["row"]; ending: T["end"] | null }>;
 };
@@ -42,7 +43,7 @@ type Replies<T extends Encounter> = {
 /**
  * Each active world tick calls these in this order: tick-opened, then on the driver's NPC turn before-npc-hits and npc-turn,
  * then on the player's turn hit-applied once per landed hit and player-hits-settled, then player-moved, then tick-ended.
- * After an ending, only hit-applied and tick-ended still run that tick.
+ * After an ending, only hit-applied and tick-ended still run that tick. Settlement heals land before the SDK latches the player's death.
  */
 export type Hooks<T extends Encounter> = { readonly [K in FrameKind]: (frame: FrameOf<T, K>) => Replies<T>[K] };
 
@@ -108,6 +109,20 @@ function requestedDamage(damage: Damage, hp: number, prayer: Style | null): numb
       return prayer === damage.style ? damage.protectedAmount : damage.unprotectedAmount;
     default: {
       const unhandled: never = damage;
+      return unhandled;
+    }
+  }
+}
+
+function healed(player: Player, { amount, limit }: Heal): number {
+  const hp = player.currentStats.hitpoint;
+  switch (limit) {
+    case "allow-overheal":
+      return hp + amount;
+    case "max-hp":
+      return Math.max(hp, Math.min(player.stats.hitpoint, hp + amount));
+    default: {
+      const unhandled: never = limit;
       return unhandled;
     }
   }
@@ -242,7 +257,8 @@ export class EncounterBinding<T extends Encounter> {
     if (run.kind !== "turned") return;
     const { time } = run;
     const applied = run.landed.flatMap((hit) => this.hooks["hit-applied"]({ kind: "hit-applied", time, hit }));
-    const settled = run.ending === null ? this.hooks["player-hits-settled"]({ kind: "player-hits-settled", time, landed: run.landed }) : [];
+    const player = { hp: this.player.currentStats.hitpoint, maxHp: this.player.stats.hitpoint };
+    const settled = run.ending === null ? this.hooks["player-hits-settled"]({ kind: "player-hits-settled", time, landed: run.landed, player }).flatMap((output) => this.settle(output)) : [];
     this.run = { ...run, kind: "settled", events: [...run.events, ...applied, ...settled], landed: [] };
   }
 
@@ -251,7 +267,10 @@ export class EncounterBinding<T extends Encounter> {
     const run = this.run;
     if (run.kind !== "settled") return;
     this.run = { ...run, kind: "moved" };
-    if (run.ending === null) this.hooks["player-moved"]({ kind: "player-moved", time: run.time, steps: this.player.stepsThisTick.map(({ x, y }) => tile(x, y)) });
+    if (run.ending === null) {
+      const steps = this.player.stepsThisTick.map(({ x, y }) => tile(x, y));
+      this.hooks["player-moved"]({ kind: "player-moved", time: run.time, steps, at: tile(this.player.location.x, this.player.location.y) });
+    }
   }
 
   finishTick(): T["row"] | null {
@@ -320,6 +339,20 @@ export class EncounterBinding<T extends Encounter> {
   private land(hit: Landed<T["cause"]>): void {
     const run = this.run;
     if (run.kind === "turned") this.run = { ...run, landed: [...run.landed, hit] };
+  }
+
+  private settle(output: Logged<T["event"]> | Heal): readonly T["event"][] {
+    switch (output.kind) {
+      case "event":
+        return [output.event];
+      case "heal":
+        this.player.currentStats.hitpoint = healed(this.player, output);
+        return [];
+      default: {
+        const unhandled: never = output;
+        return unhandled;
+      }
+    }
   }
 
   private apply(actor: Unit, outputs: readonly (Logged<T["event"]> | Judgement | HitRequest<T["cause"]>)[], incoming: ReadonlyMap<IncomingHit, Projectile>): readonly T["event"][] {

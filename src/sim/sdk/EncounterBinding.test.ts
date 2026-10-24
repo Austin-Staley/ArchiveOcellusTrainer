@@ -89,12 +89,12 @@ async function encounter(start: Tick, judged: number) {
       frames.push(`${time.encounter} ${kind} ${cause}: ${receipt.beforeHp} to ${receipt.afterHp}`);
       return [`landed ${cause}`];
     },
-    "player-hits-settled": ({ kind, time, landed }) => {
-      frames.push(`${time.encounter} ${kind} ${landed.map(({ cause }) => cause).join(", ")}`);
-      return ["settled"];
+    "player-hits-settled": ({ kind, time, landed, player: { hp, maxHp } }) => {
+      frames.push(`${time.encounter} ${kind} ${landed.map(({ cause }) => cause).join(", ")} at ${hp} of ${maxHp} hp`);
+      return [{ kind: "event", event: "settled" }, { kind: "heal", amount: 5, limit: "max-hp" }];
     },
-    "player-moved": ({ kind, time, steps }) => {
-      frames.push(`${time.encounter} ${kind} ${steps.map(({ x, y }) => `(${x}, ${y})`).join(" ")}`);
+    "player-moved": ({ kind, time, steps, at }) => {
+      frames.push(`${time.encounter} ${kind} ${steps.map(({ x, y }) => `(${x}, ${y})`).join(" ")} to (${at.x}, ${at.y}) at ${player.currentStats.hitpoint} hp`);
     },
     "tick-ended": ({ kind, time, inputs, events, ending }) => {
       frames.push(`${time.encounter} ${kind}${ending === null ? "" : ` ${ending}`}`);
@@ -111,7 +111,7 @@ describe("EncounterBinding", () => {
     DelayedAction.reset();
   });
 
-  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order", async () => {
+  test("frames follow the SDK's tick once each, from the first world tick after GET READY, with judged hits and requested hits landing in order and settlement heals applied up to max HP before the player moves", async () => {
     const { world, player, npc, binding, frames } = await encounter(tick(5), 7);
     world.getReadyTimer = 2;
     player.running = false;
@@ -126,15 +126,15 @@ describe("EncounterBinding", () => {
         "5 before-npc-hits ",
         "5 npc-turn from 125 hp",
         "5 hit-applied strike 5: 99 to 96",
-        "5 player-hits-settled strike 5",
-        "5 player-moved (22, 20)",
+        "5 player-hits-settled strike 5 at 96 of 99 hp",
+        "5 player-moved (22, 20) to (22, 20) at 99 hp",
         "5 tick-ended",
         "6 tick-opened at world tick 3",
         "6 before-npc-hits melee 20 from 5",
         "6 npc-turn from 125 hp",
-        "6 hit-applied strike 6: 96 to 93",
-        "6 player-hits-settled strike 6",
-        "6 player-moved (23, 20)",
+        "6 hit-applied strike 6: 99 to 96",
+        "6 player-hits-settled strike 6 at 96 of 99 hp",
+        "6 player-moved (23, 20) to (23, 20) at 99 hp",
         "6 tick-ended",
       ],
       rows: ["5: [walk to (23, 20)] judged 0, turned, landed strike 5, settled", "6: [] judged 1, turned, landed strike 6, settled"],

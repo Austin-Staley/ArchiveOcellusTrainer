@@ -5,8 +5,8 @@ import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
-import type { HitReceipt, IncomingStyle, Style } from "../../../../sim/combat";
-import type { FrameOf, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
+import type { IncomingStyle, Style } from "../../../../sim/combat";
+import type { FrameOf, Heal, HitRequest, Hooks, InFlight, IncomingHit, Judgement, Landed, Logged } from "../../../../sim/sdk/EncounterBinding";
 import { EncounterBinding, incomingStyle } from "../../../../sim/sdk/EncounterBinding";
 import type {
   Beat,
@@ -33,7 +33,8 @@ import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
 import type { Schedule } from "../../../../sim/schedule";
 import { reach, TileSet } from "../../../../sim/tiles";
 import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
-import { enteredSquare, orbTile } from "../p4/orb";
+import type { Orbs, OrbStep } from "../p4/orb";
+import { drain, expireOrb, forgiveOrbDebt, formOrb, matureOrb, moveOver, NO_ORBS, releaseUnclaimedOuterOrb, returnDueOrbs } from "../p4/orb";
 import { rollInt } from "../p4/roll";
 import { compileSchedule } from "../p4/schedule";
 import { VoidRift } from "./VoidRift";
@@ -45,13 +46,6 @@ type P4Run = Readonly<{ input: InputObservation; event: FightEvent; cause: Playe
 export type OcellusBinding = EncounterBinding<P4Run>;
 
 type Output = Logged<FightEvent> | HitRequest<PlayerHit>;
-
-/** An unclaimed outer orb heals the boss by `credit`; a claim returns `owed`, which a prevented death clears. */
-type Orb =
-  | Readonly<{ kind: "dormant"; void: VoidKind; credit: number; owed: number; tile: Tile }>
-  | Readonly<{ kind: "available"; void: VoidKind; credit: number; owed: number; tile: Tile }>
-  | Readonly<{ kind: "claimed"; void: VoidKind; credit: number; owed: number; tile: Tile; returnsAt: Tick }>
-  | Readonly<{ kind: "expired"; void: VoidKind; credit: number; tile: Tile }>;
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 
@@ -143,8 +137,7 @@ export class Ocellus extends Mob {
   private readonly schedule: Schedule<Phase, Beat, Mechanic>;
   readonly holes: TileSet;
   readonly binding: OcellusBinding;
-  private orbs: readonly Orb[] = [];
-  private entered: Tile | null = null;
+  private orbs: Orbs = NO_ORBS;
   private marks: readonly Mark[] = [];
   private stolen: readonly Readonly<{ ordinal: Ordinal; credit: number }>[] = [];
   private rifts: readonly Rift[] = [];
@@ -160,9 +153,9 @@ export class Ocellus extends Mob {
     }),
     "npc-turn": ({ time, snapshot }) => this.turn(time.encounter, snapshot.player),
     "hit-applied": ({ hit }) => this.landed(hit),
-    "player-hits-settled": ({ time, landed }) => this.settlePlayerHits(time.encounter, landed),
-    "player-moved": ({ steps }) => {
-      this.entered = steps.reduce(enteredSquare, this.entered);
+    "player-hits-settled": ({ time, landed, player }) => this.settlePlayerHits(time.encounter, landed, player),
+    "player-moved": ({ time, steps, at }) => {
+      this.orbs = moveOver(this.orbs, steps, at, time.encounter, this.config.choices.orbPickupRadius.option.value);
     },
     "tick-ended": (frame) => this.closeRow(frame),
   };
@@ -334,13 +327,13 @@ export class Ocellus extends Mob {
       case "lifeforce-tell":
         return logs({ kind: "lifeforce-told", at, void: beat.void });
       case "lifeforce-hit":
-        return [this.drain(beat.void, at, player.tile)];
+        return [drain({ ...this.config, holes: this.holes }, this.orbs, beat.void, at, player.tile)];
       case "orb-matures":
-        return logs(this.matureOrb(beat.void, at));
+        return logs(...this.stepOrbs(matureOrb(this.orbs, beat.void, at)));
       case "orb-expires":
-        return logs(this.expireOrb(beat.void, at));
+        return logs(...this.stepOrbs(expireOrb(this.orbs, beat.void, at)));
       case "unclaimed-orb-heals":
-        return logs(this.healFromUnclaimedOuterOrb(at));
+        return logs(...this.stepOrbs(releaseUnclaimedOuterOrb(this.orbs)).map(({ amount }) => this.healBoss({ kind: "unclaimed-orb" }, amount, at)));
       case "explosion-series-starts":
         return logs({ kind: "explosion-series-started", at, void: beat.void });
       case "explosion-mark":
@@ -457,11 +450,6 @@ export class Ocellus extends Mob {
     return [fixedHit(rollInt(this.config.seed, "explosionDamage", at, this.config.choices.explosions.option.value.damage, 0), impact)];
   }
 
-  private drain(kind: VoidKind, at: Tick, player: Tile): HitRequest<PlayerHit> {
-    const orb = orbTile(this.config.seed, at, player, this.entered ?? player, kind, this.config.choices, this.holes);
-    return { kind: "hit", damage: { kind: "fraction-current-hp", divisor: OCELLUS_P4.lifeforceOrb.drainDivisor.value }, cause: { kind: "lifeforce-drained", at, void: kind, orb } };
-  }
-
   private landed({ cause, receipt }: Landed<PlayerHit>): readonly FightEvent[] {
     switch (cause.kind) {
       case "deflect-reflected":
@@ -474,14 +462,8 @@ export class Ocellus extends Mob {
         return [{ ...cause, receipt }];
       case "explosion-resolved":
         return [{ ...cause, outcome: { kind: "hit", receipt } }];
-      case "lifeforce-drained": {
-        const credit = receipt.applied;
-        this.orbs = [...this.orbs.filter((orb) => orb.void !== cause.void), { kind: "dormant", void: cause.void, credit, owed: credit, tile: cause.orb }];
-        return [
-          { kind: "lifeforce-drained", at: cause.at, void: cause.void, receipt },
-          { kind: "orb-spawned", at: cause.at, void: cause.void, tile: cause.orb, credit },
-        ];
-      }
+      case "lifeforce-drained":
+        return this.stepOrbs(formOrb(this.orbs, cause, receipt));
       default: {
         const unhandled: never = cause;
         return unhandled;
@@ -489,61 +471,18 @@ export class Ocellus extends Mob {
     }
   }
 
-  private orb(kind: VoidKind): Orb | null {
-    return this.orbs.find((orb) => orb.void === kind) ?? null;
+  private stepOrbs<O>(step: OrbStep<O>): readonly O[] {
+    this.orbs = step.orbs;
+    return step.outputs;
   }
 
-  private replaceOrb(kind: VoidKind, next: Orb | null): void {
-    this.orbs = this.orbs.flatMap((orb) => (orb.void !== kind ? [orb] : next === null ? [] : [next]));
-  }
-
-  private matureOrb(kind: VoidKind, at: Tick): FightEvent | null {
-    const orb = this.orb(kind);
-    if (orb?.kind !== "dormant") return null;
-    this.replaceOrb(kind, { ...orb, kind: "available" });
-    return { kind: "orb-matured", at, void: kind, tile: orb.tile };
-  }
-
-  private expireOrb(kind: VoidKind, at: Tick): FightEvent | null {
-    const orb = this.orb(kind);
-    if (orb?.kind !== "dormant" && orb?.kind !== "available") return null;
-    this.replaceOrb(kind, { kind: "expired", void: kind, credit: orb.credit, tile: orb.tile });
-    return { kind: "orb-expired", at, void: kind, tile: orb.tile, credit: orb.credit };
-  }
-
-  private healFromUnclaimedOuterOrb(at: Tick): FightEvent | null {
-    const orb = this.orb("outer-void");
-    if (orb?.kind !== "expired") return null;
-    this.replaceOrb("outer-void", null);
-    return this.healBoss({ kind: "unclaimed-orb" }, orb.credit, at);
-  }
-
-  private claimOrbs(at: Tick, player: Tile): void {
-    const radius = this.config.choices.orbPickupRadius.option.value;
-    const returnsAt = after(at, OCELLUS_P4.lifeforceOrb.returnAfterStep.value);
-    this.orbs = this.orbs.map((orb) => (orb.kind === "available" && reach(orb.tile, player) <= radius ? { ...orb, kind: "claimed", returnsAt } : orb));
-  }
-
-  /** Runs after the player's hits land and before the SDK latches death, so a return must not reach a player at 0 HP. */
-  private settlePlayerHits(at: Tick, landed: readonly Landed<PlayerHit>[]): readonly FightEvent[] {
-    const isDue = (orb: Orb): orb is Extract<Orb, { kind: "claimed" }> => orb.kind === "claimed" && orb.returnsAt === at;
-    const due = this.orbs.filter(isDue);
-    this.orbs = this.orbs.filter((orb) => !isDue(orb));
-    const events: FightEvent[] = [];
-    for (const orb of due) {
-      const beforeHp = this.target.currentStats.hitpoint;
-      if (beforeHp <= 0) continue;
-      const afterHp = beforeHp + orb.owed;
-      this.target.currentStats.hitpoint = afterHp;
-      events.push({ kind: "orb-returned", at, void: orb.void, tile: orb.tile, receipt: { requested: orb.owed, applied: orb.owed, beforeHp, afterHp } });
-    }
-    if (!this.invincible()) return events;
-    const lethal = landed.find(({ receipt }) => receipt.beforeHp > 0 && receipt.afterHp === 0);
-    if (!lethal) return events;
-    const clearedOrbCredit = this.orbs.reduce((sum, orb) => sum + (orb.kind === "expired" ? 0 : orb.owed), 0);
-    this.orbs = this.orbs.map((orb) => (orb.kind === "expired" ? orb : { ...orb, owed: 0 }));
-    this.target.currentStats.hitpoint = this.target.stats.hitpoint;
-    return [...events, { kind: "death-prevented", at, source: lethal.cause.kind, clearedOrbCredit }];
+  private settlePlayerHits(at: Tick, landed: readonly Landed<PlayerHit>[], player: Readonly<{ hp: number; maxHp: number }>): readonly (Logged<FightEvent> | Heal)[] {
+    const returned = this.stepOrbs(returnDueOrbs(this.orbs, at, player.hp));
+    const lethal = this.invincible() ? landed.find(({ receipt }) => receipt.beforeHp > 0 && receipt.afterHp === 0) : undefined;
+    if (!lethal) return returned;
+    const { orbs, cleared } = forgiveOrbDebt(this.orbs);
+    this.orbs = orbs;
+    return [...returned, { kind: "heal", amount: player.maxHp, limit: "max-hp" }, ...logs({ kind: "death-prevented", at, source: lethal.cause.kind, clearedOrbCredit: cleared })];
   }
 
   private closeRow({ time, inputs, snapshot, events, combatDraws, ending }: FrameOf<P4Run, "tick-ended">): Readonly<{ row: TickRow; ending: RunEnd | null }> {
@@ -567,10 +506,7 @@ export class Ocellus extends Mob {
       combatDraws,
     };
     const end = ending ?? (died ? "death" : null);
-    if (end === null) {
-      this.claimOrbs(row.tick, playerAtPostTick.tile);
-      this.rifts = this.rifts.map((rift) => ({ ...rift, hpAtPostTick: rift.mob.currentStats.hitpoint }));
-    }
+    if (end === null) this.rifts = this.rifts.map((rift) => ({ ...rift, hpAtPostTick: rift.mob.currentStats.hitpoint }));
     return { row, ending: end };
   }
 }

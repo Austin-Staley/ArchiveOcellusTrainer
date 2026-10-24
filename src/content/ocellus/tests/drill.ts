@@ -52,7 +52,7 @@ export function startDrill(options: DrillOptions = {}) {
   // The world tick after the last held one ends GET READY and is the boss's first step, P4 tick 0.
   const tickThroughGetReady = () => region.world.tickWorld(region.world.getReadyTimer - 1);
   tickThroughGetReady();
-  Viewport.viewport.resize(800, 600);
+  Viewport.viewport.resize(800, 800);
 
   const rows = (): readonly TickRow[] => region.fightLog().rows;
   const player = (): Player => region.players[0];
@@ -90,7 +90,7 @@ export function startDrill(options: DrillOptions = {}) {
     tickTo(t: number) {
       advance(t, () => undefined);
     },
-    playCorrectlyTo(t: number) {
+    async playCorrectlyTo(t: number) {
       const focus = region.fightLog().header.choices.focus.option.value;
       const dodging = focus.kind === "full-fight" || focus.mechanics.includes("explosions");
       let home: At = { ...player().location };
@@ -98,17 +98,24 @@ export function startDrill(options: DrillOptions = {}) {
         home = to;
         walkTo(to);
       };
-      advance(t, (row) => {
-        for (const event of row.events) {
-          if (event.kind === "special-told" && row.playerAtPostTick.prayer !== event.style) pray(PROTECTS_FROM[event.style]);
-          if (event.kind === "orb-spawned") goHome(event.tile);
-          if (event.kind !== "stage-entered") continue;
-          if (event.stage === "outer-void") goHome(RING_NORTH);
-          if (event.stage === "after-outer") goHome(SPAWN_ON_FLOOD);
-        }
-        const stage = row.phase.stage;
-        if (dodging && (stage === "inner-void" || stage === "outer-void")) stepOffMarkedTile(home, besideOnSameFloor(home, stage === "outer-void"));
-      });
+      while (!ended() && lastTick() < t) {
+        let orb: At | null = null;
+        advance(lastTick() + 1, (row) => {
+          for (const event of row.events) {
+            if (event.kind === "special-told" && row.playerAtPostTick.prayer !== event.style) pray(PROTECTS_FROM[event.style]);
+            if (event.kind === "orb-spawned") {
+              home = event.tile;
+              orb = event.tile;
+            }
+            if (event.kind !== "stage-entered") continue;
+            if (event.stage === "outer-void") goHome(RING_NORTH);
+            if (event.stage === "after-outer") goHome(SPAWN_ON_FLOOD);
+          }
+          const stage = row.phase.stage;
+          if (dodging && (stage === "inner-void" || stage === "outer-void")) stepOffMarkedTile(home, besideOnSameFloor(home, stage === "outer-void"));
+        });
+        if (orb) await clickTile(region.world, orb);
+      }
     },
     innerOrb(): At {
       const spawned = this.events("orb-spawned").filter((event) => event.void === "inner-void");

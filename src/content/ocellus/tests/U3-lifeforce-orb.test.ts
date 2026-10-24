@@ -185,6 +185,20 @@ describe("U3 lifeforce hit and orb", () => {
     });
   });
 
+  test("guard: on the tick an orb return falls due, the row lists the floor hit that landed before it", () => {
+    const drill = startDrill({ seed: ANY_FLOOR_SEED, selection: { focus: "orb-retrieval", outerOrbTile: "any-floor" } });
+    drill.tickTo(13);
+    drill.walkTo(ANY_FLOOR_INNER_ORB);
+    drill.tickTo(30);
+    drill.walkTo(RING_NORTH);
+    drill.tickTo(45);
+    drill.walkTo(OUTER_ORB_ON_FLOOD);
+    drill.tickTo(50);
+    const settled = drill.row(50).events.flatMap((e) => (e.kind === "floor-hit" || e.kind === "orb-returned" ? [[e.kind, e.receipt.beforeHp, e.receipt.afterHp]] : []));
+    drill.dispose();
+    expect(settled).toEqual([["floor-hit", 31, 21], ["orb-returned", 21, 70]]);
+  });
+
   test("an orb never forms on a floor hole: seed 5's inner orb from the spawn and seed 2's any-floor outer orb from the ring", () => {
     const orbs = (runSeed: number, selection: DrillSelection, until: number) => {
       const drill = startDrill({ seed: runSeed, selection });

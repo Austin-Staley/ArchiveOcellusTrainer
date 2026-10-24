@@ -105,6 +105,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "death-prevented":
       views.chat.push(`Invincible: ${LETHAL_HIT[event.source]} would have killed you on tick ${event.at}.`);
       return;
+    case "run-ended":
+      views.explosions.retire();
+      return;
     case "overhead-switched":
     case "boss-state-changed":
     case "player-hit-judged":
@@ -116,7 +119,6 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "special-hit":
     case "rift-spawned":
     case "rift-hit":
-    case "run-ended":
       return;
     default: {
       const unhandled: never = event;

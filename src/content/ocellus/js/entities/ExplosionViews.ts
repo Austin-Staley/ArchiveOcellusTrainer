@@ -229,4 +229,11 @@ export class ExplosionViews {
     this.live.get(`${kind}:${pulse}`)?.detonate();
     this.live.delete(`${kind}:${pulse}`);
   }
+
+  retire(): void {
+    this.live.forEach((view) => {
+      view.dying = 0;
+    });
+    this.live.clear();
+  }
 }

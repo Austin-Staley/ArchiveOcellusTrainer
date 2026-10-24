@@ -64,6 +64,18 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
+  test("a kill on an impact tick ends the run with the pending mark no longer drawn", async () => {
+    const drill = startDrill({ seed: BOW_ROLLS_24_9_13_53, bossHp: 1, selection: EXPLOSIONS });
+    await drill.click(RING_NORTH);
+    drill.tickTo(15);
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(17);
+    const marked = drill.drawnShardReach(RING_NORTH, 0.25).length;
+    drill.tickTo(18);
+    expect([marked, drill.events("run-ended").map((e) => [e.at, e.reason]), drill.drawnShardReach(RING_NORTH, 0.25)]).toEqual([7, [[18, "kill"]], []]);
+    drill.dispose();
+  });
+
   test("guard: standing under the boss gives no cover: stepping under on a mark tick leaves that mark behind, and the next mark under the boss hits", async () => {
     const drill = startDrill({ selection: EXPLOSIONS });
     await drill.click(FLOOD_NORTH_OF_RING);

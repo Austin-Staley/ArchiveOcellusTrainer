@@ -19,9 +19,9 @@ function posesRequested(selection: DrillSelection, start: number, through: numbe
 }
 
 describe("U1 cycle skeleton", () => {
-  test("floor stages, overheads and boss state follow the reconciled schedule as separate tracks", () => {
+  test("floor stages, overheads and boss state follow the reconciled schedule as separate tracks", async () => {
     const drill = startDrill();
-    drill.playCorrectlyTo(128);
+    await drill.playCorrectlyTo(128);
     expect(drill.rows().map((row) => row.tick)).toEqual(Array.from({ length: 129 }, (_, t) => t));
     expect(drill.events("stage-entered").map((e) => [e.at, e.stage])).toEqual([
       [0, "lead-in"], [8, "inner-void"], [30, "after-inner"], [39, "outer-void"], [59, "after-outer"],
@@ -39,21 +39,21 @@ describe("U1 cycle skeleton", () => {
     drill.dispose();
   });
 
-  test("the transition attack ordinal runs across cycles and each selection names its variants", () => {
-    const hits = (options: Parameters<typeof startDrill>[0]) => {
+  test("the transition attack ordinal runs across cycles and each selection names its variants", async () => {
+    const hits = async (options: Parameters<typeof startDrill>[0]) => {
       const drill = startDrill({ ...options, selection: { focus: "transition-attacks", ...options?.selection } });
-      drill.playCorrectlyTo(217);
+      await drill.playCorrectlyTo(217);
       const out = drill.rows().flatMap((row) => row.beats.flatMap((b) => (b.kind === "special-hit" ? [[row.tick, b.ordinal, b.variant]] : [])));
       drill.dispose();
       return out;
     };
-    expect(hits({ selection: { specialSelection: "replay-v2" } })).toEqual([
+    expect(await hits({ selection: { specialSelection: "replay-v2" } })).toEqual([
       [37, 0, "vortex"], [65, 1, "spike-disk"], [97, 2, "black-disk"], [125, 3, "vortex"], [157, 4, "spike-disk"], [185, 5, "black-disk"], [217, 6, "vortex"],
     ]);
-    expect(hits({ seed: 1 })).toEqual([
+    expect(await hits({ seed: 1 })).toEqual([
       [37, 0, "black-disk"], [65, 1, "black-disk"], [97, 2, "spike-disk"], [125, 3, "spike-disk"], [157, 4, "spike-disk"], [185, 5, "vortex"], [217, 6, "black-disk"],
     ]);
-    expect(hits({ seed: 2 })).toEqual([
+    expect(await hits({ seed: 2 })).toEqual([
       [37, 0, "vortex"], [65, 1, "spike-disk"], [97, 2, "vortex"], [125, 3, "black-disk"], [157, 4, "black-disk"], [185, 5, "vortex"], [217, 6, "spike-disk"],
     ]);
   });
@@ -201,7 +201,7 @@ describe("U1 cycle skeleton", () => {
     },
   ])("guard: a lethal hit on phase-change tick $at logs the phase that tick enters and none of its beats", async ({ at, clickAt, phase, entered }) => {
     const drill = startDrill({ seed: 100, bossHp: 1 });
-    drill.playCorrectlyTo(clickAt);
+    await drill.playCorrectlyTo(clickAt);
     await drill.click(UNDER_BOSS);
     drill.tickTo(at + 2);
     const row = drill.row(at);

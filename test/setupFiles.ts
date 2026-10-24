@@ -23,7 +23,7 @@ global.fetch = (() => Promise.resolve({ arrayBuffer: () => Promise.resolve(new A
 global.ResizeObserver = class {
   constructor(private readonly callback: ResizeObserverCallback) {}
   observe() {
-    queueMicrotask(() => this.callback([{ contentRect: { width: 800, height: 600 } } as ResizeObserverEntry], this));
+    queueMicrotask(() => this.callback([{ contentRect: { width: 800, height: 800 } } as ResizeObserverEntry], this));
   }
   unobserve() {}
   disconnect() {}

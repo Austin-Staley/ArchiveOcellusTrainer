@@ -3,7 +3,8 @@ import { CacheRenderInstancedModel, CacheRenderReferences, CollisionType, Entity
 import type { Location3, Model, Region } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Tile } from "../../../../sim/brands";
-import { PLATFORM, WALKWAY, beside } from "../p4/floor";
+import { beside } from "../../../../sim/tiles";
+import { PLATFORM, WALKWAY } from "../p4/floor";
 import { rimEdges } from "./P4Views";
 
 const LOOK = OCELLUS_P4.geometry.walkway.value;

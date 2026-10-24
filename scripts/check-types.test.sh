@@ -98,7 +98,7 @@ helmet_factory_rejects_a_weapon() {
 void_masks_reject_a_swapped_mask() {
   expect_compile_error src/content/ocellus/js/p4/floor.ts \
     '"inner-void": voidMask("inner-void")' '"inner-void": voidMask("outer-void")' \
-    "error TS2322: Type 'TileMask<\"outer-void\">' is not assignable to type 'TileMask<\"inner-void\">'."
+    "error TS2322: Type 'TileSet<\"outer-void\">' is not assignable to type 'TileSet<\"inner-void\">'."
 }
 explicit_any_fails() { expect_finding src/content/ocellus/js/p4/roll.ts 'export const x: any = 1;' "explicit any"; }
 as_cast_fails() { expect_finding src/content/ocellus/js/p4/roll.ts 'export const x = (1 as number);' "type assertion with as"; }

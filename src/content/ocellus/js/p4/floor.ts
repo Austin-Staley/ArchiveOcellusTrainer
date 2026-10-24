@@ -1,94 +1,10 @@
 import type { FloorRule, FloorShape, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Tile } from "../../../../sim/brands";
 import { tile } from "../../../../sim/brands";
+import { TileSet } from "../../../../sim/tiles";
 import type { Phase, VoidKind } from "../P4Types";
 
-const key = (at: Tile) => `${at.x},${at.y}`;
-
-export type Side = "north" | "south" | "east" | "west";
-const STEP: Readonly<Record<Side, Readonly<{ dx: number; dy: number }>>> = {
-  north: { dx: 0, dy: -1 },
-  south: { dx: 0, dy: 1 },
-  west: { dx: -1, dy: 0 },
-  east: { dx: 1, dy: 0 },
-};
-const SIDES: readonly Side[] = ["north", "south", "west", "east"];
-
-export function beside(at: Tile, side: Side): Tile {
-  return tile(at.x + STEP[side].dx, at.y + STEP[side].dy);
-}
-
-export type ArenaGlyph = "#" | "." | "?" | "w" | "b";
-const ARENA_GLYPHS: readonly string[] = ["#", ".", "?", "w", "b"];
-
-export class TileMask<K extends VoidKind | null = VoidKind | null> {
-  private constructor(readonly kind: K, private readonly byKey: ReadonlyMap<string, Tile>) {}
-
-  static area(from: Tile, to: Tile): TileMask<null> {
-    if (from.x > to.x || from.y > to.y) throw new RangeError(`empty area from ${key(from)} to ${key(to)}`);
-    const tiles = new Map<string, Tile>();
-    for (let x: number = from.x; x <= to.x; x++) {
-      for (let y: number = from.y; y <= to.y; y++) tiles.set(`${x},${y}`, tile(x, y));
-    }
-    return new TileMask(null, tiles);
-  }
-
-  static at(tiles: readonly Tile[]): TileMask<null> {
-    return new TileMask(null, new Map(tiles.map((at) => [key(at), at])));
-  }
-
-  static of(rows: readonly string[], ...glyphs: readonly ArenaGlyph[]): TileMask<null> {
-    const tiles = new Map<string, Tile>();
-    rows.forEach((row, y) =>
-      [...row].forEach((cell, x) => {
-        if (!ARENA_GLYPHS.includes(cell)) throw new RangeError(`arena cell ${JSON.stringify(cell)} at ${x},${y} is not one of ${ARENA_GLYPHS.join(" ")}`);
-        if (glyphs.some((glyph) => glyph === cell)) tiles.set(`${x},${y}`, tile(x, y));
-      }),
-    );
-    return new TileMask(null, tiles);
-  }
-
-  minus(other: TileMask): TileMask<null> {
-    return new TileMask(null, new Map([...this.byKey].filter(([at]) => !other.byKey.has(at))));
-  }
-
-  forVoid<V extends VoidKind>(kind: V): TileMask<V> {
-    return new TileMask(kind, this.byKey);
-  }
-
-  contains(at: Tile): boolean {
-    return this.byKey.has(key(at));
-  }
-
-  tiles(): readonly Tile[] {
-    return [...this.byKey.values()];
-  }
-
-  border(): readonly Readonly<{ at: Tile; side: Side }>[] {
-    return this.tiles().flatMap((at) =>
-      SIDES.filter((side) => !this.contains(beside(at, side))).map((side) => ({ at, side })),
-    );
-  }
-
-  surround(): TileMask<null> {
-    const around = new Map<string, Tile>();
-    for (const { x, y } of this.tiles()) {
-      for (const dx of [-1, 0, 1]) {
-        for (const dy of [-1, 0, 1]) {
-          const at = tile(x + dx, y + dy);
-          if (!this.contains(at)) around.set(key(at), at);
-        }
-      }
-    }
-    return new TileMask(null, around);
-  }
-
-  extent(): Readonly<{ width: number; height: number }> {
-    const tiles = this.tiles();
-    return { width: Math.max(0, ...tiles.map(({ x }) => x + 1)), height: Math.max(0, ...tiles.map(({ y }) => y + 1)) };
-  }
-}
+const ARENA_GLYPHS = ["#", ".", "?", "w", "b"] as const;
 
 const { geometry, boss, floor } = OCELLUS_P4;
 const anchor = geometry.bossAnchor.value;
@@ -97,14 +13,14 @@ const ring = (floor.squareSide.value - size) / 2;
 if (!Number.isInteger(ring) || ring < 0) throw new RangeError(`a ${floor.squareSide.value}-tile square cannot centre on a ${size}-tile boss`);
 
 // The SDK anchors a unit on its south-west tile and extends it east and north (lower y).
-const aroundBoss = (grow: number) => TileMask.area(tile(anchor.x - grow, anchor.y - size + 1 - grow), tile(anchor.x + size - 1 + grow, anchor.y + grow));
+const aroundBoss = (grow: number) => TileSet.area(tile(anchor.x - grow, anchor.y - size + 1 - grow), tile(anchor.x + size - 1 + grow, anchor.y + grow));
 export const NEAR_SQUARE = aroundBoss(ring);
 export const FOOTPRINT = aroundBoss(0);
-export const PLATFORM = TileMask.of(geometry.platform.value, "#");
-export const WALKWAY = TileMask.of(geometry.platform.value, "w", "b");
-export const BRAZIERS = TileMask.of(geometry.platform.value, "b");
+export const PLATFORM = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "#");
+export const WALKWAY = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "w", "b");
+export const BRAZIERS = TileSet.grid(geometry.platform.value, ARENA_GLYPHS, "b");
 
-function shaped(shape: FloorShape): TileMask {
+function shaped(shape: FloorShape): TileSet {
   switch (shape) {
     case "near-square":
       return NEAR_SQUARE;
@@ -117,11 +33,11 @@ function shaped(shape: FloorShape): TileMask {
   }
 }
 
-function voidMask<K extends VoidKind>(kind: K): TileMask<K> {
-  return shaped(floor.shapes[kind].value).forVoid(kind);
+function voidMask<K extends VoidKind>(kind: K): TileSet<K> {
+  return shaped(floor.shapes[kind].value).tagged(kind);
 }
 
-export const VOID_MASKS: { readonly [K in VoidKind]: TileMask<K> } = {
+export const VOID_MASKS: { readonly [K in VoidKind]: TileSet<K> } = {
   "inner-void": voidMask("inner-void"),
   "outer-void": voidMask("outer-void"),
 };

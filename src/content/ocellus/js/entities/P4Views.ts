@@ -5,7 +5,7 @@ import { spriteFile } from "../../../../assets";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Tile } from "../../../../sim/brands";
 import type { BossOverhead, Special, Stage, VoidKind } from "../P4Types";
-import type { Side, TileMask } from "../p4/floor";
+import type { Side, TileSet } from "../../../../sim/tiles";
 import { VOID_MASKS } from "../p4/floor";
 
 const LOOK = OCELLUS_P4.floor.look.value;
@@ -18,7 +18,7 @@ type Point = Readonly<{ x: number; z: number }>;
 type Edge = Readonly<{ at: Tile; side: Side; from: Point; to: Point; inward: Point }>;
 
 /** Tile (x, y) spans world x to x + 1 and z from y - 1 to y; lower y is north. */
-export function rimEdges(mask: TileMask): readonly Edge[] {
+export function rimEdges(mask: TileSet): readonly Edge[] {
   return mask.border().map(({ at, side }): Edge => {
     const { x, y } = at;
     switch (side) {
@@ -63,7 +63,7 @@ function starfield(): THREE.Texture {
   return texture;
 }
 
-function floorGeometry(mask: TileMask): THREE.BufferGeometry {
+function floorGeometry(mask: TileSet): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
   for (const { x, y } of mask.tiles()) {
@@ -82,7 +82,7 @@ function floorGeometry(mask: TileMask): THREE.BufferGeometry {
 type Vertex = readonly [number, number, number];
 type Segment = Readonly<{ from: Vertex; to: Vertex }>;
 
-function rimGeometry(mask: TileMask): THREE.BufferGeometry {
+function rimGeometry(mask: TileSet): THREE.BufferGeometry {
   const rim = new THREE.Color(LOOK.rim);
   const positions: number[] = [];
   const colors: number[] = [];
@@ -147,7 +147,7 @@ class VoidFloorModel implements Model {
 
   async preload(): Promise<void> {}
 
-  private build(mask: TileMask): THREE.Group {
+  private build(mask: TileSet): THREE.Group {
     if (this.stars === null) {
       this.stars = starfield();
       this.owned.push(this.stars);

@@ -29,8 +29,9 @@ import type {
 } from "../P4Types";
 import { riftId } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
-import { FOOTPRINT, TileMask, VOID_MASKS, floorRule } from "../p4/floor";
-import { enteredSquare, orbTile, reach } from "../p4/orb";
+import { reach, TileSet } from "../../../../sim/tiles";
+import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
+import { enteredSquare, orbTile } from "../p4/orb";
 import { rollInt } from "../p4/roll";
 import type { Moment } from "../p4/schedule";
 import { Schedule } from "../p4/schedule";
@@ -189,7 +190,7 @@ function specialAttack<V extends Special>(at: Tick, ordinal: Ordinal, variant: V
 
 export class Ocellus extends Mob {
   private readonly schedule: Schedule;
-  readonly holes: TileMask;
+  readonly holes: TileSet;
   private run: Run = { kind: "waiting", inputs: [] };
   private orbs: readonly Orb[] = [];
   private entered: Tile | null = null;
@@ -201,7 +202,7 @@ export class Ocellus extends Mob {
   constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer, private readonly invincible: () => boolean) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
     this.schedule = Schedule.compile(config.seed, config.choices);
-    this.holes = TileMask.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value.tiles : []);
+    this.holes = TileSet.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value.tiles : []);
   }
 
   enterP4(): void {

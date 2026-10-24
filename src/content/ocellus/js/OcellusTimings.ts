@@ -1,6 +1,7 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { BossOverhead, Cycle, HoveringBoss, Mechanic, Seed, SoundId, Special, Stage, Style, TickSpan, Tile, TransitionKind, VoidKind } from "./P4Types";
-import { cycle, seed, soundId, span, tick, tile } from "./P4Types";
+import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
+import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, Style, TransitionKind, VoidKind } from "./P4Types";
 import { roll } from "./p4/roll";
 
 type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "spec-single" | "community-tested" | "owner-estimated" | "inferred" | "assumption";

@@ -1,7 +1,8 @@
 import type { FloorRule, FloorShape, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Phase, Tile, VoidKind } from "../P4Types";
-import { tile } from "../P4Types";
+import type { Tile } from "../../../../sim/brands";
+import { tile } from "../../../../sim/brands";
+import type { Phase, VoidKind } from "../P4Types";
 
 const key = (at: Tile) => `${at.x},${at.y}`;
 

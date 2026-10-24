@@ -3,7 +3,8 @@ import { CacheRenderInstancedModel, CacheRenderModel, CacheRenderReferences, Col
 import type { Location3, Model, Region, Renderable, Unit } from "osrs-sdk";
 import { spriteFile } from "../../../../assets";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { BossOverhead, Special, Stage, Tile, VoidKind } from "../P4Types";
+import type { Tile } from "../../../../sim/brands";
+import type { BossOverhead, Special, Stage, VoidKind } from "../P4Types";
 import type { Side, TileMask } from "../p4/floor";
 import { VOID_MASKS } from "../p4/floor";
 

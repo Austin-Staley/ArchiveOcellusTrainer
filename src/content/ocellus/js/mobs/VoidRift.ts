@@ -1,8 +1,8 @@
 import { CacheRenderModel, CacheRenderReferences, Mob, RangedWeapon } from "osrs-sdk";
 import type { IncomingAttackRoll, IncomingAttackRollModifiers, Model, Region, UnitBonuses } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { TickSpan, Tile } from "../P4Types";
-import { span } from "../P4Types";
+import type { TickSpan, Tile } from "../../../../sim/brands";
+import { span } from "../../../../sim/brands";
 
 const RIFT = OCELLUS_P4.rifts;
 /** Unit.drawHPBar draws the HP bar 5 px tall. */

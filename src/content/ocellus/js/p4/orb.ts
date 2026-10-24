@@ -1,6 +1,7 @@
 import type { OrbFloor, OuterOrbTile, ResolvedChoices } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Seed, Tick, Tile, VoidKind } from "../P4Types";
+import type { Seed, Tick, Tile } from "../../../../sim/brands";
+import type { VoidKind } from "../P4Types";
 import type { TileMask } from "./floor";
 import { FOOTPRINT, NEAR_SQUARE, PLATFORM, VOID_MASKS } from "./floor";
 import { roll } from "./roll";

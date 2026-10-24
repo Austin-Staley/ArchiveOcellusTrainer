@@ -3,10 +3,11 @@ import type { Model, Region, UnitBonuses, UnitStats } from "osrs-sdk";
 import type { DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
+import type { Cycle, Tick, Tile } from "../../../../sim/brands";
+import { after, span, tick, tile, worldTick } from "../../../../sim/brands";
 import type {
   Beat,
   BossState,
-  Cycle,
   ExplosionOutcome,
   FightEvent,
   HealCause,
@@ -23,12 +24,10 @@ import type {
   Special,
   SpecialAttack,
   Style,
-  Tick,
   TickRow,
-  Tile,
   VoidKind,
 } from "../P4Types";
-import { after, riftId, span, tick, tile, worldTick } from "../P4Types";
+import { riftId } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
 import { FOOTPRINT, TileMask, VOID_MASKS, floorRule } from "../p4/floor";
 import { enteredSquare, orbTile, reach } from "../p4/orb";

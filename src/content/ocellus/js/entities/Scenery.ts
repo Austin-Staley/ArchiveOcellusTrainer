@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CacheRenderInstancedModel, CacheRenderReferences, CollisionType, Entity, GROUND_OVERLAY_Y, LineOfSightMask } from "osrs-sdk";
 import type { Location3, Model, Region } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Tile } from "../P4Types";
+import type { Tile } from "../../../../sim/brands";
 import { PLATFORM, WALKWAY, beside } from "../p4/floor";
 import { rimEdges } from "./P4Views";
 

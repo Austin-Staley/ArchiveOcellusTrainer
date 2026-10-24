@@ -1,7 +1,9 @@
 import type { DrillStart, Focus, ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
-import type { Beat, BossOverhead, Cycle, Mechanic, Phase, Seed, Special, Tick, TransitionKind, VoidKind } from "../P4Types";
-import { cycle, ordinal, tick } from "../P4Types";
+import type { Cycle, Seed, Tick } from "../../../../sim/brands";
+import { cycle, tick } from "../../../../sim/brands";
+import type { Beat, BossOverhead, Mechanic, Phase, Special, TransitionKind, VoidKind } from "../P4Types";
+import { ordinal } from "../P4Types";
 import { floorRule } from "./floor";
 import { roll } from "./roll";
 

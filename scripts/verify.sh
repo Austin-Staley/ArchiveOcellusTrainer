@@ -243,6 +243,9 @@ KILL_RESULT_CLICK_TICK=12
 KILL_RESULT_LINES='["Ocellus defeated","P4 time: 16 ticks (0:09.6)"]'
 RESULT_BUTTONS='["Restart","Retry seed"]'
 LOAD_RETRY_QUERY="?seed=1"
+GET_READY_QUERY="?seed=1"
+GET_READY_TICKS=6
+GET_READY_CLICK_TICK=1
 DEFLECT_QUERY="?seed=1&focus=rifts&setup=melee&drillStart=cycle-start"
 DEFLECT_CLICK_TICK=12
 DEFLECT_HOVER_SHOT_TICK=20
@@ -1490,6 +1493,65 @@ drive_run_results() {
   return $verdict
 }
 
+record_get_ready() {
+  ab eval '(() => {
+    const now = () => window.__archiveOcellusProbe?.snapshot() ?? null;
+    const record = { installedAt: now(), clickTick: null, overlay: {}, player: {} };
+    window.__getReady = record;
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      const count = /^GET READY\.\.\.(\d+)$/.exec(String(text))?.[1];
+      const t = count === undefined ? undefined : now()?.tick;
+      if (t !== undefined && !(record.overlay[t] ??= []).includes(Number(count))) record.overlay[t].push(Number(count));
+      return fillText.call(this, text, ...rest);
+    };
+    document.addEventListener("mousedown", () => { record.clickTick ??= now()?.tick ?? null; }, true);
+    const frame = () => {
+      const snapshot = now();
+      if (snapshot?.player) record.player[snapshot.tick] = snapshot.player;
+      requestAnimationFrame(frame);
+    };
+    frame();
+  })()' >/dev/null
+}
+
+drive_get_ready() {
+  ab open "${URL}${GET_READY_QUERY}" >/dev/null || return 1
+  record_get_ready || { log "the GET READY probe was not installed"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= ${GET_READY_CLICK_TICK}" \
+    --timeout 90000 >/dev/null || { log "the GET READY page never started ticking"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_at $((CX - WALK_CLICK_LEFT_PX)) $((CY - WALK_CLICK_UP_PX)) || return 1
+  fight_tick_at_least 1 30000 || { log "the boss never stepped to P4 tick 1 after GET READY"; return 1; }
+  ab --json eval "window.__getReady" | json data.result >"$VERIFY_DIR/get-ready.json" || { log "GET READY capture failed"; return 1; }
+  probe "log()" >"$VERIFY_DIR/get-ready-log.json"
+  ab --json errors | json data.errors >"$VERIFY_DIR/get-ready-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  node -e '
+    const fs = require("fs"), [dir, spawn, readyTicks] = process.argv.slice(1);
+    const read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, "utf8"));
+    const [ready, log, errors] = ["get-ready.json", "get-ready-log.json", "get-ready-page-errors.json"].map(read);
+    const from = JSON.parse(spawn), countdown = Number(readyTicks);
+    const overlay = Object.entries(ready.overlay).map(([tick, counts]) => [Number(tick), counts]).sort(([a], [b]) => a - b);
+    const firstStep = Object.entries(ready.player).map(([tick, at]) => [Number(tick), at]).sort(([a], [b]) => a - b)
+      .find(([, at]) => at.x !== from.x || at.y !== from.y)?.[0] ?? null;
+    const firstBossStep = log.rows[0] ? [log.rows[0].tick, log.rows[0].worldTick] : null;
+    const checks = {
+      getReadyRecordedFromWorldTickZero: ready.installedAt?.tick === 0,
+      getReadyCountsDownOncePerWorldTick: JSON.stringify(overlay) === JSON.stringify(Array.from({ length: countdown }, (_, tick) => [tick, [countdown - tick]])),
+      firstBossStepEndsGetReady: JSON.stringify(firstBossStep) === JSON.stringify([0, countdown]),
+      clickDuringGetReadyWalksBeforeItEnds: ready.clickTick !== null && ready.clickTick < countdown && firstStep !== null && firstStep > ready.clickTick && firstStep < countdown,
+      noGetReadyPageErrors: errors.length === 0,
+    };
+    console.log(JSON.stringify({ overlay, clickTick: ready.clickTick, firstStep, firstBossStep, checks }, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$SPAWN_TILE" "$GET_READY_TICKS" >"$VERIFY_DIR/get-ready-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/get-ready-checks.json"
+  [[ $verdict -eq 0 ]] || log "a GET READY check failed"
+  return $verdict
+}
+
 drive_load_retry() {
   local file opened deadline
   file="$(node -p 'require(process.argv[1]).assets["npc-" + process.argv[2]].file' "$MANIFEST" "$BOSS_NPC")" || { log "the boss asset is not in the manifest"; return 1; }
@@ -1637,7 +1699,7 @@ drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
   ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
-  drive_load_retry && drive_settings_menu && drive_run_results && drive_whats_new || return 1
+  drive_load_retry && drive_get_ready && drive_settings_menu && drive_run_results && drive_whats_new || return 1
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \

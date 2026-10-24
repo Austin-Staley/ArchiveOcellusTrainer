@@ -1,4 +1,6 @@
-import { paintedTiles } from "../../../../test/paintedTiles";
+import { Settings } from "osrs-sdk";
+import { paintedStyleAt, paintedTiles } from "../../../../test/paintedTiles";
+import { OCELLUS_P4 } from "../js/OcellusTimings";
 import { startDrill } from "./drill";
 import type { At } from "./drill";
 
@@ -135,6 +137,85 @@ describe("Ocellus arena", () => {
       toward: [{ x: 9, y: 4 }, { x: 8, y: 5 }, { x: 8, y: 5 }],
       back: [{ x: 9, y: 4 }, { x: 10, y: 3 }, { x: 10, y: 3 }],
     });
+  });
+
+  test("the back wall draws one straight diagonal from the end of the straight run to the jut, and the flood meets it along that diagonal", () => {
+    const drill = startDrill({ selection: { focus: "void-floor" } });
+    const { region } = drill;
+    const [wall, flood] = [OCELLUS_P4.geometry.walkway.value.top, OCELLUS_P4.floor.look.value.void];
+    const samples = [0.1, 0.4, 0.7];
+    const raster = (styleAt: (x: number, y: number) => string | null) => {
+      const rows: string[] = [];
+      for (let y = 2; y < 9; y++) {
+        for (const dy of samples) {
+          let row = "";
+          for (let x = 7; x < 13; x++) {
+            for (const dx of samples) {
+              const style = styleAt(x + dx, y + dy);
+              row += style === null ? "." : style === wall ? "w" : style === flood ? "v" : "#";
+            }
+          }
+          rows.push(row);
+        }
+      }
+      return rows;
+    };
+    const ground = raster(paintedStyleAt((context, scale) => region.drawWorldBackground(context, scale)));
+    drill.tickTo(45);
+    const flooded = raster(
+      paintedStyleAt((context, scale) => {
+        region.drawWorldBackground(context, scale);
+        region.entities.forEach((entity) => entity.draw(0, context));
+      }, Settings.tileSize),
+    );
+    drill.dispose();
+    expect(drill.row(45).phase.stage).toBe("outer-void");
+    expect(flooded).toEqual([
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "vvvvvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvvwww",
+      "###vvvvvvvvvvvwwww",
+      "###vvvvvvvvvvwwwww",
+      "###vvvvvvvvvwww...",
+      "###vvvvvvvvwwww...",
+      "###vvvvvvvwwwww...",
+      "###vvvvvvwww......",
+      "###vvvvvwwww......",
+      "###vvvvwwwww......",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
+    expect(ground).toEqual([
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "###############www",
+      "##############wwww",
+      "#############wwwww",
+      "############www...",
+      "###########wwww...",
+      "##########wwwww...",
+      "#########www......",
+      "########wwww......",
+      "#######wwwww......",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "###wwwwww.........",
+      "wwwwww............",
+      "wwwwww............",
+      "wwwwww............",
+    ]);
   });
 
   test("guard: a walk from the diagonal toward the tiles behind the boss stops on the 5x5's corner or beside the jut, because the walkway juts in to meet the corner", () => {

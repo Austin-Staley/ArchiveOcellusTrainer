@@ -9,7 +9,7 @@ import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, VoidKind } f
 import { BossLook, ExplosionViews, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
 import { BossFootprint, Ocellus } from "./mobs/Ocellus";
-import { BRAZIERS, PLATFORM, WALKWAY, voidUnder } from "./p4/floor";
+import { BRAZIERS, CURB, PLATFORM, voidUnder } from "./p4/floor";
 
 const GRID = PLATFORM.extent();
 
@@ -145,12 +145,38 @@ export class OcellusRegion extends Region {
   }
 
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
-    for (const { x, y } of PLATFORM.tiles()) {
-      context.fillStyle = (x + y) % 2 === 0 ? "#4a4339" : "#3f392f";
-      context.fillRect(x * scale, y * scale, scale, scale);
+    const floor = ({ x, y }: Tile) => ((x + y) % 2 === 0 ? "#4a4339" : "#3f392f");
+    const { top } = OCELLUS_P4.geometry.walkway.value;
+    for (const at of PLATFORM.tiles()) {
+      context.fillStyle = floor(at);
+      context.fillRect(at.x * scale, at.y * scale, scale, scale);
     }
-    context.fillStyle = OCELLUS_P4.geometry.walkway.value.top;
-    for (const { x, y } of WALKWAY.tiles()) context.fillRect(x * scale, y * scale, scale, scale);
+    for (const curb of CURB) {
+      const { x, y } = curb.at;
+      switch (curb.shape) {
+        case "square":
+          context.fillStyle = top;
+          context.fillRect(x * scale, y * scale, scale, scale);
+          break;
+        case "diagonal": {
+          context.fillStyle = floor(curb.at);
+          context.fillRect(x * scale, y * scale, scale, scale);
+          const [from, to] = curb.cut;
+          context.fillStyle = top;
+          context.beginPath();
+          context.moveTo(from.x * scale, from.y * scale);
+          context.lineTo(curb.wallCorner.x * scale, curb.wallCorner.y * scale);
+          context.lineTo(to.x * scale, to.y * scale);
+          context.closePath();
+          context.fill();
+          break;
+        }
+        default: {
+          const unhandled: never = curb;
+          return unhandled;
+        }
+      }
+    }
   }
 
   initialiseRegion(): { player: Player } {

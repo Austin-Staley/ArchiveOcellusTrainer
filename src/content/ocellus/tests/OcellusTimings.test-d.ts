@@ -1,7 +1,8 @@
 import type { ResolvedChoices } from "../js/OcellusTimings";
 import { OCELLUS_P4 } from "../js/OcellusTimings";
 import type { Tick } from "../../../sim/brands";
-import type { FightEvent, HitReceipt, Ordinal, Special, Style } from "../js/P4Types";
+import type { HitReceipt, Style } from "../../../sim/combat";
+import type { FightEvent, Ordinal, Special } from "../js/P4Types";
 
 // Assignability ignores readonly, so this compares the two types for identity instead.
 type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

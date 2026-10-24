@@ -1,61 +1,46 @@
-import { Collision, Player, Random } from "osrs-sdk";
+import { Collision, Player } from "osrs-sdk";
 import type { Location, MovePace, Region } from "osrs-sdk";
-import type { InputObservation, PlayerObservation, Style } from "./P4Types";
+import type { PlayerObservation } from "./P4Types";
 import { tile } from "../../../sim/brands";
+import { protectionOf } from "../../../sim/sdk/EncounterBinding";
+import type { OcellusBinding } from "./mobs/Ocellus";
 import { Ocellus } from "./mobs/Ocellus";
-import type { CombatStream } from "./p4/roll";
 
 export class OcellusPlayer extends Player {
-  private orderedPace: MovePace = "run-setting";
-
-  constructor(
-    region: Region,
-    location: Location,
-    private readonly combat: CombatStream,
-    private readonly report: (input: InputObservation) => void,
-    private readonly settle: () => void,
-  ) {
+  constructor(region: Region, location: Location, private readonly binding: () => OcellusBinding) {
     super(region, location);
   }
 
-  get combatDraws(): number {
-    return this.combat.draws;
-  }
-
-  get protection(): Style | null {
-    if (this.prayerController.matchFeature("melee")) return "melee";
-    if (this.prayerController.matchFeature("range")) return "ranged";
-    if (this.prayerController.matchFeature("magic")) return "magic";
-    return null;
-  }
-
   observe(): PlayerObservation {
-    return { tile: tile(this.location.x, this.location.y), hp: this.currentStats.hitpoint, prayer: this.protection };
+    return { tile: tile(this.location.x, this.location.y), hp: this.currentStats.hitpoint, prayer: protectionOf(this) };
   }
 
   override moveTo(x: number, y: number, pace: MovePace = "run-setting"): void {
-    this.orderedPace = pace;
     super.moveTo(x, y, pace);
-    this.report({ kind: "walk-ordered", destination: tile(x, y), pace });
+    this.binding().input({ kind: "walk-ordered", destination: tile(x, y), pace });
   }
 
-  /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. The SDK keeps the order's pace private, so the player holds it to re-order at the same pace. */
+  /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. */
   override determineDestination(): void {
     super.determineDestination();
     const to = this.destinationLocation;
-    if (to && Collision.collideableEntitiesAtPoint(this.region, to.x, to.y, 1).length > 0) super.moveTo(to.x, to.y, this.orderedPace);
+    if (to && Collision.collideableEntitiesAtPoint(this.region, to.x, to.y, 1).length > 0) super.moveTo(to.x, to.y, this.pace);
   }
 
   override pretick(): void {
-    const before = this.protection;
+    const before = protectionOf(this);
     super.pretick();
-    const after = this.protection;
-    if (after !== before) this.report({ kind: "prayer-published", prayer: after });
+    const after = protectionOf(this);
+    if (after !== before) this.binding().input({ kind: "prayer-published", prayer: after });
   }
 
   override postAttacksEvent(): void {
     super.postAttacksEvent();
-    this.settle();
+    this.binding().playerHitsSettled();
+  }
+
+  override movementStep(): void {
+    this.binding().playerMovement(() => super.movementStep());
   }
 
   override attack(): boolean {
@@ -65,12 +50,6 @@ export class OcellusPlayer extends Player {
   }
 
   override attackStep(): void {
-    const previous = Random.randomFn;
-    Random.setRandom(() => this.combat.next());
-    try {
-      super.attackStep();
-    } finally {
-      Random.setRandom(previous);
-    }
+    this.binding().combat(() => super.attackStep());
   }
 }

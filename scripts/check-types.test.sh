@@ -18,13 +18,18 @@ ready() {
 
 clean_tree() {
   T="$(mktemp -d "$WORK/case.XXXXXX")"
-  mkdir -p "$T/src/content/ocellus/js/p4" "$T/src/content/ocellus/tests" "$T/src/sim" "$T/test"
+  mkdir -p "$T/src/content/ocellus/js/p4" "$T/src/content/ocellus/tests" "$T/src/sim/sdk" "$T/test"
   cat >"$T/src/sim/brands.ts" <<'EOF'
 export type Tick = number & { readonly brand: "tick" };
 EOF
   cat >"$T/src/sim/schedule.ts" <<'EOF'
 import type { Tick } from "./brands";
 export const at = (t: Tick): Tick => t;
+EOF
+  cat >"$T/src/sim/sdk/binding.ts" <<'EOF'
+import type { Player } from "osrs-sdk";
+import type { Tick } from "../brands";
+export const turn = (player: Player, t: Tick): [Player, Tick] => [player, t];
 EOF
   cat >"$T/src/content/ocellus/js/P4Types.ts" <<'EOF'
 export type Tick = number & { readonly brand: "tick" };
@@ -134,6 +139,9 @@ test_file_inside_the_fight_fails() { expect_finding src/content/ocellus/js/p4/sc
 absolute_import_of_internal_fails() { expect_finding src/App.tsx 'export { later } from "@ROOT@/src/content/ocellus/js/p4/schedule";' "import of fight internal src/content/ocellus/js/p4/schedule.ts"; }
 sim_import_of_content_fails() { expect_finding src/sim/schedule.ts 'import type { Tick } from "../content/ocellus/js/P4Types";' "sim import from outside src/sim src/content/ocellus/js/P4Types.ts"; }
 sim_import_of_app_fails() { expect_finding src/sim/schedule.ts 'export const app = () => import("../ArchiveOcellusApp");' "sim import from outside src/sim src/ArchiveOcellusApp"; }
+sim_core_import_of_the_sdk_fails() { expect_finding src/sim/schedule.ts 'import type { Player } from "osrs-sdk";' "sim core import of the SDK osrs-sdk"; }
+sim_core_import_of_an_sdk_package_fails() { expect_finding src/sim/tiles.ts 'export const react = () => import("osrs-sdk-react");' "sim core import of the SDK osrs-sdk-react"; }
+sim_core_import_of_the_sim_sdk_fails() { expect_finding src/sim/schedule.ts 'export { turn } from "./sdk/binding";' "sim core import of src/sim/sdk src/sim/sdk/binding.ts"; }
 sourced_value_without_a_wiki_answer_fails() {
   expect_compile_error src/content/ocellus/js/OcellusTimings.ts \
     '"one-tile shard", noWiki("the Void Rift infobox leaves size empty (rev 15380527)"), cache("npc 16678 size")' '"one-tile shard", cache("npc 16678 size")' \
@@ -171,6 +179,9 @@ for t in \
   absolute_import_of_internal_fails \
   sim_import_of_content_fails \
   sim_import_of_app_fails \
+  sim_core_import_of_the_sdk_fails \
+  sim_core_import_of_an_sdk_package_fails \
+  sim_core_import_of_the_sim_sdk_fails \
   helmet_factory_rejects_a_weapon \
   void_masks_reject_a_swapped_mask \
   sourced_value_without_a_wiki_answer_fails \

@@ -1,5 +1,6 @@
 import type { MovePace } from "osrs-sdk";
 import type { Brand, Cycle, Seed, Tick, TickSpan, Tile, Unbranded, WorldTick } from "../../../sim/brands";
+import type { HitReceipt, IncomingStyle, Style } from "../../../sim/combat";
 import type { GearSlot, ResolvedChoices, SpecialStyle, TransitionCue } from "./OcellusTimings";
 import { isCount } from "../../../sim/brands";
 
@@ -26,7 +27,6 @@ export type TransitionKind = "after-inner" | "after-outer";
 export type BossState = Phase["boss"];
 export type BossOverhead = NonNullable<Phase["overhead"]>;
 
-export type Style = "melee" | "ranged" | "magic";
 export type Special = "vortex" | "spike-disk" | "black-disk";
 export type Mechanic = "void-floor" | "floor-holes" | "lifeforce-orb" | "explosions" | "transition-attacks" | "rifts";
 
@@ -49,7 +49,6 @@ export type Beat =
   | Readonly<{ kind: "rifts-spawn"; forCycle: Cycle }>
   | Readonly<{ kind: "rift-charge-ends"; forCycle: Cycle }>;
 
-export type IncomingStyle = Style | "typeless";
 export type RunEnd = "kill" | "death";
 
 export type RiftId = `rift-${number}-${number}`;
@@ -57,7 +56,6 @@ export function riftId(spawnedAt: Tick, slot: number): RiftId {
   return `rift-${spawnedAt}-${slot}`;
 }
 
-export type HitReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number; prayer: Style | null }>;
 export type HealReceipt = Readonly<{ requested: number; applied: number; beforeHp: number; afterHp: number }>;
 export type HealCause = Readonly<{ kind: "unclaimed-orb" }> | Readonly<{ kind: "soul-split"; ordinal: Ordinal }>;
 /** `attackDelay` is the player's SDK attack clock at the impact, before and after a dodge cuts it. */
@@ -67,7 +65,15 @@ export type ExplosionOutcome =
   | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
 export type HitJudgement = "passed" | "invulnerable" | "blocked";
-export type PlayerHitSource = "deflect-reflected" | "floor-hit" | "hole-hit" | "lifeforce-drained" | "explosion-resolved" | "special-hit" | "rift-burst";
+export type PlayerHit =
+  | Readonly<{ kind: "deflect-reflected"; at: Tick; style: Style }>
+  | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile }>
+  | Readonly<{ kind: "hole-hit"; at: Tick; tile: Tile }>
+  | Readonly<{ kind: "lifeforce-drained"; at: Tick; void: VoidKind; orb: Tile }>
+  | Readonly<{ kind: "explosion-resolved"; at: Tick; void: VoidKind; pulse: number; tile: Tile; underBoss: boolean }>
+  | (Readonly<{ kind: "special-hit" }> & SpecialAttack)
+  | Readonly<{ kind: "rift-burst"; at: Tick; rift: RiftId; tile: Tile }>;
+export type PlayerHitSource = PlayerHit["kind"];
 
 export type FightEvent =
   | Readonly<{ kind: "stage-entered"; at: Tick; stage: Stage }>

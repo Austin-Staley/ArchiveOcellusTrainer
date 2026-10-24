@@ -14,6 +14,7 @@ import type {
   HitReceipt,
   IncomingStyle,
   InputObservation,
+  Mechanic,
   Ordinal,
   Phase,
   PlayerHitSource,
@@ -29,12 +30,12 @@ import type {
 } from "../P4Types";
 import { riftId } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
+import type { Moment, Schedule } from "../../../../sim/schedule";
 import { reach, TileSet } from "../../../../sim/tiles";
 import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
 import { enteredSquare, orbTile } from "../p4/orb";
 import { rollInt } from "../p4/roll";
-import type { Moment } from "../p4/schedule";
-import { Schedule } from "../p4/schedule";
+import { compileSchedule } from "../p4/schedule";
 import { VoidRift } from "./VoidRift";
 
 type RowDraft = Omit<TickRow, "playerAtPostTick" | "bossHp" | "combatDraws"> & Readonly<{ bossHpAtBossStep: number; drawsAtBossStep: number; riftsAtBossStep: readonly Rift[] }>;
@@ -189,7 +190,7 @@ function specialAttack<V extends Special>(at: Tick, ordinal: Ordinal, variant: V
 }
 
 export class Ocellus extends Mob {
-  private readonly schedule: Schedule;
+  private readonly schedule: Schedule<Phase, Beat, Mechanic>;
   readonly holes: TileSet;
   private run: Run = { kind: "waiting", inputs: [] };
   private orbs: readonly Orb[] = [];
@@ -201,7 +202,7 @@ export class Ocellus extends Mob {
 
   constructor(region: Region, private readonly config: DrillConfig, private readonly target: OcellusPlayer, private readonly invincible: () => boolean) {
     super(region, OCELLUS_P4.geometry.bossAnchor.value);
-    this.schedule = Schedule.compile(config.seed, config.choices);
+    this.schedule = compileSchedule(config.seed, config.choices);
     this.holes = TileSet.at(this.schedule.acts("floor-holes") ? config.choices.floorHoleLayout.option.value.tiles : []);
   }
 
@@ -396,7 +397,7 @@ export class Ocellus extends Mob {
     }
   }
 
-  private step(moment: Moment, last: Phase | null, inputs: readonly InputObservation[]): void {
+  private step(moment: Moment<Phase, Beat>, last: Phase | null, inputs: readonly InputObservation[]): void {
     const draft = {
       tick: moment.tick,
       worldTick: worldTick(this.region.world.globalTickCounter),
@@ -422,7 +423,7 @@ export class Ocellus extends Mob {
     this.run = { kind: "stepping", draft: { ...draft, beats: moment.beats, events: [...logged, ...destroyed, ...reactions] } };
   }
 
-  private judgeLandingHits(moment: Moment): FightEvent[] {
+  private judgeLandingHits(moment: Moment<Phase, Beat>): FightEvent[] {
     return this.incomingProjectiles
       .filter((projectile) => projectile.remainingDelay === 1 && !projectile.shouldDestroy())
       .map((projectile): FightEvent => {
@@ -436,7 +437,7 @@ export class Ocellus extends Mob {
       });
   }
 
-  private judge(moment: Moment, style: IncomingStyle, launchedAt: Tick): Verdict {
+  private judge(moment: Moment<Phase, Beat>, style: IncomingStyle, launchedAt: Tick): Verdict {
     if (!damageable(moment.phase.boss)) return { outcome: "invulnerable" };
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {

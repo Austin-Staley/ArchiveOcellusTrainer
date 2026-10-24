@@ -1,6 +1,7 @@
 import type { TwistedBow } from "osrs-sdk";
 import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
 import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { DrillStart, Focus } from "../../../sim/schedule";
 import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, Style, TransitionKind, VoidKind } from "./P4Types";
 import { roll } from "./p4/roll";
 
@@ -167,8 +168,6 @@ type GeometryRecipe = Readonly<{
   brazier: Selected<BrazierRecipe>;
 }>;
 
-export type Focus = Readonly<{ kind: "full-fight" }> | Readonly<{ kind: "drill"; mechanics: readonly [Mechanic, ...Mechanic[]] }>;
-export type DrillStart = Readonly<{ kind: "before-first-beat"; lead: TickSpan }> | Readonly<{ kind: "cycle-start" }>;
 
 type BossPose =
   | "idle"
@@ -797,8 +796,8 @@ const GEAR: GearRecipe = {
 };
 
 const PRACTICE = owner("practice one mechanic at a time; a drill option, not game data");
-const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus> =>
-  selected<Focus>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs from the drill's start; only these mechanics act", PRACTICE);
+const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus<Mechanic>> =>
+  selected<Focus<Mechanic>>({ kind: "drill", mechanics: [first, ...rest] }, "assumption", "unscaled", "the cycle runs from the drill's start; only these mechanics act", PRACTICE);
 
 export const OCELLUS_P4 = {
   vods: VODS,
@@ -896,7 +895,7 @@ export const OCELLUS_P4 = {
       "any-floor": selected<OuterOrbTile>({ kind: "near-player", floor: "any-floor" }, "footage-repeated", "team-5", "outer orbs 4 to 6 tiles south-west, outside the 5x5, on the flood but off the holes; the streamer crossed the flood for them and took 59 and 49 (F1, F2)", vod("V2", "k88 to k97"), vod("V2", "k149 to k158"), ORB_OFF_HOLES),
     }),
     focus: choice("full-fight", {
-      "full-fight": selected<Focus>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", PRACTICE),
+      "full-fight": selected<Focus<Mechanic>>({ kind: "full-fight" }, "assumption", "unscaled", "every mechanic acts", PRACTICE),
       "void-floor": drill("void-floor"),
       "lifeforce-orb": drill("lifeforce-orb"),
       "orb-retrieval": drill("lifeforce-orb", "void-floor"),

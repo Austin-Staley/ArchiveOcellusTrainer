@@ -211,4 +211,42 @@ describe("U1.5 loadouts", () => {
   test("guard: in the explosions a first glaive that keeps damage drains the Defence the second glaive rolls against: seed 37's first glaive requests 17 and keeps 6", async () => {
     expect(await divisionInTheExplosions(37, 16)).toEqual({ firstGlaive: [19, "reduced", 17], glaives: 2, rolledAgainst: [250, 213] });
   });
+
+  test("guard, main filtered landed glaives: an attack after Division's glaives land rolls against the Defence they left, while a glaive still in flight counts: on seed 37 the second glaive at 18 rolls against 213, both land at 21 to leave 176, and the dodge-sped attack at 22 rolls against 176", async () => {
+    const drill = startDrill({ seed: 37, selection: { focus: "explosions" } });
+    drill.tickTo(16);
+    drill.clickInventory(28922);
+    await drill.click({ x: 6, y: 1 });
+    drill.tickTo(17);
+    drill.player().useSpecialAttack = true;
+    const boss = drill.boss();
+    const rolledAgainst = new Map<AttackBonuses, [number, number]>();
+    const observe = boss.incomingAttackRollModifiers.bind(boss);
+    vi.spyOn(boss, "incomingAttackRollModifiers").mockImplementation((attack) => {
+      const run = drill.region.snapshot()?.run;
+      if (!rolledAgainst.has(attack.bonuses)) rolledAgainst.set(attack.bonuses, [run?.kind === "running" ? run.tick : -1, boss.currentStats.defence]);
+      return observe(attack);
+    });
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(18);
+    await drill.click({ x: 5, y: 1 });
+    drill.tickTo(19);
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(20);
+    await drill.click({ x: 6, y: 1 });
+    drill.tickTo(21);
+    const leftByGlaives = boss.currentStats.defence;
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(22);
+    drill.dispose();
+    expect({ leftByGlaives, rolledAgainst: [...rolledAgainst.values()] }).toEqual({
+      leftByGlaives: 176,
+      rolledAgainst: [
+        [18, 250],
+        [18, 213],
+        [22, 176],
+        [22, 176],
+      ],
+    });
+  });
 });

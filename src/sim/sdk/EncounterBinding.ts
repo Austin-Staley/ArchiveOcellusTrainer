@@ -7,7 +7,8 @@ import type { Damage, HitReceipt, IncomingStyle, Style } from "../combat";
 export type Encounter = Readonly<{ input: unknown; event: unknown; cause: unknown; snapshot: unknown; row: unknown; end: unknown }>;
 
 export type Time = Readonly<{ world: WorldTick; encounter: Tick }>;
-export type IncomingHit = Readonly<{ style: IncomingStyle; requested: number; launchedAt: Tick }>;
+/** `rolled` is the attacker's roll; `requested` is what the SDK will deal, the roll after its caps, the target's HP among them. */
+export type IncomingHit = Readonly<{ style: IncomingStyle; rolled: number; requested: number; launchedAt: Tick }>;
 export type Landed<C> = Readonly<{ cause: C; receipt: HitReceipt }>;
 
 export type Logged<E> = Readonly<{ kind: "event"; event: E }>;
@@ -140,6 +141,7 @@ export class EncounterBinding<T extends Encounter> {
   private run: Run<T> = { kind: "waiting", inputs: [] };
   private readonly journal: T["row"][] = [];
   private readonly stream: CombatStream;
+  private readonly rolls = new WeakMap<Projectile, number>();
 
   constructor(seed: Seed, private readonly start: Tick, private readonly player: Player, private readonly hooks: Hooks<T>) {
     this.stream = new CombatStream(seed);
@@ -208,13 +210,18 @@ export class EncounterBinding<T extends Encounter> {
     const drawsAtTurn = this.stream.draws;
     const landing = actor.incomingProjectiles
       .filter((projectile) => projectile.remainingDelay === 1 && !projectile.shouldDestroy())
-      .map((projectile) => [{ style: incomingStyle(projectile.attackStyle), requested: projectile.damage, launchedAt: tick(Math.max(0, time.encounter - projectile.totalDelay)) }, projectile] as const);
+      .map((projectile) => [this.incoming(projectile, time.encounter), projectile] as const);
     const judged = this.hooks["before-npc-hits"]({ kind: "before-npc-hits", time, incoming: landing.map(([hit]) => hit) });
     const before = this.apply(actor, judged.outputs, new Map(landing));
     resolve();
     const turned = this.hooks["npc-turn"]({ kind: "npc-turn", time, snapshot: judged.snapshot });
     const after = this.apply(actor, turned.outputs, new Map());
     this.run = { kind: "turned", time, inputs: run.inputs, snapshot: judged.snapshot, events: [...before, ...after], landed: [], drawsAtTurn, ending: turned.ending };
+  }
+
+  /** The SDK keeps a projectile's roll on its weapon, and the weapon's next attack overwrites it. */
+  received(projectile: Projectile): void {
+    if (projectile.weapon) this.rolls.set(projectile, projectile.weapon.damageRoll);
   }
 
   playerHitsSettled(): void {
@@ -268,6 +275,11 @@ export class EncounterBinding<T extends Encounter> {
     } finally {
       Random.setRandom(previous);
     }
+  }
+
+  private incoming(projectile: Projectile, landsAt: Tick): IncomingHit {
+    const rolled = this.rolls.get(projectile) ?? projectile.damage;
+    return { style: incomingStyle(projectile.attackStyle), rolled, requested: projectile.damage, launchedAt: tick(Math.max(0, landsAt - projectile.totalDelay)) };
   }
 
   private land(hit: Landed<T["cause"]>): void {

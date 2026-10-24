@@ -1,5 +1,5 @@
 import { CacheRenderModel, CacheRenderReferences, CollisionType, InvisibleMovementBlocker, Mob } from "osrs-sdk";
-import type { Model, Region, UnitBonuses, UnitStats } from "osrs-sdk";
+import type { Model, Projectile, Region, UnitBonuses, UnitStats } from "osrs-sdk";
 import type { DamageRange, DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
@@ -104,15 +104,15 @@ function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   return events;
 }
 
-function landedDamage(verdict: Verdict, requested: number): number {
+function landedDamage(verdict: Verdict, hit: IncomingHit): number {
   switch (verdict.outcome) {
     case "passed":
-      return requested;
+      return hit.requested;
     case "invulnerable":
     case "blocked":
       return 0;
     case "reduced":
-      return Math.floor((requested * (100 - verdict.percentLess)) / 100);
+      return Math.min(hit.requested, Math.floor((hit.rolled * (100 - verdict.percentLess)) / 100));
     default: {
       const unhandled: never = verdict;
       return unhandled;
@@ -242,6 +242,11 @@ export class Ocellus extends Mob {
 
   override attackIfPossible(): void {}
 
+  override addProjectile(projectile: Projectile): void {
+    super.addProjectile(projectile);
+    this.binding.received(projectile);
+  }
+
   override queueStep(): void {
     this.binding.npcTurn(this, () => super.queueStep());
   }
@@ -278,7 +283,7 @@ export class Ocellus extends Mob {
 
   private judgeIncoming(landing: IncomingHit, at: Tick): readonly (Output | Judgement)[] {
     const verdict = this.judge(at, landing.style, landing.launchedAt);
-    const judged: Judgement = { kind: "judge-incoming", hit: landing, damage: landedDamage(verdict, landing.requested) };
+    const judged: Judgement = { kind: "judge-incoming", hit: landing, damage: landedDamage(verdict, landing) };
     const reflected = verdict.outcome === "blocked" ? this.reflect(verdict, landing.requested, at) : [];
     return [judged, ...reflected, ...logs({ kind: "player-hit-judged", at, style: landing.style, outcome: verdict.outcome, requested: landing.requested })];
   }

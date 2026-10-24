@@ -224,6 +224,11 @@ export class EncounterBinding<T extends Encounter> {
     if (projectile.weapon) this.rolls.set(projectile, projectile.weapon.damageRoll);
   }
 
+  landing(projectile: Projectile): Readonly<{ hit: IncomingHit; at: Tick }> {
+    const at = tick(this.nextNpcTurn() + projectile.remainingDelay - 1);
+    return { hit: this.incoming(projectile, at), at };
+  }
+
   playerHitsSettled(): void {
     const run = this.run;
     if (run.kind !== "turned") return;
@@ -274,6 +279,28 @@ export class EncounterBinding<T extends Encounter> {
       step();
     } finally {
       Random.setRandom(previous);
+    }
+  }
+
+  private nextNpcTurn(): Tick {
+    const run = this.run;
+    switch (run.kind) {
+      case "waiting":
+        return this.start;
+      case "opened":
+        return run.time.encounter;
+      case "turned":
+      case "settled":
+      case "moved":
+        return tick(run.time.encounter + 1);
+      case "between":
+        return tick(run.last + 1);
+      case "ended":
+        return tick(run.at + 1);
+      default: {
+        const unhandled: never = run;
+        return unhandled;
+      }
     }
   }
 

@@ -22,6 +22,7 @@ import type { AttackBonuses, ProjectileOptions, UnitBonuses, UnitEquipment, Weap
 import type { StanceSpeeds, TrainerItemKey } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import { itemIconFile } from "../../../../assets";
+import { Ocellus } from "../mobs/Ocellus";
 
 const { gear } = OCELLUS_P4;
 
@@ -164,8 +165,16 @@ export class OcellusScythe extends ScytheOfVitur {
   }
 }
 
-function drained(defence: number, target: Unit): number {
-  return Math.max(0, defence - Math.floor(target.currentStats.magic * gear.division.value.defenceDrainOfMagic));
+function afterGlaive(target: Unit, defence: number, damage: number): number {
+  return damage > 0 ? Math.max(0, defence - Math.floor(target.currentStats.magic * gear.division.value.defenceDrainOfMagic)) : defence;
+}
+
+function landingDamage(target: Unit, projectile: Projectile): number {
+  return target instanceof Ocellus ? target.landingDamage(projectile) : projectile.damage;
+}
+
+function defenceAfterGlaivesInFlight(target: Unit): number {
+  return target.incomingProjectiles.reduce((defence, projectile) => (projectile instanceof DivisionGlaive ? afterGlaive(target, defence, landingDamage(target, projectile)) : defence), target.currentStats.defence);
 }
 
 function rollingAgainst<T>(target: Unit, defence: number, roll: () => T): T {
@@ -181,7 +190,7 @@ function rollingAgainst<T>(target: Unit, defence: number, roll: () => T): T {
 class DivisionGlaive extends Projectile {
   override beforeHit(): void {
     super.beforeHit();
-    if (this.damage > 0 && this.to instanceof Unit) this.to.currentStats.defence = drained(this.to.currentStats.defence, this.to);
+    if (this.to instanceof Unit) this.to.currentStats.defence = afterGlaive(this.to, this.to.currentStats.defence, this.damage);
   }
 }
 
@@ -250,14 +259,12 @@ export class TonalzticsOfRalos extends RangedWeapon {
     to.addProjectile(new DivisionGlaive(this, this.damage, from, to, "range", mergeProjectileOptions(own, this.projectileOptions, options)));
   }
 
-  /** The SDK rolls both glaives as they are thrown, so the second rolls against the Defence the first glaive's drain will leave once it lands. */
+  /** The SDK rolls both glaives as they are thrown, so each throw rolls against the Defence the glaives already in flight leave once they land. */
   private throwBoth(from: Unit, to: Unit, bonuses: AttackBonuses, options: ProjectileOptions): boolean {
-    let defence = to.currentStats.defence;
     let thrown = false;
     for (let hit = 0; hit < gear.ralos.value.hits; hit++) {
-      if (!rollingAgainst(to, defence, () => super.attack(from, to, rangedBonuses(this, bonuses), options))) return thrown;
+      if (!rollingAgainst(to, defenceAfterGlaivesInFlight(to), () => super.attack(from, to, rangedBonuses(this, bonuses), options))) return thrown;
       thrown = true;
-      if (bonuses.isSpecialAttack && this.damage > 0) defence = drained(defence, to);
     }
     return thrown;
   }

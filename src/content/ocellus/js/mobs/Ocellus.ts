@@ -281,6 +281,11 @@ export class Ocellus extends Mob {
     return { outputs: [...phased, ...destroyed, ...reactions, ...this.strikeHole(at, player)], ending: null };
   }
 
+  landingDamage(projectile: Projectile): number {
+    const { hit, at } = this.binding.landing(projectile);
+    return landedDamage(this.judge(at, hit.style, hit.launchedAt), hit);
+  }
+
   private judgeIncoming(landing: IncomingHit, at: Tick): readonly (Output | Judgement)[] {
     const verdict = this.judge(at, landing.style, landing.launchedAt);
     const judged: Judgement = { kind: "judge-incoming", hit: landing, damage: landedDamage(verdict, landing) };

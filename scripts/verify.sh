@@ -112,7 +112,7 @@ HOLE_FLOOD_SHOT_TICK=45
 HOLE_TILE='{"x":11,"y":2}'
 HOLE_HITS=3
 HOLE_DAMAGE='{"min":9,"max":11}'
-PROJECTED_TILE_CLICKS=18
+PROJECTED_TILE_CLICKS=24
 ORB_HOLES_QUERY="?seed=86&floorHoleLayout=v1-turn"
 ORB_HOLES_SHOT_TICK=13
 ORB_HOLES_EXPECTED='[[12,"inner-void",{"x":2,"y":5}]]'
@@ -181,6 +181,18 @@ MARKER_SHOT_DELAY_MS=450
 EXPLOSION_PIXEL="#5e317b"
 EXPLOSION_GLOW_BOX='{"minX":-128,"maxX":127,"minY":-16,"maxY":79}'
 EXPLOSION_GLOW_MIN_SHARE=1.5
+EXPLOSION_GLOW_MAX_SHARE=0.1
+EXPLOSION_GLOW_SHOT_FRACTION=0.6
+EXPLOSION_MARKED_SHOT_FRACTIONS="0.6 0.8"
+EXPLOSION_2D_SIDE_TILE='{"x":6,"y":1}'
+EXPLOSION_2D_BOSS_TILE='{"x":5,"y":4}'
+EXPLOSION_2D_GLOW_BOX='{"minX":-214,"maxX":213,"minY":-53,"maxY":53}'
+EXPLOSION_2D_EXPECTED='{"marks":[[17,{"x":5,"y":1}],[19,{"x":6,"y":1}],[21,{"x":5,"y":1}],[23,{"x":6,"y":1}],[25,{"x":5,"y":1}],[27,{"x":6,"y":1}]],"lateHit":[49,{"x":5,"y":1},{"requested":16,"applied":16,"beforeHp":99,"afterHp":83,"prayer":null}]}'
+EXPLOSION_2D_LAST_TICK=50
+EXPLOSION_RUN_END_QUERY="?seed=38&bosshp=1&focus=explosions"
+EXPLOSION_KILL_CLICK_TICK=14
+EXPLOSION_RUN_END_EXPECTED='{"marked":[[17,{"x":5,"y":1}]],"ended":[[18,"kill"]],"resolved":[]}'
+EXPLOSION_RUN_END_FRAMES=2
 SOUND_SETTINGS_KEY="osrs-sdk:settings"
 SOUND_SAMPLES='{"12638":14332,"12537":8820}'
 EXPLOSION_SOUNDS='[[14,12638],[17,12537],[19,12537],[21,12537],[23,12537],[25,12537],[27,12537],[45,12638],[48,12537],[50,12537],[52,12537],[54,12537],[56,12537],[58,12537]]'
@@ -474,20 +486,35 @@ shot_after_tick() {
     "$1" "$2" "$VERIFY_DIR/$3" | ab batch --bail >/dev/null
 }
 
+shot_in_fight_tick() {
+  printf '[["wait","--fn","((t) => t > %d || (t === %d && (performance.now() - (window.__tickStarts[%d] ?? Infinity)) / 600 >= %s))(window.__archiveOcellusProbe?.snapshot().fight?.run.tick ?? -1)","--timeout","30000"],["screenshot","%s"]]' \
+    "$1" "$1" "$1" "$2" "$VERIFY_DIR/$3" | ab batch --bail >/dev/null
+}
+
+shot_in_world_tick() {
+  printf '[["wait","--fn","((t) => t > %d || (t === %d && (performance.now() - (window.__worldTickStarts[%d] ?? Infinity)) / 600 >= %s))(window.__archiveOcellusProbe.snapshot().tick)","--timeout","30000"],["screenshot","%s"]]' \
+    "$1" "$1" "$1" "$2" "$VERIFY_DIR/$3" | ab batch --bail >/dev/null
+}
+
 record_tick_starts() {
   ab eval '(() => {
-    const starts = window.__tickStarts = {};
+    const starts = window.__tickStarts = {}, worldStarts = window.__worldTickStarts = {};
     const watch = () => {
-      const run = window.__archiveOcellusProbe?.snapshot().fight?.run;
+      const snapshot = window.__archiveOcellusProbe?.snapshot(), run = snapshot?.fight?.run;
       if (run?.kind === "running" && starts[run.tick] === undefined) starts[run.tick] = performance.now();
+      if (snapshot && worldStarts[snapshot.tick] === undefined) worldStarts[snapshot.tick] = performance.now();
       requestAnimationFrame(watch);
     };
     watch();
   })()' >/dev/null
 }
 
+save_settings() {
+  ab eval "(() => { const key = '${SOUND_SETTINGS_KEY}', saved = JSON.parse(localStorage.getItem(key) ?? '{\"version\":1,\"values\":{}}'); saved.values = { ...saved.values, ...$1 }; localStorage.setItem(key, JSON.stringify(saved)); })()" >/dev/null
+}
+
 save_sound_settings() {
-  ab eval "(() => { const key = '${SOUND_SETTINGS_KEY}', saved = JSON.parse(localStorage.getItem(key) ?? '{\"version\":1,\"values\":{}}'); saved.values = { ...saved.values, playsAudio: $1, playsAreaAudio: $1 }; localStorage.setItem(key, JSON.stringify(saved)); })()" >/dev/null
+  save_settings "{ playsAudio: $1, playsAreaAudio: $1 }"
 }
 
 record_audio_starts() {
@@ -880,8 +907,8 @@ wait_until_ticking() {
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" --timeout 90000 >/dev/null || { log "the drill never started ticking"; return 1; }
 }
 
-click_tile() {
-  local page="$1" tile="$2" after="$3" modifier="${4:-none}" read orders
+tile_pixel() {
+  local page="$1" tile="$2" after="$3" read
   read="$(ab --json eval "new Promise((done) => {
     const probe = window.__archiveOcellusProbe, ready = () => '${after}' === 'now' || (probe.snapshot().fight?.run.tick ?? -1) >= Number('${after}');
     const read = () => {
@@ -892,16 +919,21 @@ click_tile() {
     read();
   })" | json data.result)" || return 1
   [[ "$(json at <<<"$read")" != null ]] || { log "${page}: tile ${tile} is not on the canvas"; return 1; }
-  CLICK_X="$(json at.x <<<"$read")" CLICK_Y="$(json at.y <<<"$read")" orders="$(json orders <<<"$read")"
+  CLICK_X="$(json at.x <<<"$read")" CLICK_Y="$(json at.y <<<"$read")" WALK_ORDERS="$(json orders <<<"$read")"
+}
+
+click_tile() {
+  local page="$1" tile="$2" modifier="${4:-none}"
+  tile_pixel "$page" "$tile" "$3" || return 1
   case "$modifier" in
     none) printf '[["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' "$CLICK_X" "$CLICK_Y" | ab batch --bail >/dev/null ;;
     control) control_click_at "$CLICK_X" "$CLICK_Y" ;;
   esac || { log "${page}: the click on ${tile} was not sent"; return 1; }
-  ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered').length > ${orders}" --timeout 5000 >/dev/null ||
+  ab wait --fn "window.__archiveOcellusProbe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered').length > ${WALK_ORDERS}" --timeout 5000 >/dev/null ||
     log "${page}: the click on ${tile} ordered no walk"
   ab --json eval "(() => {
     const orders = window.__archiveOcellusProbe.log().rows.flatMap((row) => row.inputs).filter((i) => i.kind === 'walk-ordered');
-    return { page: '${page}', tile: ${tile}, at: { x: ${CLICK_X}, y: ${CLICK_Y} }, ordered: orders[${orders}]?.destination ?? null };
+    return { page: '${page}', tile: ${tile}, at: { x: ${CLICK_X}, y: ${CLICK_Y} }, ordered: orders[${WALK_ORDERS}]?.destination ?? null };
   })()" | json data.result >>"$VERIFY_DIR/tile-clicks.jsonl" && echo >>"$VERIFY_DIR/tile-clicks.jsonl"
 }
 
@@ -1205,6 +1237,61 @@ drive_dodge_speedup() {
   probe "log()" >"$VERIFY_DIR/dodge-speedup.json"
   ab console >"$VERIFY_DIR/dodge-speedup-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/dodge-speedup-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
+# In 2D the player's square covers a mark on its own tile, so each page steps off the mark before a screenshot looks for it.
+drive_explosion_views() {
+  local inner=($EXPLOSION_INNER_MARKS) outer=($EXPLOSION_OUTER_MARKS) i tile mode frame ended
+  save_settings "{ use3dView: false }" || { log "the 2D view setting was not saved"; return 1; }
+  ab open "${URL}?seed=1&focus=${EXPLOSION_DRILL}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the 2D explosions drill never started"; return 1; }
+  record_tick_starts || { log "the tick watch was not installed"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  tile_pixel explosions-2d "$EXPLOSION_2D_SIDE_TILE" 0 || return 1
+  click_after_tick $((inner[0] - 1)) $((CLICK_X - CX)) $((CLICK_Y - CY)) || { log "the first 2D dodge was not clicked"; return 1; }
+  shot_in_fight_tick "${inner[0]}" "$EXPLOSION_GLOW_SHOT_FRACTION" explosion-2d-left.png || { log "2D marker screenshot failed"; return 1; }
+  ab --json eval "(() => { const probe = window.__archiveOcellusProbe; return { marked: probe.tileCentre(${SPAWN_TILE}), stepped: probe.tileCentre(${EXPLOSION_2D_SIDE_TILE}) }; })()" |
+    json data.result >"$VERIFY_DIR/explosion-2d-tiles.json" || { log "2D tile capture failed"; return 1; }
+  for i in "${!inner[@]}"; do
+    (( i == 0 )) && continue
+    (( i % 2 == 0 )) && tile="$EXPLOSION_2D_SIDE_TILE" || tile="$SPAWN_TILE"
+    click_tile explosions-2d "$tile" $((inner[i] - 1)) || { log "the 2D dodge on mark ${inner[i]} was not clicked"; return 1; }
+  done
+  click_tile explosions-2d "$EXPLOSION_2D_SIDE_TILE" "${outer[0]}" || { log "the late 2D step was not clicked"; return 1; }
+  fight_tick_at_least "$EXPLOSION_2D_LAST_TICK" 30000 || { log "the 2D explosions drill never stepped to P4 tick ${EXPLOSION_2D_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/explosions-2d.json"
+  ab console >"$VERIFY_DIR/explosion-2d-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/explosion-2d-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  for mode in 2d 3d; do
+    ab open "${URL}${EXPLOSION_RUN_END_QUERY}" >/dev/null || return 1
+    fight_tick_at_least 0 120000 || { log "the ${mode} run-end drill never started"; return 1; }
+    record_tick_starts || { log "the tick watch was not installed"; return 1; }
+    canvas_centre || { log "canvas box unreadable"; return 1; }
+    if [[ "$mode" == 2d ]]; then
+      tile_pixel "explosion-run-end-${mode}" "$EXPLOSION_2D_BOSS_TILE" 0 || return 1
+      click_after_tick "$EXPLOSION_KILL_CLICK_TICK" $((CLICK_X - CX)) $((CLICK_Y - CY)) || { log "the boss's 2D tile was not clicked"; return 1; }
+      tile_pixel "explosion-run-end-${mode}" "$EXPLOSION_2D_SIDE_TILE" 0 || return 1
+      click_after_tick $((inner[0] - 1)) $((CLICK_X - CX)) $((CLICK_Y - CY)) || { log "the 2D step off the mark was not clicked"; return 1; }
+    else
+      click_after_tick "$EXPLOSION_KILL_CLICK_TICK" 0 "-$HOVER_BOSS_BODY_UP_PX" || { log "the hovering boss was not clicked"; return 1; }
+      click_after_tick $((inner[0] - 1)) "$DODGE_CLICK_SIDE_PX" "$STEP_CLICK_DOWN_PX" || { log "the step off the mark was not clicked"; return 1; }
+    fi
+    frame=0
+    for fraction in $EXPLOSION_MARKED_SHOT_FRACTIONS; do
+      frame=$((frame + 1))
+      shot_in_fight_tick "${inner[0]}" "$fraction" "explosion-run-end-${mode}-marked-${frame}.png" || { log "${mode} marked screenshot failed"; return 1; }
+    done
+    ab wait --fn "window.__archiveOcellusProbe.snapshot().fight?.run.kind === 'ended'" --timeout 30000 >/dev/null || { log "the ${mode} run-end drill never ended"; return 1; }
+    ended="$(probe "snapshot().tick")" || return 1
+    for frame in $(seq 1 "$EXPLOSION_RUN_END_FRAMES"); do
+      shot_in_world_tick $((ended + frame)) "$EXPLOSION_GLOW_SHOT_FRACTION" "explosion-run-end-${mode}-${frame}.png" || { log "${mode} run-end screenshot failed"; return 1; }
+    done
+    probe "log()" >"$VERIFY_DIR/explosion-run-end-${mode}.json"
+    ab console >"$VERIFY_DIR/explosion-run-end-${mode}-console.log" 2>&1 || { log "console capture failed"; return 1; }
+    ab --json errors | json data.errors >"$VERIFY_DIR/explosion-run-end-${mode}-page-errors.json" || { log "page error capture failed"; return 1; }
+    [[ "$mode" == 3d ]] || save_settings "{ use3dView: true }" || { log "the 3D view setting was not restored"; return 1; }
+  done
 }
 
 drive_transition_attack() {
@@ -1776,7 +1863,7 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_back_wall && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
+  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_explosion_views && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_back_wall && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
 
   local capture
   for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png boss-bar.json cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
@@ -1786,6 +1873,8 @@ drive() {
     orb-late.png orb-late.json orb-late-page-errors.json orb-entry.png orb-entry.json orb-entry-console.log orb-entry-page-errors.json \
     explosion-left.png explosion-standing.png explosions.json explosion-audio.json explosion-console.log explosion-page-errors.json explosion-under.png explosions-under.json explosion-under-console.log explosion-under-page-errors.json \
     dodge-speedup.json dodge-speedup-console.log dodge-speedup-page-errors.json \
+    explosion-2d-left.png explosion-2d-tiles.json explosions-2d.json explosion-2d-console.log explosion-2d-page-errors.json \
+    $(for mode in 2d 3d; do echo "explosion-run-end-${mode}-marked-1.png explosion-run-end-${mode}-marked-2.png explosion-run-end-${mode}.json explosion-run-end-${mode}-console.log explosion-run-end-${mode}-page-errors.json"; seq -f "explosion-run-end-${mode}-%g.png" 1 "$EXPLOSION_RUN_END_FRAMES"; done) \
     special-before.png special-vortex.png special-spike-disk.png special-semicircle.png special-black-disk.png special.json special-console.log special-page-errors.json special-late.json special-audio.json special-late-console.log special-late-page-errors.json \
     loadout-before.json loadout-ranged.png icons.json equipment-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec-log.json loadout-spec.png equipment-melee.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
@@ -1823,7 +1912,8 @@ drive() {
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
-      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction, backWallStart, backWallEnd, backWallToward, backWallBack] = process.argv.slice(1);
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction, backWallStart, backWallEnd, backWallToward, backWallBack,
+      explosion2dGlowBox, explosion2dExpected, explosionRunEndExpected, explosionGlowMaxShare, explosionRunEndFrames] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -1834,6 +1924,8 @@ drive() {
     const [orbLog, orbClick, orbErrors, orbSkip, orbSkipErrors] = ["orb.json", "orb-click.json", "orb-page-errors.json", "orb-skip.json", "orb-skip-page-errors.json"].map(read);
     const [explosionLog, explosionAudio, explosionErrors, underLog, underErrors] = ["explosions.json", "explosion-audio.json", "explosion-page-errors.json", "explosions-under.json", "explosion-under-page-errors.json"].map(read);
     const [dodgeLog, dodgeErrors] = ["dodge-speedup.json", "dodge-speedup-page-errors.json"].map(read);
+    const [explosion2dLog, explosion2dTiles, explosion2dErrors] = ["explosions-2d.json", "explosion-2d-tiles.json", "explosion-2d-page-errors.json"].map(read);
+    const runEndPages = Object.fromEntries(["2d", "3d"].map((mode) => [mode, { log: read(`explosion-run-end-${mode}.json`), errors: read(`explosion-run-end-${mode}-page-errors.json`) }]));
     const [specialLog, specialErrors, lateLog, lateErrors, transitionAudio] = ["special.json", "special-page-errors.json", "special-late.json", "special-late-page-errors.json", "special-audio.json"].map(read);
     const [carried, itemMenu, itemMenuClosed, brewClick, brewHp, suppliesErrors] = ["supplies-inventory.json", "item-menu.json", "item-menu-closed.json", "brew-click.json", "brew-hp.json", "supplies-page-errors.json"].map(read);
     const icons = read("icons.json");
@@ -2013,7 +2105,10 @@ drive() {
     };
     const timerShare = (file) => pixelShare(file, (r, g, b) => r >= 180 && g >= 140 && b <= 90 && r - b >= 120, fromCentre(riftTimerBox));
     const splatShare = (file) => pixelShare(file, (r, g, b) => r >= 120 && g <= 40 && b <= 40, fromCentre(reflectSplatBox));
-    const glow = (file) => spot(file, (r, g, b) => b >= 120 && b - g >= 80 && r - g >= 50, fromCentre(explosionGlowBox));
+    const isGlow = (r, g, b) => b >= 120 && b - g >= 80 && r - g >= 50;
+    const glow = (file, box = explosionGlowBox) => spot(file, isGlow, fromCentre(box));
+    const markDrawn = (file, box) => spot(file, (...rgb) => isGlow(...rgb) || shardRgb.every((v, c) => Math.abs(rgb[c] - v) <= 12), fromCentre(box)).share;
+    const viewBox = (mode) => (mode === "2d" ? explosion2dGlowBox : explosionGlowBox);
     const holeTiles = JSON.parse(holeLayout).tiles;
     const onHole = (tile) => holeTiles.some((hole) => same(tile, hole));
     const darkAround = (file, [, dx, dy]) => {
@@ -2090,6 +2185,23 @@ drive() {
         },
         shards: { "explosion-left.png": shards("explosion-left.png"), "explosion-standing.png": shards("explosion-standing.png") },
         glow: { "explosion-left.png": glow("explosion-left.png"), "explosion-under.png": glow("explosion-under.png") },
+        twoD: {
+          marks: kindOf(explosion2dLog.rows, "explosion-marked").filter((e) => e.at < late).map((e) => [e.at, e.tile]),
+          dodges: JSON.parse(innerMarks).map((t) => ({ mark: t, stepped: stepped(explosion2dLog.rows, t), outcome: resolvedAt(explosion2dLog.rows, t + 1)?.outcome.kind ?? null })),
+          late: {
+            steppedOnImpact: stepped(explosion2dLog.rows, late + 1),
+            hit: ((e) => e && [e.at, e.tile, e.outcome.receipt ?? null])(resolvedAt(explosion2dLog.rows, late + 1)),
+          },
+          glow: glow("explosion-2d-left.png", explosion2dGlowBox),
+          tiles: explosion2dTiles,
+        },
+        runEnd: Object.fromEntries(Object.entries(runEndPages).map(([mode, { log }]) => [mode, {
+          marked: kindOf(log.rows, "explosion-marked").map((e) => [e.at, e.tile]),
+          ended: kindOf(log.rows, "run-ended").map((e) => [e.at, e.reason]),
+          resolved: kindOf(log.rows, "explosion-resolved").map((e) => e.at),
+          drawnWhileMarked: Math.max(...[1, 2].map((frame) => markDrawn(`explosion-run-end-${mode}-marked-${frame}.png`, viewBox(mode)))),
+          drawnAfterTheEnd: Array.from({ length: Number(explosionRunEndFrames) }, (_, frame) => markDrawn(`explosion-run-end-${mode}-${frame + 1}.png`, viewBox(mode))),
+        }])),
         sounds: {
           heard: explosionAudio.filter((s) => s.rate === 22050 && soundBySamples[s.samples] !== undefined).map((s) => [s.tick, soundBySamples[s.samples]]),
           contexts: [...new Set(explosionAudio.map((s) => s.state))],
@@ -2316,6 +2428,12 @@ drive() {
       bowTwoTicksOnOneTileDodges: sameJson(speedup.attacks, dodgeAttacks) && speedup.dodges.length === JSON.parse(innerMarks).length && speedup.dodges.every(([, , kind]) => kind === "dodged"),
       explosionSoundsOnSchedule: sameJson(sounds.heard, explosionSounds) && sameJson(sounds.contexts, JSON.stringify(["running"])),
       markGlowsBrightPurple: Object.values(observed.explosions.glow).every((g) => g.share >= Number(explosionGlowMinShare)),
+      explosionsDodgedIn2d: sameJson(observed.explosions.twoD.marks, JSON.stringify(JSON.parse(explosion2dExpected).marks)) && observed.explosions.twoD.dodges.every((d) => d.stepped && d.outcome === "dodged"),
+      lateStepHitIn2d: observed.explosions.twoD.late.steppedOnImpact && sameJson(observed.explosions.twoD.late.hit, JSON.stringify(JSON.parse(explosion2dExpected).lateHit)),
+      markGlowsIn2d: observed.explosions.twoD.glow.share >= Number(explosionGlowMinShare),
+      markLeftBehindIn2d: ((g, tiles) => g.dx !== null && Math.abs(g.dx) >= 0.01 && Math.sign(g.dx) === Math.sign(tiles.marked.x - tiles.stepped.x))(observed.explosions.twoD.glow, observed.explosions.twoD.tiles),
+      markGoneWhenTheRunEnds: Object.values(observed.explosions.runEnd).every(({ marked, ended, resolved, drawnWhileMarked, drawnAfterTheEnd }) =>
+        sameJson({ marked, ended, resolved }, explosionRunEndExpected) && drawnWhileMarked >= Number(explosionGlowMinShare) && drawnAfterTheEnd.every((share) => share <= Number(explosionGlowMaxShare))),
       markerStaysOnCapturedTile: leftGlow.dx !== null && leftGlow.dx <= -0.01 && standing.share >= 0.1 && standing.dx !== null && Math.abs(standing.dx) <= 0.016,
       prayerBeforeLandingProtects: special.prayedAt !== null && special.prayedAt < expectedSpecial.protected[0] && sameJson(special.hits, JSON.stringify([expectedSpecial.protected])),
       lateClickTakesFullHit: special.latePrayedAt !== null && special.latePrayedAt > expectedSpecial.late[0] && sameJson(special.lateHits[0], JSON.stringify(expectedSpecial.late)),
@@ -2414,7 +2532,7 @@ drive() {
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
       projectedClicksOrderTheirTiles: tileClicks.length === Number(projectedTileClicks) && tileClicks.every(({ tile, ordered }) => same(ordered, tile)),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, explosion2dErrors, runEndPages["2d"].errors, runEndPages["3d"].errors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -2438,7 +2556,8 @@ drive() {
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
     "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" \
-    "$BACK_WALL_START_TILE" "$BACK_WALL_END_TILE" "$BACK_WALL_TOWARD_TILES" "$BACK_WALL_BACK_TILES" >"$VERIFY_DIR/observed.json"
+    "$BACK_WALL_START_TILE" "$BACK_WALL_END_TILE" "$BACK_WALL_TOWARD_TILES" "$BACK_WALL_BACK_TILES" \
+    "$EXPLOSION_2D_GLOW_BOX" "$EXPLOSION_2D_EXPECTED" "$EXPLOSION_RUN_END_EXPECTED" "$EXPLOSION_GLOW_MAX_SHARE" "$EXPLOSION_RUN_END_FRAMES" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

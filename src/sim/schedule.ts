@@ -21,12 +21,12 @@ export class Schedule<P, B, M extends string> {
     private readonly mechanicOf: (beat: B) => M | null,
     private readonly focus: Focus<M>,
     drillStart: DrillStart,
-    horizon: number,
+    horizon: Tick,
   ) {
     this.start = this.startTick(drillStart, horizon);
   }
 
-  private startTick(drillStart: DrillStart, horizon: number): Tick {
+  private startTick(drillStart: DrillStart, horizon: Tick): Tick {
     if (this.focus.kind === "full-fight") return tick(0);
     switch (drillStart.kind) {
       case "cycle-start":

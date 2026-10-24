@@ -3,7 +3,6 @@ export type Basis = "footage-repeated" | "footage-once" | "spec-confirmed" | "sp
 export type WikiRef = Readonly<{ kind: "wiki"; page: string; oldid: number | null }>;
 export type NoWiki = Readonly<{ kind: "no-wiki"; why: string }>;
 
-/** The first entry says which OSRS wiki revision states the value, or why none is cited. */
 export type Citations<Source> = readonly [WikiRef, ...(WikiRef | Source)[]] | readonly [NoWiki, ...Source[]];
 
 export type Evidence<Source, Scale extends string> = Readonly<{

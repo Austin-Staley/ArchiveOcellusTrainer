@@ -163,6 +163,6 @@ export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<
   };
 
   const slots = beats.map((slotBeats, offset): Slot<Phase, Beat> => ({ phase: phaseAt(offset), beats: slotBeats }));
-  // Rifts are the only beats gated by cycle, and they spawn before their first rift cycle starts.
-  return new Schedule(leadInTable, slots, mechanicOf, choices.focus.option.value, choices.drillStart.option.value, leadInLength + length * firstRiftCycle);
+  const firstRiftCycleEnds = tick(leadInLength + length * firstRiftCycle);
+  return new Schedule(leadInTable, slots, mechanicOf, choices.focus.option.value, choices.drillStart.option.value, firstRiftCycleEnds);
 }

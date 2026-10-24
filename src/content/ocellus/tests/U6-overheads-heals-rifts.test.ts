@@ -1,9 +1,14 @@
 import type { Fill } from "../../../../test/paintedTiles";
 import { paintedFills } from "../../../../test/paintedTiles";
 import type { DrillSelection } from "../js/OcellusTimings";
-import { startDrill } from "./drill";
+import { RING_NORTH, UNDER_BOSS, startDrill } from "./drill";
 
 const TRANSITIONS = { focus: "transition-attacks", specialSelection: "replay-v2" } as const;
+
+const FIRST_ATTACK_ON_SEED_100 = {
+  bow: { setup: "ranged", style: "ranged", requested: [54] },
+  scythe: { setup: "melee", style: "melee", requested: [31, 7, 5] },
+} as const;
 
 type Drill = ReturnType<typeof startDrill>;
 
@@ -62,30 +67,35 @@ describe("U6 boss overheads, heals and rifts", () => {
   });
 
   test.each([
-    ["range", 9, 10, "ranged", "passed", 20],
-    ["range", 30, 31, "ranged", "passed", 20],
-    ["slash", 31, 32, "melee", "blocked", 0],
-    ["slash", 32, 33, "melee", "blocked", 0],
-    ["slash", 33, 34, "melee", "passed", 20],
-    ["range", 33, 34, "ranged", "passed", 20],
-    ["range", 37, 39, "ranged", "passed", 20],
-    ["slash", 38, 39, "melee", "passed", 20],
-    ["range", 38, 39, "ranged", "passed", 20],
-    ["slash", 39, 40, "melee", "passed", 20],
-    ["range", 39, 40, "ranged", "blocked", 0],
-    ["slash", 59, 60, "melee", "passed", 20],
-    ["range", 59, 60, "ranged", "blocked", 0],
-    ["slash", 61, 62, "melee", "passed", 20],
-    ["range", 61, 62, "ranged", "passed", 20],
-    ["slash", 67, 68, "melee", "passed", 20],
-    ["range", 67, 68, "ranged", "passed", 20],
-  ] as const)("Deflect judges a hit by the overhead when it was launched: a %s hit launched at %i and landing at %i", (attackStyle, launchedAt, landsAt, style, outcome, taken) => {
-    const drill = startDrill({ selection: { focus: "rifts", drillStart: "cycle-start" } });
-    drill.tickTo(launchedAt);
-    drill.hit(drill.player(), drill.boss(), 20, attackStyle, landsAt - launchedAt);
+    ["bow", 9, 11, "passed", 54],
+    ["bow", 30, 32, "passed", 54],
+    ["scythe", 31, 32, "blocked", 0],
+    ["scythe", 32, 33, "blocked", 0],
+    ["scythe", 33, 34, "passed", 43],
+    ["bow", 33, 35, "passed", 54],
+    ["bow", 37, 39, "passed", 54],
+    ["scythe", 38, 39, "passed", 43],
+    ["bow", 38, 40, "passed", 54],
+    ["scythe", 39, 40, "passed", 43],
+    ["bow", 39, 41, "blocked", 0],
+    ["scythe", 59, 60, "passed", 43],
+    ["bow", 59, 61, "blocked", 0],
+    ["scythe", 61, 62, "passed", 43],
+    ["bow", 61, 63, "passed", 54],
+    ["scythe", 67, 68, "passed", 43],
+    ["bow", 67, 69, "passed", 54],
+  ] as const)("guard: Deflect judges a hit by the overhead when it was launched: a %s attack from the ring launched at %i and landing at %i", async (weapon, launchedAt, landsAt, outcome, taken) => {
+    const { setup, style, requested } = FIRST_ATTACK_ON_SEED_100[weapon];
+    const drill = startDrill({ seed: 100, selection: { focus: "rifts", drillStart: "cycle-start", setup } });
+    await drill.click(RING_NORTH);
+    drill.tickTo(launchedAt - 1);
+    await drill.click(UNDER_BOSS);
     drill.tickTo(landsAt);
     const { atBossStep, atPostTick } = drill.row(landsAt).bossHp;
-    expect([drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]), atBossStep - atPostTick]).toEqual([[[landsAt, style, outcome, 20]], taken]);
+    expect([drill.events("player-hit-judged").map((e) => [e.at, e.style, e.outcome, e.requested]), atBossStep - atPostTick]).toEqual([
+      requested.map((amount) => [landsAt, style, outcome, amount]),
+      taken,
+    ]);
     drill.dispose();
   });
 
@@ -299,12 +309,19 @@ describe("U6 boss overheads, heals and rifts", () => {
     drill.dispose();
   });
 
-  test("a kill on the Soul Split tick ends the run before the boss heals", () => {
-    const drill = startDrill({ selection: TRANSITIONS });
-    drill.tickTo(38);
-    drill.hit(drill.player(), drill.boss(), 1355);
-    drill.tickTo(40);
-    expect([drill.events("boss-healed"), drill.events("run-ended").map((e) => [e.at, e.reason])]).toEqual([[], [[39, "kill"]]]);
-    drill.dispose();
+  test("guard: a kill on the Soul Split tick ends the run before the boss heals", async () => {
+    const fight = async (attacks: boolean) => {
+      const drill = startDrill({ seed: 100, bossHp: 1, selection: TRANSITIONS });
+      drill.tickTo(35);
+      if (attacks) await drill.click(UNDER_BOSS);
+      drill.tickTo(40);
+      const seen = [drill.events("boss-healed").map((e) => e.at), drill.events("run-ended").map((e) => [e.at, e.reason])];
+      drill.dispose();
+      return seen;
+    };
+    expect([await fight(false), await fight(true)]).toEqual([
+      [[39], []],
+      [[], [[39, "kill"]]],
+    ]);
   });
 });

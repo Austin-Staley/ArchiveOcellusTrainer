@@ -843,6 +843,16 @@ export const OCELLUS_P4 = {
       "wiki-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(3), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "spec-single", "unscaled", "six marks every 2 ticks, damage a tick later; first mark from k55; 16 from one teammate splat (inferred)", STRATEGIES, vod("V2", "k55-k65, k62")),
       "v2-tell-then-six": selected<ExplosionRecipe>({ firstMarkAfterHit: span(5), count: 6, period: span(2), impactAfterMark: span(1), damage: { min: 16, max: 16 } }, "inferred", "team-4-and-5", "k55 read as a tell, marks k57 to k67 (C4); the default because sound 12537 plays at hit + 5 to hit + 15 in every void of both clips and the marks are taken to sit on it", STRATEGIES_P4, vod("V2", "k55-k67"), vod("V1", "3:54:06.58, t17"), vod("V2", "5:20:29.70, t17")),
     }),
+    explosionDamageReduction: choice("wiki-60", {
+      "wiki-60": selected(
+        60,
+        "spec-single",
+        "unscaled",
+        "the boss takes 60% less damage while the explosions are occurring: from the first mark, when the first explosion begins on the player's tile, to the last impact, when the last one deals its damage; the series start before it only signals the attack; a hit counts on the tick it lands, and each hit rounds down; the window's ends, the landing tick and the rounding are inferred; the wiki tags the figure citation needed and says it is for 5-tick weapons and may differ with attack speed, so every weapon takes it here (inferred)",
+        STRATEGIES_P4,
+      ),
+      "wiki-50": selected(50, "spec-single", "unscaled", "the Ocellus page: Ocellus takes 50% reduced damage while the void explosions are happening; the same window, landing tick and rounding as wiki-60 (inferred)", BOSS_INFOBOX),
+    }),
     specialSelection: choice("random-uniform", {
       "random-uniform": selected<SpecialSelection>({ kind: "random-uniform" }, "inferred", "unscaled", "V1 repeats melee, so no fixed rotation explains both clips (C3)", NO_WIKI_P4, vod("V1", "G62, G90"), vod("V2", "k77-k257")),
       "rotation-magic-ranged-melee": selected<SpecialSelection>({ kind: "rotation", order: ["vortex", "spike-disk", "black-disk"] }, "footage-once", "team-5", "V2 strict rotation over 7 attacks", NO_WIKI_P4, vod("V2", "k77, k105, k137, k165, k197, k225, k257")),
@@ -951,6 +961,7 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     bossMaxHp: pick("bossMaxHp"),
     entryHpFraction: pick("entryHpFraction"),
     explosions: pick("explosions"),
+    explosionDamageReduction: pick("explosionDamageReduction"),
     specialSelection: pick("specialSelection"),
     unclaimedOuterOrb: pick("unclaimedOuterOrb"),
     innerVoidFloor: pick("innerVoidFloor"),

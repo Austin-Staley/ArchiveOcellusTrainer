@@ -41,6 +41,7 @@ export type Beat =
   | Readonly<{ kind: "explosion-series-starts"; void: VoidKind }>
   | Readonly<{ kind: "explosion-mark"; void: VoidKind; pulse: number }>
   | Readonly<{ kind: "explosion-impact"; void: VoidKind; pulse: number }>
+  | Readonly<{ kind: "explosions-occurring"; void: VoidKind }>
   | Readonly<{ kind: "floor-damage"; void: VoidKind }>
   | Readonly<{ kind: "special-tell"; ordinal: Ordinal; variant: Special }>
   | Readonly<{ kind: "special-hit"; ordinal: Ordinal; variant: Special }>
@@ -64,7 +65,7 @@ export type ExplosionOutcome =
   | Readonly<{ kind: "dodged"; attackDelay: Readonly<{ before: number; after: number }> }>
   | Readonly<{ kind: "avoided" }>;
 export type SpecialAttack<V extends Special = Special> = { [K in V]: Readonly<{ at: Tick; ordinal: Ordinal; variant: K; style: SpecialStyle<K> }> }[V];
-export type HitJudgement = "passed" | "invulnerable" | "blocked";
+export type HitJudgement = "passed" | "invulnerable" | "blocked" | "reduced";
 export type PlayerHit =
   | Readonly<{ kind: "deflect-reflected"; at: Tick; style: Style }>
   | Readonly<{ kind: "floor-hit"; at: Tick; void: VoidKind; tile: Tile }>

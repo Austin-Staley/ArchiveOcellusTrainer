@@ -58,7 +58,8 @@ type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 type Verdict =
   | Readonly<{ outcome: "passed" }>
   | Readonly<{ outcome: "invulnerable" }>
-  | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>;
+  | Readonly<{ outcome: "blocked"; style: Style; reflectPercent: number }>
+  | Readonly<{ outcome: "reduced"; percentLess: number }>;
 
 type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; hpAtPostTick: number; spawnedAt: Tick }>;
 
@@ -101,6 +102,22 @@ function phaseEvents(last: Phase | null, now: Phase, at: Tick): FightEvent[] {
   if ((last?.overhead ?? null) !== now.overhead) events.push({ kind: "overhead-switched", at, overhead: now.overhead });
   if (last?.boss !== now.boss) events.push({ kind: "boss-state-changed", at, state: now.boss });
   return events;
+}
+
+function landedDamage(verdict: Verdict, requested: number): number {
+  switch (verdict.outcome) {
+    case "passed":
+      return requested;
+    case "invulnerable":
+    case "blocked":
+      return 0;
+    case "reduced":
+      return Math.floor((requested * (100 - verdict.percentLess)) / 100);
+    default: {
+      const unhandled: never = verdict;
+      return unhandled;
+    }
+  }
 }
 
 function damageable(state: BossState): boolean {
@@ -261,9 +278,9 @@ export class Ocellus extends Mob {
 
   private judgeIncoming(landing: IncomingHit, at: Tick): readonly (Output | Judgement)[] {
     const verdict = this.judge(at, landing.style, landing.launchedAt);
-    const zeroed: readonly Judgement[] = verdict.outcome === "passed" ? [] : [{ kind: "judge-incoming", hit: landing, damage: 0 }];
+    const judged: Judgement = { kind: "judge-incoming", hit: landing, damage: landedDamage(verdict, landing.requested) };
     const reflected = verdict.outcome === "blocked" ? this.reflect(verdict, landing.requested, at) : [];
-    return [...zeroed, ...reflected, ...logs({ kind: "player-hit-judged", at, style: landing.style, outcome: verdict.outcome, requested: landing.requested })];
+    return [judged, ...reflected, ...logs({ kind: "player-hit-judged", at, style: landing.style, outcome: verdict.outcome, requested: landing.requested })];
   }
 
   private judge(at: Tick, style: IncomingStyle, launchedAt: Tick): Verdict {
@@ -271,17 +288,22 @@ export class Ocellus extends Mob {
     const rule = this.config.choices.deflect.option.value;
     switch (rule.kind) {
       case "none":
-        return { outcome: "passed" };
+        return this.unblocked(at);
       case "block": {
         const { overhead } = this.schedule.at(launchedAt).phase;
         const deflected = overhead === null ? null : OCELLUS_P4.deflects[overhead].value;
-        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : { outcome: "passed" };
+        return deflected !== null && deflected === style ? { outcome: "blocked", style: deflected, reflectPercent: rule.reflectPercent } : this.unblocked(at);
       }
       default: {
         const unhandled: never = rule;
         return unhandled;
       }
     }
+  }
+
+  private unblocked(at: Tick): Verdict {
+    if (!this.schedule.at(at).beats.some((beat) => beat.kind === "explosions-occurring")) return { outcome: "passed" };
+    return { outcome: "reduced", percentLess: this.config.choices.explosionDamageReduction.option.value };
   }
 
   private reflect({ style, reflectPercent }: Extract<Verdict, { outcome: "blocked" }>, blocked: number, at: Tick): readonly Output[] {
@@ -315,6 +337,8 @@ export class Ocellus extends Mob {
         return logs(this.markExplosion(beat.void, beat.pulse, at, player.tile));
       case "explosion-impact":
         return this.detonate(beat.void, beat.pulse, at, player.tile);
+      case "explosions-occurring":
+        return [];
       case "special-tell":
         return logs({ kind: "special-told", ...specialAttack(at, beat.ordinal, beat.variant) });
       case "special-hit":

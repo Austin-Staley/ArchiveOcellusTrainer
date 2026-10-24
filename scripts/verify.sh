@@ -156,6 +156,7 @@ ORB_ENTRY_LAST_TICK=44
 ORB_OPPOSITE_EXPECTED='[[43,{"x":7,"y":7}]]'
 EXPLOSION_DRILL="explosions"
 EXPLOSION_INNER_MARKS="17 19 21 23 25 27"
+EXPLOSION_DAMAGE_REDUCTION_PERCENT=60
 EXPLOSION_OUTER_MARKS="48 50 52 54 56 58"
 EXPLOSION_LAST_TICK=59
 EXPLOSION_UNDER_LAST_TICK=29
@@ -733,6 +734,7 @@ drive_loadouts() {
   ab wait --fn "window.__archiveOcellusProbe.snapshot().fight.player.specialEnergy < 100" --timeout 15000 >/dev/null || log "the special attack was not spent"
   glaives_landed 2 || log "the glaives never landed"
   probe "snapshot().fight" >"$VERIFY_DIR/loadout-spec.json"
+  probe "log()" >"$VERIFY_DIR/loadout-spec-log.json"
   ab wait 1200 >/dev/null
   ab screenshot "$VERIFY_DIR/loadout-spec.png" >/dev/null || { log "special attack screenshot failed"; return 1; }
   click_at "$LOADOUT_EQUIPMENT_TAB_X" "$LOADOUT_EQUIPMENT_TAB_Y" || return 1
@@ -1741,7 +1743,7 @@ drive() {
     explosion-left.png explosion-standing.png explosions.json explosion-audio.json explosion-console.log explosion-page-errors.json explosion-under.png explosions-under.json explosion-under-console.log explosion-under-page-errors.json \
     dodge-speedup.json dodge-speedup-console.log dodge-speedup-page-errors.json \
     special-before.png special-vortex.png special-spike-disk.png special-semicircle.png special-black-disk.png special.json special-console.log special-page-errors.json special-late.json special-audio.json special-late-console.log special-late-page-errors.json \
-    loadout-before.json loadout-ranged.png icons.json equipment-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec.png equipment-melee.png \
+    loadout-before.json loadout-ranged.png icons.json equipment-ranged.png loadout-after.json loadout-melee.png loadout-spec.json loadout-spec-log.json loadout-spec.png equipment-melee.png \
     loadout-console.log loadout-page-errors.json loadout-selector.json loadout-selector-page-errors.json \
     defence-floor-start.json defence-floor-first.json defence-floor.json defence-floor-log.json defence-floor.png defence-floor-console.log defence-floor-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
@@ -1776,7 +1778,7 @@ drive() {
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
-      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry] = process.argv.slice(1);
+      orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -2037,6 +2039,7 @@ drive() {
           attacks: dodgeLog.rows.filter((row) => row.tick <= Number(dodgeLastTick) && row.combatDraws > 0).map((row) => row.tick),
           dodges: kindOf(dodgeLog.rows, "explosion-resolved").map((e) => [e.at, e.tile, e.outcome.kind, e.outcome.attackDelay ?? null]),
           steps: dodgeLog.rows.filter((row) => row.inputs.length > 0).map((row) => [row.tick, row.inputs.map((input) => input.destination ?? input.prayer)]),
+          bossHits: dodgeLog.rows.flatMap((row) => row.events.filter((e) => e.kind === "player-hit-judged").map((e) => [e.at, e.outcome, e.requested, row.bossHp.atBossStep - row.bossHp.atPostTick])),
         },
         shards: { "explosion-left.png": shards("explosion-left.png"), "explosion-standing.png": shards("explosion-standing.png") },
         glow: { "explosion-left.png": glow("explosion-left.png"), "explosion-under.png": glow("explosion-under.png") },
@@ -2232,9 +2235,13 @@ drive() {
       rangedSetupWorn: sameJson(dressed.player.equipped, rangedWorn),
       switchesWornByClick: sameJson(switched.player.equipped, meleeWorn),
       divisionSpentHalfTheBar: switched.player.specialEnergy === 100 && spec.player.specialEnergy === 50,
-      divisionDrainedBossDefence: switched.boss.defence - spec.boss.defence === Number(drain),
+      divisionDrainedBossDefence: (() => {
+        const kept = (e) => (e.outcome === "passed" ? e.requested : e.outcome === "reduced" ? Math.floor((e.requested * (100 - Number(explosionReduction))) / 100) : 0);
+        const glaives = read("loadout-spec-log.json").rows.flatMap((row) => row.events.filter((e) => e.kind === "player-hit-judged")).slice(0, 2);
+        return glaives.length === 2 && switched.boss.defence - spec.boss.defence === Number(drain) * glaives.filter((e) => kept(e) > 0).length;
+      })(),
       setupSelectorApplied: sameJson(selector.player.equipped, meleeWorn),
-      divisionStopsAtDefenceFloor: sameJson(observed.defenceFloor.bossDefence, floorSteps) && floorGlaives.length === 4 && floorGlaives.every((event) => event.outcome === "passed" && event.requested > 0),
+      divisionStopsAtDefenceFloor: sameJson(observed.defenceFloor.bossDefence, floorSteps) && floorGlaives.length === 4 && floorGlaives.every((event) => (event.outcome === "passed" || event.outcome === "reduced") && event.requested > 0),
       orbToldAndDrained: sameJson(orb.told, JSON.stringify(expectedOrb.told)) && sameJson(orb.drained, JSON.stringify(expectedOrb.drained)),
       orbSpawnedDormant: sameJson(orb.spawned, JSON.stringify(expectedOrb.spawned)),
       orbClickTargetedOrb: same(orb.clicked, orbTile),
@@ -2246,6 +2253,13 @@ drive() {
       lateStepHitOnMarkedTile: lateStep.standing !== null && lateStep.resolved?.outcome.kind === "hit" && sameJson(lateStep.resolved.outcome.receipt, JSON.stringify(expectedExplosions.lateHit)) &&
         same(lateStep.marked, lateStep.standing) && same(lateStep.resolved.tile, lateStep.standing) && !lateStep.steppedOnMark && lateStep.steppedOnImpact && !same(lateStep.endTile, lateStep.standing),
       campingUnderBossHit: sameJson(under, JSON.stringify(expectedExplosions.under)),
+      hitsDuringTheExplosionsLoseTheReduction: (() => {
+        const marks = JSON.parse(innerMarks);
+        const during = (at) => at >= marks[0] && at <= marks[marks.length - 1] + 1;
+        const kept = (requested) => Math.floor((requested * (100 - Number(explosionReduction))) / 100);
+        return speedup.bossHits.some(([at, , requested]) => during(at) && requested > 0 && kept(requested) < requested) &&
+          speedup.bossHits.every(([at, outcome, requested, lost]) => (during(at) ? outcome === "reduced" && lost === kept(requested) : outcome === "passed" && lost === requested));
+      })(),
       bowTwoTicksOnOneTileDodges: sameJson(speedup.attacks, dodgeAttacks) && speedup.dodges.length === JSON.parse(innerMarks).length && speedup.dodges.every(([, , kind]) => kind === "dodged"),
       explosionSoundsOnSchedule: sameJson(sounds.heard, explosionSounds) && sameJson(sounds.contexts, JSON.stringify(["running"])),
       markGlowsBrightPurple: Object.values(observed.explosions.glow).every((g) => g.share >= Number(explosionGlowMinShare)),
@@ -2368,7 +2382,7 @@ drive() {
     "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
-    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" >"$VERIFY_DIR/observed.json"
+    "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

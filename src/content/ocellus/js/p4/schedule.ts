@@ -41,6 +41,7 @@ function mechanicOf(beat: Beat): Mechanic | null {
     case "explosion-series-starts":
     case "explosion-mark":
     case "explosion-impact":
+    case "explosions-occurring":
       return "explosions";
     case "floor-damage":
       return "void-floor";
@@ -101,10 +102,15 @@ export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<
       put(hit + unclaimed.afterHit, "unclaimed outer orb heal", () => ({ kind: "unclaimed-orb-heals" }));
     }
     put(hit + explosionCues.seriesStartsAfterHit.value, `${kind} explosion series start`, () => ({ kind: "explosion-series-starts", void: kind }));
+    const firstMark = hit + explosions.firstMarkAfterHit;
     for (let pulse = 0; pulse < explosions.count; pulse++) {
-      const mark = hit + explosions.firstMarkAfterHit + pulse * explosions.period;
+      const mark = firstMark + pulse * explosions.period;
       put(mark, `${kind} explosion mark ${pulse}`, () => ({ kind: "explosion-mark", void: kind, pulse }));
       put(mark + explosions.impactAfterMark, `${kind} explosion impact ${pulse}`, () => ({ kind: "explosion-impact", void: kind, pulse }));
+    }
+    const lastImpact = firstMark + (explosions.count - 1) * explosions.period + explosions.impactAfterMark;
+    for (let offset = firstMark; offset <= lastImpact; offset++) {
+      put(offset, `${kind} explosions occurring`, () => ({ kind: "explosions-occurring", void: kind }));
     }
     const floor = floorRule(kind, choices);
     if (floor.kind === "damages") {

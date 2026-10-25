@@ -5,26 +5,38 @@ export const VIEWS = ["3d", "2d"] as const;
 export type View = (typeof VIEWS)[number];
 export const SIDES = ["base", "head"] as const;
 export type Side = (typeof SIDES)[number];
-const BUDGETS = ["drawCallsMedian3d", "drawCallsMax3d", "canvasToViewport2d", "geometriesPerRetiredRift3d", "texturesPerRetiredRift3d"] as const;
+const GROWTH_BUDGETS = ["geometriesPerRetiredRift3d", "texturesPerRetiredRift3d", "heapGrowthMiB3d", "mobGrowth3d", "entityGrowth3d", "projectileGrowth3d", "sceneObjectGrowth3d"] as const;
+type GrowthBudget = (typeof GROWTH_BUDGETS)[number];
+const BUDGETS = ["drawCallsMedian3d", "drawCallsMax3d", "canvasToViewport2d", "tickGapExcess3d", "tickGapExcess2d", ...GROWTH_BUDGETS] as const;
 export type BudgetName = (typeof BUDGETS)[number];
+const LIMITS = [...BUDGETS, "medianRatioLimit"] as const;
+export type Limit = (typeof LIMITS)[number];
 const TIMINGS = ["frameP95", "tickGapP95"] as const;
 export type TimingMeasure = (typeof TIMINGS)[number];
+const MIB = 1024 * 1024;
 
 type TickRange = Readonly<{ from: Tick; to: Tick }>;
+export type BudgetException = Readonly<{ budget: Limit; from: number; to: number; reason: string; evidence: string }>;
 export type Config = Readonly<{
-  workload: Readonly<{ query: string; window: TickRange; resources: TickRange }>;
+  workload: Readonly<{ query: string; cpuThrottleRate: number; window: TickRange; resources: TickRange }>;
   budgets: Readonly<Record<BudgetName, number>>;
   timing: Readonly<{ pairs: number; medianRatioLimit: number }>;
+  exceptions: readonly BudgetException[];
 }>;
+export type BaseLimits = Readonly<{ limits: Readonly<Partial<Record<Limit, number>>>; exceptions: readonly BudgetException[] }>;
 
-type TickSample = Readonly<{ at: number; p4: Tick | null; stage: string | null; geometries: number | null; textures: number | null }>;
+type WorldCounts = Readonly<{ mobs: number; entities: number; projectiles: number }>;
+type RendererCounts = Readonly<{ geometries: number; textures: number; sceneObjects: number }>;
+type TickSample = Readonly<{ at: number; p4: Tick | null; stage: string | null; world: WorldCounts; renderer: RendererCounts | null }>;
 type DrawSample = Readonly<{ at: number; calls: number }>;
+type HeapReading = Readonly<{ p4: Tick; usedBytes: number; backingBytes: number }>;
 export type Capture = Readonly<{
   view: View;
   viewportPixels: number;
   frames: readonly number[];
   ticks: readonly TickSample[];
   draws: readonly DrawSample[];
+  heap: readonly HeapReading[];
   largestCanvasPixels: number;
   retired: readonly Tick[];
   errors: readonly string[];
@@ -44,6 +56,7 @@ export type RunMetrics = Readonly<{
 export type Line =
   | Readonly<{ kind: "budget"; name: BudgetName; observed: number; budget: number }>
   | Readonly<{ kind: "timing"; measure: TimingMeasure; view: View; base: readonly number[]; head: readonly number[]; medianRatio: number; limit: number }>
+  | Readonly<{ kind: "raise"; limit: Limit; base: number; head: number; exception: BudgetException | null }>
   | Readonly<{ kind: "measurement"; run: string; problem: string }>;
 
 export function passes(line: Line): boolean {
@@ -52,6 +65,8 @@ export function passes(line: Line): boolean {
       return line.observed <= line.budget;
     case "timing":
       return line.medianRatio <= line.limit;
+    case "raise":
+      return line.exception !== null;
     case "measurement":
       return false;
     default: {
@@ -93,6 +108,17 @@ function measurementProblems(name: string, capture: Capture, window: TickRange):
   ];
 }
 
+function tickGapsByTick(capture: Capture, { from, to }: TickRange): ReadonlyMap<Tick, number> {
+  const ticks = capture.ticks.flatMap(({ at, p4 }) => (p4 !== null && p4 >= from && p4 <= to ? [{ at, p4 }] : []));
+  return new Map(ticks.slice(1).map(({ at, p4 }, i) => [p4, at - ticks[i].at]));
+}
+
+function tickGapExcess(pairs: readonly Pair[], view: View, window: TickRange): number {
+  const base = pairs.map((pair) => tickGapsByTick(pair[view].base, window));
+  const longestBase = (p4: Tick) => Math.max(...base.map((gaps) => gaps.get(p4) ?? -Infinity));
+  return Math.max(...pairs.flatMap((pair) => [...tickGapsByTick(pair[view].head, window)].map(([p4, gap]) => gap - longestBase(p4))));
+}
+
 export function runMetrics(capture: Capture, window: TickRange): RunMetrics {
   const within = span(capture, window);
   if (within === null) throw new RangeError(`the run never reached P4 tick ${window.to}`);
@@ -117,25 +143,40 @@ function ticksSinceInnerVoidOnset(capture: Capture, sample: TickSample): number 
   return sample.p4 - onset.p4;
 }
 
-type Growth = Readonly<{ geometries: number; textures: number }> | Readonly<{ problem: string }>;
+type Growth = Readonly<{ observed: Readonly<Record<GrowthBudget, number>> }> | Readonly<{ problem: string }>;
 
-function growthPerRetiredRift(capture: Capture, { from, to }: TickRange): Growth {
+const heapBytes = ({ usedBytes, backingBytes }: HeapReading): number => usedBytes + backingBytes;
+
+function longRunGrowth(capture: Capture, { from, to }: TickRange): Growth {
   const first = tickAt(capture, from);
   const last = tickAt(capture, to);
   if (!first || !last) return { problem: `never reached P4 tick ${to}` };
-  if (first.geometries === null || first.textures === null || last.geometries === null || last.textures === null) return { problem: "no renderer resource counts" };
+  if (first.renderer === null || last.renderer === null) return { problem: "no renderer resource counts" };
   const offsets = [ticksSinceInnerVoidOnset(capture, first), ticksSinceInnerVoidOnset(capture, last)];
   if (offsets[0] === null || offsets[0] !== offsets[1]) return { problem: `P4 ticks ${from} and ${to} are at cycle offsets ${offsets.join(" and ")}` };
   const retired = capture.retired.filter((at) => at > from && at <= to).length;
   if (retired === 0) return { problem: `no rift retired between P4 ticks ${from} and ${to}` };
-  return { geometries: (last.geometries - first.geometries) / retired, textures: (last.textures - first.textures) / retired };
+  const heapFrom = capture.heap.find(({ p4 }) => p4 >= from && p4 < to);
+  const heapTo = capture.heap.find(({ p4 }) => p4 >= to);
+  if (!heapFrom || !heapTo) return { problem: `no heap reading ${heapFrom ? `from P4 tick ${to}` : `between P4 ticks ${from} and ${to}`}` };
+  return {
+    observed: {
+      geometriesPerRetiredRift3d: (last.renderer.geometries - first.renderer.geometries) / retired,
+      texturesPerRetiredRift3d: (last.renderer.textures - first.renderer.textures) / retired,
+      heapGrowthMiB3d: (heapBytes(heapTo) - heapBytes(heapFrom)) / MIB,
+      mobGrowth3d: last.world.mobs - first.world.mobs,
+      entityGrowth3d: last.world.entities - first.world.entities,
+      projectileGrowth3d: last.world.projectiles - first.world.projectiles,
+      sceneObjectGrowth3d: last.renderer.sceneObjects - first.renderer.sceneObjects,
+    },
+  };
 }
 
 export function judge(config: Config, runs: Runs): readonly Line[] {
   const { window, resources } = config.workload;
   const named = runs.pairs.flatMap((pair, i) => VIEWS.flatMap((view) => SIDES.map((side) => [`${side}-${view}-${i + 1}`, pair[view][side]] as const)));
   const problems = [...named.flatMap(([name, capture]) => measurementProblems(name, capture, window)), ...measurementProblems("long-3d", runs.long, resources)];
-  const growth = growthPerRetiredRift(runs.long, resources);
+  const growth = longRunGrowth(runs.long, resources);
   if ("problem" in growth) problems.push({ kind: "measurement", run: "long-3d", problem: growth.problem });
   if (problems.length > 0 || "problem" in growth) return problems;
 
@@ -145,8 +186,9 @@ export function judge(config: Config, runs: Runs): readonly Line[] {
     drawCallsMedian3d: worst(metrics("3d", "head").map((run) => run.drawCallsMedian)),
     drawCallsMax3d: worst(metrics("3d", "head").map((run) => run.drawCallsMax)),
     canvasToViewport2d: worst(metrics("2d", "head").map((run) => run.canvasToViewport)),
-    geometriesPerRetiredRift3d: growth.geometries,
-    texturesPerRetiredRift3d: growth.textures,
+    tickGapExcess3d: tickGapExcess(runs.pairs, "3d", window),
+    tickGapExcess2d: tickGapExcess(runs.pairs, "2d", window),
+    ...growth.observed,
   };
   const budgets: Line[] = BUDGETS.map((name) => ({ kind: "budget", name, observed: observed[name], budget: config.budgets[name] }));
   const timings: Line[] = VIEWS.flatMap((view) =>
@@ -157,6 +199,22 @@ export function judge(config: Config, runs: Runs): readonly Line[] {
     }),
   );
   return [...budgets, ...timings];
+}
+
+const limits = (config: Config): Readonly<Record<Limit, number>> => ({ ...config.budgets, medianRatioLimit: config.timing.medianRatioLimit });
+
+const sameRaise = (a: BudgetException, b: BudgetException): boolean => a.budget === b.budget && a.from === b.from && a.to === b.to;
+
+export function budgetRaises(base: BaseLimits | null, head: Config): readonly Line[] {
+  if (base === null) return [];
+  const now = limits(head);
+  return LIMITS.flatMap((limit): Line[] => {
+    const was = base.limits[limit];
+    if (was === undefined || now[limit] <= was) return [];
+    const added = head.exceptions.filter((entry) => !base.exceptions.some((old) => sameRaise(old, entry)));
+    const exception = added.find((entry) => entry.budget === limit && entry.from === was && entry.to === now[limit]) ?? null;
+    return [{ kind: "raise", limit, base: was, head: now[limit], exception }];
+  });
 }
 
 type Json = unknown;
@@ -173,10 +231,6 @@ function num(raw: Json, key: string): number {
 function finite(raw: Json): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) throw new TypeError(`${String(raw)} is not a number`);
   return raw;
-}
-
-function finiteOrNull(raw: Json): number | null {
-  return raw === null ? null : finite(raw);
 }
 
 function list(raw: Json, key: string): readonly Json[] {
@@ -199,6 +253,28 @@ function isView(value: Json): value is View {
   return VIEWS.some((view) => view === value);
 }
 
+function isLimit(value: Json): value is Limit {
+  return LIMITS.some((limit) => limit === value);
+}
+
+function text(raw: Json, key: string): string {
+  const value = field(raw, key);
+  if (typeof value !== "string" || value.trim() === "") throw new TypeError(`${key} is not a non-empty string`);
+  return value;
+}
+
+function exceptions(raw: Json): readonly BudgetException[] {
+  return list(raw, "exceptions").map((entry) => {
+    const budget = field(entry, "budget");
+    if (!isLimit(budget)) throw new TypeError(`exception budget ${String(budget)} is not a budget`);
+    return { budget, from: num(entry, "from"), to: num(entry, "to"), reason: text(entry, "reason"), evidence: text(entry, "evidence") };
+  });
+}
+
+function has(raw: Json, key: string): boolean {
+  return typeof raw === "object" && raw !== null && key in raw;
+}
+
 export function parseConfig(raw: Json): Config {
   const workload = field(raw, "workload");
   const query = field(workload, "query");
@@ -207,17 +283,37 @@ export function parseConfig(raw: Json): Config {
   const timing = field(raw, "timing");
   const pairs = num(timing, "pairs");
   if (!Number.isInteger(pairs) || pairs < 1) throw new RangeError("timing.pairs is not a positive whole number");
+  const cpuThrottleRate = num(workload, "cpuThrottleRate");
+  if (cpuThrottleRate < 1) throw new RangeError("workload.cpuThrottleRate is below 1");
   return {
-    workload: { query, window: range(workload, "window"), resources: range(workload, "resources") },
+    workload: { query, cpuThrottleRate, window: range(workload, "window"), resources: range(workload, "resources") },
     budgets: {
       drawCallsMedian3d: num(budgets, "drawCallsMedian3d"),
       drawCallsMax3d: num(budgets, "drawCallsMax3d"),
       canvasToViewport2d: num(budgets, "canvasToViewport2d"),
+      tickGapExcess3d: num(budgets, "tickGapExcess3d"),
+      tickGapExcess2d: num(budgets, "tickGapExcess2d"),
       geometriesPerRetiredRift3d: num(budgets, "geometriesPerRetiredRift3d"),
       texturesPerRetiredRift3d: num(budgets, "texturesPerRetiredRift3d"),
+      heapGrowthMiB3d: num(budgets, "heapGrowthMiB3d"),
+      mobGrowth3d: num(budgets, "mobGrowth3d"),
+      entityGrowth3d: num(budgets, "entityGrowth3d"),
+      projectileGrowth3d: num(budgets, "projectileGrowth3d"),
+      sceneObjectGrowth3d: num(budgets, "sceneObjectGrowth3d"),
     },
     timing: { pairs, medianRatioLimit: num(timing, "medianRatioLimit") },
+    exceptions: exceptions(raw),
   };
+}
+
+export function parseBaseLimits(raw: Json): BaseLimits {
+  const budgets = field(raw, "budgets");
+  const timing = field(raw, "timing");
+  const present = LIMITS.flatMap((limit) => {
+    const source = limit === "medianRatioLimit" ? timing : budgets;
+    return has(source, limit) ? [[limit, num(source, limit)] as const] : [];
+  });
+  return { limits: Object.fromEntries(present), exceptions: has(raw, "exceptions") ? exceptions(raw) : [] };
 }
 
 export function parseCapture(raw: Json): Capture {
@@ -230,14 +326,24 @@ export function parseCapture(raw: Json): Capture {
     viewportPixels: num(viewport, "width") * num(viewport, "height") * num(viewport, "dpr") ** 2,
     frames: list(raw, "frames").map(finite),
     ticks: list(raw, "ticks").map((sample) => {
-      const [at, p4, stage, geometries, textures] = tuple(sample, 5);
+      const p4 = field(sample, "p4");
+      const stage = field(sample, "stage");
       if (stage !== null && typeof stage !== "string") throw new TypeError(`stage ${String(stage)} is not a string`);
-      return { at: finite(at), p4: p4 === null ? null : tick(finite(p4)), stage, geometries: finiteOrNull(geometries), textures: finiteOrNull(textures) };
+      const world = field(sample, "world");
+      const renderer = field(sample, "renderer");
+      return {
+        at: num(sample, "at"),
+        p4: p4 === null ? null : tick(finite(p4)),
+        stage,
+        world: { mobs: num(world, "mobs"), entities: num(world, "entities"), projectiles: num(world, "projectiles") },
+        renderer: renderer === null ? null : { geometries: num(renderer, "geometries"), textures: num(renderer, "textures"), sceneObjects: num(renderer, "sceneObjects") },
+      };
     }),
     draws: list(raw, "draws").map((sample) => {
       const [at, calls] = tuple(sample, 2);
       return { at: finite(at), calls: finite(calls) };
     }),
+    heap: list(raw, "heap").map((reading) => ({ p4: tick(num(reading, "p4")), usedBytes: num(reading, "usedBytes"), backingBytes: num(reading, "backingBytes") })),
     largestCanvasPixels: num(canvas, "width") * num(canvas, "height"),
     retired: list(raw, "retired").map((at) => tick(finite(at))),
     errors: list(raw, "errors").map(String),

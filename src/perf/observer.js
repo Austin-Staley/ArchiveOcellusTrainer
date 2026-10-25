@@ -1,4 +1,3 @@
-// A base revision has no perf hook of its own, so this reaches the production build only through hooks every build already calls.
 (() => {
   const view = new URLSearchParams(location.hash.slice(1)).get("perf-view");
   if (view !== "3d" && view !== "2d") return;
@@ -10,9 +9,11 @@
   const frames = [];
   const ticks = [];
   const draws = [];
+  const heap = [];
   const errors = [];
   const largestCanvas = { width: 0, height: 0 };
   let renderer = null;
+  let scene = null;
   let region = null;
 
   addEventListener("error", (event) => errors.push(String(event.message)));
@@ -51,6 +52,7 @@
       // The SDK's model warm-up renders once into a throwaway 1x1 canvas; only the viewport's renders count.
       if (this.domElement.width * this.domElement.height > 1) {
         renderer = this;
+        scene = args[0];
         draws.push([performance.now(), this.info.render.calls]);
       }
       return out;
@@ -68,8 +70,15 @@
         const at = performance.now();
         const out = Reflect.apply(tickWorld, this, args);
         const run = region.snapshot()?.run;
-        const memory = renderer?.info.memory;
-        ticks.push([at, run?.kind === "running" ? run.tick : null, run?.kind === "running" ? run.phase.stage : null, memory?.geometries ?? null, memory?.textures ?? null]);
+        let sceneObjects = 0;
+        scene?.traverse(() => sceneObjects++);
+        ticks.push({
+          at,
+          p4: run?.kind === "running" ? run.tick : null,
+          stage: run?.kind === "running" ? run.phase.stage : null,
+          world: { mobs: region.mobs.length, entities: region.entities.length, projectiles: region.projectiles.length },
+          renderer: renderer && scene ? { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, sceneObjects } : null,
+        });
         return out;
       };
     }
@@ -82,14 +91,17 @@
   };
   requestAnimationFrame(frame);
 
+  const p4Tick = () => ticks.findLast(({ p4 }) => p4 !== null)?.p4 ?? -1;
   window.__perfGate = Object.freeze({
-    p4Tick: () => ticks.findLast(([, p4]) => p4 !== null)?.[1] ?? -1,
+    p4Tick,
+    noteHeap: (usedBytes, backingBytes) => heap.push({ p4: p4Tick(), usedBytes, backingBytes }),
     capture: () => ({
       view,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
       frames,
       ticks,
       draws,
+      heap,
       largestCanvas,
       retired: (region?.fightLog().rows ?? []).flatMap((row) => row.events).filter(({ kind }) => kind === "rift-destroyed" || kind === "rift-burst").map(({ at }) => at),
       errors,

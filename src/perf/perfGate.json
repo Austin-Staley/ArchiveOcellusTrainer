@@ -1,15 +1,41 @@
 {
   "workload": {
     "query": "?seed=1&invincible=on",
-    "window": { "from": 8, "to": 80 },
-    "resources": { "from": 220, "to": 400 }
+    "cpuThrottleRate": 4,
+    "window": {
+      "from": 8,
+      "to": 80
+    },
+    "resources": {
+      "from": 220,
+      "to": 400
+    }
   },
   "budgets": {
-    "drawCallsMedian3d": 548,
+    "drawCallsMedian3d": 550,
     "drawCallsMax3d": 1234,
     "canvasToViewport2d": 97.65625,
+    "tickGapExcess3d": 300,
+    "tickGapExcess2d": 300,
     "geometriesPerRetiredRift3d": 2.67,
-    "texturesPerRetiredRift3d": 1
+    "texturesPerRetiredRift3d": 1,
+    "heapGrowthMiB3d": 4,
+    "mobGrowth3d": 0,
+    "entityGrowth3d": 0,
+    "projectileGrowth3d": 0,
+    "sceneObjectGrowth3d": 0
   },
-  "timing": { "pairs": 5, "medianRatioLimit": 1.25 }
+  "timing": {
+    "pairs": 5,
+    "medianRatioLimit": 1.25
+  },
+  "exceptions": [
+    {
+      "budget": "drawCallsMedian3d",
+      "from": 548,
+      "to": 550,
+      "reason": "the fight window's renders draw 547 to 550 calls and the median sits on the 548/549 edge, so a 1500 ms stall with no draw-call change moved it to 549; 550 is the top of that band, and drawCallsMax3d still fails a uniform increase of one call",
+      "evidence": "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer/pull/63"
+    }
+  ]
 }

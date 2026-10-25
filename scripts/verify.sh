@@ -2857,19 +2857,48 @@ build_perf_base() {
   rm -rf "$src"
 }
 
+perf_tab() {
+  ab --json tab list | json data.tabs.0.targetId
+}
+
+release_throttle() {
+  [[ -n "$THROTTLE_PID" ]] || return 0
+  kill "$THROTTLE_PID" 2>/dev/null
+  wait "$THROTTLE_PID" 2>/dev/null
+  log "perf: CPU throttle holder PID ${THROTTLE_PID} is gone"
+  THROTTLE_PID=
+}
+
+throttle_perf() {
+  local log_file="$VERIFY_DIR/perf/throttle.log"
+  : >"$log_file"
+  node --import tsx src/perf/devtools.ts throttle "$(ab get cdp-url)" "$(perf_tab)" "$(perf_gate workload.cpuThrottleRate)" >"$log_file" 2>&1 &
+  THROTTLE_PID=$!
+  for _ in $(seq 1 60); do
+    grep -q "^throttled" "$log_file" && { log "perf: $(cat "$log_file"), PID ${THROTTLE_PID}"; return 0; }
+    kill -0 "$THROTTLE_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  log "perf: the CPU throttle did not start: $(cat "$log_file")"
+  return 1
+}
+
 perf_capture() {
-  local name=$1 side=$2 view=$3 until=$4
-  ab open about:blank >/dev/null &&
-    ab open "http://127.0.0.1:${PRODUCTION_PORT}/${side}/$(perf_gate workload.query)#perf-view=${view}" >/dev/null &&
-    ab wait --fn "window.__perfGate.p4Tick() >= ${until}" --timeout $((until * 600 + 120000)) >/dev/null &&
-    ab --json eval "JSON.stringify(window.__perfGate.capture())" | json data.result >"$VERIFY_DIR/perf/captures/${name}.json" ||
-    { log "perf: the ${name} run did not reach P4 tick ${until}"; return 1; }
+  local name=$1 side=$2 view=$3 until=$4 heap_from=${5:-} at
+  ab open about:blank >/dev/null && ab open "http://127.0.0.1:${PRODUCTION_PORT}/${side}/$(perf_gate workload.query)#perf-view=${view}" >/dev/null || { log "perf: the ${name} page did not open"; return 1; }
+  for at in $heap_from "$until"; do
+    ab wait --fn "window.__perfGate.p4Tick() >= ${at}" --timeout $((until * 600 + 120000)) >/dev/null || { log "perf: the ${name} run did not reach P4 tick ${at}"; return 1; }
+    [[ -z "$heap_from" ]] || node --import tsx src/perf/devtools.ts heap "$(ab get cdp-url)" "$(perf_tab)" >>"$VERIFY_DIR/perf/heap.log" || { log "perf: no heap reading at P4 tick ${at} of ${name}"; return 1; }
+  done
+  ab --json eval "JSON.stringify(window.__perfGate.capture())" | json data.result >"$VERIFY_DIR/perf/captures/${name}.json" || { log "perf: the ${name} capture could not be read"; return 1; }
+  [[ -z "$THROTTLE_PID" ]] || kill -0 "$THROTTLE_PID" 2>/dev/null || { log "perf: the CPU throttle ended during ${name}: $(cat "$VERIFY_DIR/perf/throttle.log")"; return 1; }
   log "perf: captured ${name}"
 }
 
 drive_perf() {
   local pair view side order
   ab --init-script "$ROOT/src/perf/observer.js" set viewport 1280 800 >/dev/null || { log "the perf session did not start"; return 1; }
+  throttle_perf || return 1
   for pair in $(seq 1 "$(perf_gate timing.pairs)"); do
     order=(base head)
     ((pair % 2 == 0)) && order=(head base)
@@ -2879,8 +2908,9 @@ drive_perf() {
       done
     done
   done
-  perf_capture long-3d head 3d "$(perf_gate workload.resources.to)" || return 1
-  node node_modules/.bin/tsx src/perf/check.ts "$PERF_GATE" "$VERIFY_DIR/perf/captures" >"$VERIFY_DIR/perf-checks.json"
+  release_throttle
+  perf_capture long-3d head 3d "$(perf_gate workload.resources.to)" "$(perf_gate workload.resources.from)" || return 1
+  VERIFY_PERF_BASE="$(cat "$VERIFY_DIR/perf/base-revision")" node node_modules/.bin/tsx src/perf/check.ts "$PERF_GATE" "$VERIFY_DIR/perf/captures" >"$VERIFY_DIR/perf-checks.json"
 }
 
 stage_perf() {
@@ -2890,12 +2920,13 @@ stage_perf() {
   node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/perf/www/head" >"$VERIFY_DIR/perf/head-build.log" 2>&1 || { log "perf: the head build failed"; return 1; }
   build_perf_base || return 1
 
-  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-perf" PRODUCTION_PID= result=1
-  trap 'release_production; exit 130' INT TERM
+  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-perf" PRODUCTION_PID= THROTTLE_PID= result=1
+  trap 'release_throttle; release_production; exit 130' INT TERM
   if serve_static "$VERIFY_DIR/perf/www" "$VERIFY_DIR/perf/server.log"; then
     drive_perf
     result=$?
   fi
+  release_throttle
   release_production || result=1
   trap - INT TERM
   return $result

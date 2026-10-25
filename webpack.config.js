@@ -8,13 +8,23 @@ if (WEB_ANALYTICS_TOKEN !== "" && !/^[0-9a-f]{32}$/.test(WEB_ANALYTICS_TOKEN)) {
   throw new Error("CF_WEB_ANALYTICS_TOKEN must be the 32 hex digit Web Analytics site token");
 }
 
+// The dev server is at the host root. A production build uses relative asset
+// URLs, so the same dist/ resolves under /ArchiveOcellusTrainer/ on GitHub Pages
+// and at the root of a local static server. PAGES_BASE can force an absolute base.
+function publicPath() {
+  if (process.argv.includes("serve")) return "";
+  const requested = process.env.PAGES_BASE ?? "./";
+  if (requested === "./" || requested === "." || requested === "") return "./";
+  return requested.endsWith("/") ? requested : `${requested}/`;
+}
+
 module.exports = {
   entry: "./src/index.ts",
   output: {
     filename: "assets/main.[contenthash].js",
     assetModuleFilename: "assets/[contenthash][ext]",
     path: path.resolve(__dirname, "dist"),
-    publicPath: "",
+    publicPath: publicPath(),
   },
   devtool: "source-map",
   performance: { hints: false },

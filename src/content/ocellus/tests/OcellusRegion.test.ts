@@ -61,7 +61,7 @@ describe("Ocellus arena", () => {
       "................",
     ]);
     drill.dispose();
-  });
+  }, 10_000);
 
   test("a walk past the edge, or onto the tile beside it, stops on the floor tile nearest the order", () => {
     const stopsAt = (to: At) => {

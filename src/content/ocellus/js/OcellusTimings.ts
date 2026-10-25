@@ -1,14 +1,16 @@
 import type { TwistedBow } from "osrs-sdk";
-import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
-import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { BuildFlags } from "../../../flags";
+import type { Cycle, HpFraction, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
+import { cycle, hpFraction, seed, soundId, span, tick, tile } from "../../../sim/brands";
 import type { Style } from "../../../sim/combat";
 import type { Basis, Citations, Evidence, WikiRef } from "../../../sim/provenance";
 import { noWiki, wiki } from "../../../sim/provenance";
 import type { DrillStart, Focus } from "../../../sim/schedule";
 import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, TransitionKind, VoidKind } from "./P4Types";
+import type { AutoAttack, Quadrant, ReachRule } from "./P3Types";
 import { roll } from "./roll";
 
-type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
+type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5" | "solo";
 
 const VODS = {
   V1: { streamer: "Molgoatkirby", url: "https://www.twitch.tv/videos/2906214879", tickPrefix: "G", clipTickAtP4Zero: 25 },
@@ -915,6 +917,114 @@ export const OCELLUS_P4 = {
   },
 } as const;
 
+const STRATEGIES_P3 = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381236);
+const BOSS_PAGE_P3 = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15381233);
+const NO_WIKI_P3_TICKS = noWiki("the wiki's phase 3 text gives the order and damage but no tick counts (Strategies rev 15381236)");
+const NO_WIKI_P3_ARENA = noWiki("the wiki has no tile layout of the phase 3 arena (Strategies rev 15381236, Ocellus rev 15381233)");
+const KIRBY_GUIDE = "https://www.youtube.com/watch?v=GU8_yiucWtk";
+const ROBINHOOD_GUIDE = "https://www.youtube.com/watch?v=9sji2HBjI98";
+const DEFBIGBEAST_GUIDE = "https://www.youtube.com/watch?v=lT4DVmgDJak";
+const PANFLEET_SOLO = "https://www.youtube.com/watch?v=_upW4hBgHbA";
+const P3_CYCLE_FRAMES = guide(PANFLEET_SOLO, "5:20 to 5:45 at 1x: swings f114, f168, f294, f348, waves f240, f421, smite f478 (raid timer 30:13.00 at f0)");
+const P3_CHIP_FRAMES = guide(DEFBIGBEAST_GUIDE, "20:28 to 21:12 at 1x: waves f310 and f490, the tank's chips red 2 at f363 and red 1 at f417");
+
+type AutoStep = Readonly<{ attack: AutoAttack; next: TickSpan }>;
+type P3BossPose = "swing" | "voidShot" | "wave";
+
+type P3Recipe = Readonly<{
+  arena: Readonly<{ grid: Selected<readonly string[]>; playerSpawn: Selected<Tile>; bossAnchor: Selected<Tile> }>;
+  thresholds: Selected<Readonly<Record<Quadrant, HpFraction>>>;
+  firstAttackAfterStart: Selected<TickSpan>;
+  autos: Selected<readonly [AutoStep, ...AutoStep[]]>;
+  swing: Readonly<{ protectedDamage: Selected<DamageRange>; unprotectedDamage: Selected<DamageRange> }>;
+  voidShot: Selected<DamageRange>;
+  bossPoses: Readonly<Record<P3BossPose, Selected<number>>>;
+}>;
+
+const P3: P3Recipe = {
+  arena: {
+    grid: selected(
+      [
+        ".........bbbbbbbbbbbbb.........",
+        ".......bbbb222+++111bbbb.......",
+        "......bbbb2222+++1111bbbb......",
+        ".....bbbb22222+++11111bbbb.....",
+        "....bbBb222222+++111111bBbb....",
+        "...bbbb2222222+++1111111bbbb...",
+        "...bbb22222222+++11111111bbb...",
+        "..bbb222222222+++111111111bbb..",
+        "..bb2222222222+++1111111111bb..",
+        "..b22222222222+++11111111111b..",
+        "..b22222222222+++11111111111b..",
+        "..b22222222222+++11111111111b..",
+        "..b+++++++++++++++++++++++++b..",
+        "..b+++++++++++++++++++++++++b..",
+        "..b+++++++++++++++++++++++++b..",
+        "..b33333333333+++44444444444b..",
+        "..b33333333333+++44444444444b..",
+        "..b33333333333+++44444444444b..",
+        "..bb3333333333+++4444444444bb..",
+        "..bbb333333333+++444444444bbb..",
+        "...bbb33333333+++44444444bbb...",
+        "...bbbb3333333+++4444444bbbb...",
+        "....bbBb333333+++444444bBbb....",
+        ".....bbbb33333+++44444bbbb.....",
+        "......bbbb3333+++4444bbbb......",
+        ".......bbbb333+++444bbbb.......",
+        ".........bbbbb+++bbbbb.........",
+      ],
+      "spec-single",
+      "unscaled",
+      "row y = 0 first, x = 0 leftmost, at cache x = 16 + column and y = 54 - row; 1 to 4 are the north-east, north-west, south-west and south-east wedges of 85 floor tiles each, + the 3-wide cross between them, b the raised rim, B a brazier on the rim, . not floor; every floor tile of the map square is in the grid, and a quarter turn about The Blade at cache (31, 41) maps each wedge onto the next",
+      NO_WIKI_P3_ARENA, cache("map square 16472 plane 1: floor overlay 657, rim 656, brazier locs 62894"),
+    ),
+    playerSpawn: selected(tile(19, 9), "assumption", "unscaled", "a floor tile of the north-east wedge two tiles south-west of the boss; no clip pins where the phase starts", NO_WIKI_P3_ARENA),
+    bossAnchor: selected(tile(21, 7), "assumption", "unscaled", "south-west tile of the boss's 3x3, which covers x 21 to 23 and y 5 to 7, all on the north-east wedge; no clip pins where the phase starts", NO_WIKI_P3_ARENA),
+  },
+  thresholds: selected(
+    { 1: hpFraction(0.75), 2: hpFraction(0.5), 3: hpFraction(0.25) },
+    "community-tested",
+    "team-4-and-5",
+    "a quadrant breaks on the first tick the boss is at or below the fraction of his max HP; the wiki says only enough damage",
+    NO_WIKI_P3_TICKS, guide(ROBINHOOD_GUIDE, "0:06:13"), guide(KIRBY_GUIDE, "5:37"),
+  ),
+  firstAttackAfterStart: selected(span(7), "inferred", "unscaled", "the first swing 7 ticks after the phase's first boss step, so the second wave casts at 24 and a smite would start at 27, 3 ticks after it, as in F2a's quadrant 1; no clip shows the ticks from the phase start to the first attack", NO_WIKI_P3_TICKS, P3_CYCLE_FRAMES),
+  autos: selected(
+    [
+      { attack: "melee", next: span(3) },
+      { attack: "melee", next: span(4) },
+      { attack: "wave", next: span(3) },
+      { attack: "melee", next: span(3) },
+      { attack: "melee", next: span(4) },
+      { attack: "wave", next: span(3) },
+    ],
+    "footage-repeated",
+    "solo",
+    "swing, swing, wave twice, 20 ticks: the swings 3 ticks apart, the wave 4 after the second swing, the next swing 3 after the wave; the last gap leads into the special; panfleet's solo and DefBigbeast's quadrant 3 agree on every gap; the wiki infobox's attack speed of 6 is not the swing interval",
+    STRATEGIES_P3, BOSS_PAGE_P3, P3_CYCLE_FRAMES, P3_CHIP_FRAMES, guide(KIRBY_GUIDE, "4:18"), guide(KIRBY_GUIDE, "11:18"),
+  ),
+  swing: {
+    protectedDamage: selected<DamageRange>({ min: 0, max: 6 }, "footage-repeated", "solo", "chip through Protect from Melee: red 6, blue 0, red 6, blue 0 in panfleet's solo and red 2 and red 1 on DefBigbeast's tank; 6 is the most seen", NO_WIKI_P3_TICKS, P3_CYCLE_FRAMES, P3_CHIP_FRAMES, guide(ROBINHOOD_GUIDE, "0:02:09")),
+    unprotectedDamage: selected<DamageRange>({ min: 0, max: 26 }, "inferred", "unscaled", "the monster melee max hit ⌊0.5 + (250 + 9) × (0 + 64) / 640⌋ = 26 at the cache's Strength 250 with no strength bonus (assumption); no clip shows an unprotected swing", noWiki("no wiki page gives the phase 3 swing's max hit (Ocellus rev 15381233)"), cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
+  },
+  voidShot: selected<DamageRange>({ min: 20, max: 20 }, "spec-single", "unscaled", "a typeless void shot in place of a swing when the boss cannot reach the player; the wiki's 20+ taken as 20", STRATEGIES_P3, guide(ROBINHOOD_GUIDE, "0:02:26 to 0:02:31")),
+  bossPoses: {
+    swing: pose(14842, "npc_ocellus_phase3_melee_basic", "inferred", "the swing, 2 ticks; by its name"),
+    voidShot: pose(14851, "npc_ocellus_phase3_basic_projectile_all", "inferred", "the void shot, 3 ticks; by its name"),
+    wave: pose(14846, "npc_ocellus_phase3_melee_slash", "inferred", "the wave cast, 3 ticks; by its name and its four frame sounds"),
+  },
+};
+
+export const OCELLUS_P3 = {
+  ...P3,
+  choices: {
+    reach: choice("melee-range", {
+      "melee-range": selected<ReachRule>("melee-range", "community-tested", "team-4-and-5", "a swing becomes a void shot when the player is not in the SDK's melee range of the boss's 3x3 after his step; the wiki's unable to reach read as melee range", STRATEGIES_P3, guide(ROBINHOOD_GUIDE, "0:02:26")),
+      "within-two": selected<ReachRule>("within-two", "spec-single", "unscaled", "a void shot when the player is more than 2 tiles from the boss's 3x3", BOSS_PAGE_P3),
+    }),
+  },
+} as const;
+
 type Choices = typeof OCELLUS_P4.choices;
 type ChoiceName = keyof Choices;
 type OptionsOf<K extends ChoiceName> = Choices[K]["options"];
@@ -982,20 +1092,98 @@ function isChoiceName(name: string): name is ChoiceName {
   return hasKey(OCELLUS_P4.choices, name);
 }
 
-export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {
-  const rejected: string[] = [];
-  for (const [key, value] of url.searchParams) {
-    if (key !== "seed" && key !== "invincible" && key !== "bosshp" && !isChoiceName(key)) rejected.push(`${key}=${value}`);
-  }
-  const invincible = url.searchParams.get("invincible");
-  if (invincible !== null && invincible !== "on") rejected.push(`invincible=${invincible}`);
+type SeedRead = Readonly<{ seed: Seed; rejected: string | null }>;
+
+function readSeed(url: URL, freshSeed: () => number): SeedRead {
   const raw = url.searchParams.get("seed");
   const parsed = raw !== null && /^\d{1,10}$/.test(raw) && Number(raw) <= 0xffffffff ? Number(raw) : null;
-  const runSeed = seed(parsed ?? freshSeed());
-  const choices = resolveChoices((name) => url.searchParams.get(name) ?? undefined, rejected, runSeed);
-  if (raw !== null && parsed === null) rejected.push(`seed=${raw}`);
-  const rawBossHp = url.searchParams.get("bosshp");
-  const bossEntryHp = rawBossHp !== null && /^\d{1,6}$/.test(rawBossHp) && Number(rawBossHp) >= 1 && Number(rawBossHp) <= choices.bossMaxHp.option.value ? Number(rawBossHp) : null;
-  if (rawBossHp !== null && bossEntryHp === null) rejected.push(`bosshp=${rawBossHp}`);
-  return { config: { seed: runSeed, choices, bossEntryHp }, invincible: invincible === "on", rejected };
+  return { seed: seed(parsed ?? freshSeed()), rejected: raw !== null && parsed === null ? `seed=${raw}` : null };
+}
+
+function readInvincible(url: URL, rejected: string[]): boolean {
+  const invincible = url.searchParams.get("invincible");
+  if (invincible !== null && invincible !== "on") rejected.push(`invincible=${invincible}`);
+  return invincible === "on";
+}
+
+function readBossHp(url: URL, maxHp: number, rejected: string[]): number | null {
+  const raw = url.searchParams.get("bosshp");
+  const bossHp = raw !== null && /^\d{1,6}$/.test(raw) && Number(raw) >= 1 && Number(raw) <= maxHp ? Number(raw) : null;
+  if (raw !== null && bossHp === null) rejected.push(`bosshp=${raw}`);
+  return bossHp;
+}
+
+function rejectUnknownKeys(url: URL, known: (key: string) => boolean, rejected: string[]): void {
+  for (const [key, value] of url.searchParams) {
+    if (key !== "seed" && key !== "invincible" && key !== "bosshp" && !known(key)) rejected.push(`${key}=${value}`);
+  }
+}
+
+export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDrill {
+  const rejected: string[] = [];
+  rejectUnknownKeys(url, isChoiceName, rejected);
+  const invincible = readInvincible(url, rejected);
+  const run = readSeed(url, freshSeed);
+  const choices = resolveChoices((name) => url.searchParams.get(name) ?? undefined, rejected, run.seed);
+  if (run.rejected !== null) rejected.push(run.rejected);
+  const bossEntryHp = readBossHp(url, choices.bossMaxHp.option.value, rejected);
+  return { config: { seed: run.seed, choices, bossEntryHp }, invincible, rejected };
+}
+
+type P3ChoiceName = keyof typeof OCELLUS_P3.choices;
+type P3OptionsOf<K extends P3ChoiceName> = (typeof OCELLUS_P3.choices)[K]["options"];
+type P3OptionKey<K extends P3ChoiceName> = keyof P3OptionsOf<K> & string;
+const P3_CHOICES: { readonly [K in P3ChoiceName]: Readonly<{ default: P3OptionKey<K>; options: P3OptionsOf<K> }> } = OCELLUS_P3.choices;
+
+class ResolvedP3Choice<K extends P3ChoiceName> {
+  readonly #name: K;
+  readonly option: P3OptionsOf<K>[P3OptionKey<K>];
+
+  constructor(name: K, readonly key: P3OptionKey<K>) {
+    this.#name = name;
+    this.option = P3_CHOICES[name].options[key];
+  }
+}
+
+export type P3Choices = Readonly<{ setup: ResolvedChoice<"setup">; bossMaxHp: ResolvedChoice<"bossMaxHp">; reach: ResolvedP3Choice<"reach"> }>;
+export type P3Config = Readonly<{ seed: Seed; choices: P3Choices; bossEntryHp: number | null }>;
+type ParsedP3 = Readonly<{ config: P3Config; invincible: boolean; rejected: readonly string[] }>;
+
+const P3_KEYS: readonly string[] = ["setup", "bossMaxHp", ...Object.keys(OCELLUS_P3.choices)];
+
+function parseP3Request(url: URL, freshSeed: () => number): ParsedP3 {
+  const rejected: string[] = [];
+  rejectUnknownKeys(url, (key) => P3_KEYS.includes(key), rejected);
+  const invincible = readInvincible(url, rejected);
+  const run = readSeed(url, freshSeed);
+  const p4Choice = <K extends "setup" | "bossMaxHp">(name: K): ResolvedChoice<K> => {
+    const raw = url.searchParams.get(name);
+    const { options } = CHOICES[name];
+    if (raw !== null && hasKey(options, raw)) return new ResolvedChoice(name, raw);
+    if (raw !== null) rejected.push(`${name}=${raw}`);
+    return new ResolvedChoice(name, CHOICES[name].default);
+  };
+  const p3Choice = <K extends P3ChoiceName>(name: K): ResolvedP3Choice<K> => {
+    const raw = url.searchParams.get(name);
+    const { options } = P3_CHOICES[name];
+    if (raw !== null && hasKey(options, raw)) return new ResolvedP3Choice(name, raw);
+    if (raw !== null) rejected.push(`${name}=${raw}`);
+    return new ResolvedP3Choice(name, P3_CHOICES[name].default);
+  };
+  const choices: P3Choices = { setup: p4Choice("setup"), bossMaxHp: p4Choice("bossMaxHp"), reach: p3Choice("reach") };
+  if (run.rejected !== null) rejected.push(run.rejected);
+  const bossEntryHp = readBossHp(url, choices.bossMaxHp.option.value, rejected);
+  return { config: { seed: run.seed, choices, bossEntryHp }, invincible, rejected };
+}
+
+export type DrillRequest = (Readonly<{ phase: "p4" }> & ParsedDrill) | (Readonly<{ phase: "p3" }> & ParsedP3);
+
+export function parseRequest(url: URL, freshSeed: () => number, flags: BuildFlags): DrillRequest {
+  if (!flags.p3) return { phase: "p4", ...parseDrillRequest(url, freshSeed) };
+  const phase = url.searchParams.get("phase");
+  const rest = new URL(url.href);
+  rest.searchParams.delete("phase");
+  if (phase === "p3") return { phase: "p3", ...parseP3Request(rest, freshSeed) };
+  const p4 = parseDrillRequest(rest, freshSeed);
+  return { phase: "p4", ...p4, rejected: phase === null || phase === "p4" ? p4.rejected : [`phase=${phase}`, ...p4.rejected] };
 }

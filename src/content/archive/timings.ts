@@ -187,6 +187,8 @@ export const ARCHIVE = {
     padAfterSixth: 2,
     voidAfterSixth: 3,
     nextAfterPad: 9,
+    /** Unverified. The low end of a missed-pad hit described as heavy. */
+    padMiss: 50,
     /** Unverified. Measured lengths were 79, 130 and 131. */
     end: 130,
     enoughBeforeEnd: 8,
@@ -230,6 +232,8 @@ export const ARCHIVE = {
     voidCharge: 18,
     voidBurst: 30,
     siphonHeal: 22,
+    /** Unverified. The wiki says an augmenter boosts combat stats and gives no amount. */
+    augmenterBoost: 4,
     censerHeal: 50,
     censerPrayer: 50,
   },

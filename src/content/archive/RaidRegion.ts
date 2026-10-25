@@ -169,6 +169,7 @@ export class RaidRegion extends Region {
   private marks: Mark[] = [];
   private ended = false;
   private banked = 0;
+  private escape: Readonly<{ tile: Tile; next: Tile; until: number }> | null = null;
 
   constructor(private readonly launch: RaidLaunch) {
     super();
@@ -243,6 +244,8 @@ export class RaidRegion extends Region {
     this.memory = step.memory;
     this.rows.push(...step.events);
     step.events.forEach((stamp) => this.present(stamp.event));
+    this.crossPad();
+    this.rewardVoids();
     this.clockTick = (this.clockTick ?? 0) + 1;
     this.previous = tile(player.location.x, player.location.y);
     if (this.rooted) player.setLocation({ x: this.rooted.x, y: this.rooted.y });
@@ -346,6 +349,10 @@ export class RaidRegion extends Region {
       case "phase":
         this.enterPhase(event.name);
         return;
+      case "pad":
+        this.escape = { tile: event.tile, next: event.next, until: (this.clockTick ?? 0) + 8 };
+        this.say("An orange portal is open. Step on it.");
+        return;
       case "mark":
         event.tiles.forEach((at) => {
           const mark = new Mark(this, { x: at.x, y: at.y });
@@ -380,7 +387,60 @@ export class RaidRegion extends Region {
       boss.stats.hitpoint = this.realHp;
       boss.currentStats.hitpoint = this.realHp;
     }
+    if (name === "void-rift" || name === "void-siphon" || name === "void-augmenter") this.summonVoid(name);
     if (name === "complete") this.ended = true;
+  }
+
+  private summonVoid(name: "void-rift" | "void-siphon" | "void-augmenter"): void {
+    const add = this.mounted?.adds[0];
+    if (!add) return;
+    const label = name === "void-rift" ? "Void rift" : name === "void-siphon" ? "Void siphon" : "Void augmenter";
+    add.label = label;
+    add.fill(addBar(this.launch, label));
+    this.spent.delete(add);
+    if (!this.mobs.includes(add) && !this.newMobs.includes(add)) this.addMob(add);
+  }
+
+  private crossPad(): void {
+    if (!this.mounted || !this.escape) return;
+    const { player } = this.mounted;
+    if ((this.clockTick ?? 0) > this.escape.until) {
+      this.escape = null;
+      return;
+    }
+    if (player.location.x === this.escape.tile.x && player.location.y === this.escape.tile.y) {
+      player.setLocation({ x: this.escape.next.x, y: this.escape.next.y });
+      this.say("The orange portal carries you to the next quadrant.");
+      this.escape = null;
+    }
+  }
+
+  private rewardVoids(): void {
+    if (!this.mounted) return;
+    const { player } = this.mounted;
+    this.mounted.adds.forEach((add) => {
+      if (add.currentStats.hitpoint > 0 || this.spent.has(add) || !add.label.startsWith("Void ")) return;
+      this.spent.add(add);
+      switch (add.label) {
+        case "Void siphon":
+          player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + ARCHIVE.p3.siphonHeal);
+          this.say("The siphon's killing blow heals you for 22.");
+          return;
+        case "Void rift":
+          player.attackDelay = 0;
+          this.say("The rift resets your attack.");
+          return;
+        case "Void augmenter":
+          player.currentStats.attack += ARCHIVE.p3.augmenterBoost;
+          player.currentStats.strength += ARCHIVE.p3.augmenterBoost;
+          player.currentStats.range += ARCHIVE.p3.augmenterBoost;
+          player.currentStats.magic += ARCHIVE.p3.augmenterBoost;
+          this.say("The augmenter raises your combat stats.");
+          return;
+        default:
+          return;
+      }
+    });
   }
 
   private collectCensers(): void {
@@ -507,5 +567,7 @@ function addBar(launch: RaidLaunch, name: string): Bar {
   if (name === "Smorks") return { npcId: ARCHIVE.bork.smorkNpcId, hp: ARCHIVE.bork.smorkHp, defence: launch.options.smorkDefence, name, size: ARCHIVE.bork.smorkSize };
   if (name === "Undead binder") return { npcId: ARCHIVE.moia.binderNpcId, hp: ARCHIVE.moia.binderHp, defence: 1, name, size: 1 };
   if (name === "Void rift") return { npcId: 16678, hp: 50, defence: 0, name, size: 1 };
+  if (name === "Void siphon") return { npcId: 16679, hp: 44, defence: 0, name, size: 1 };
+  if (name === "Void augmenter") return { npcId: 16680, hp: 50, defence: 0, name, size: 1 };
   return { npcId: 0, hp: 1, defence: 1, name, size: 1 };
 }

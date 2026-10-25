@@ -69,6 +69,46 @@ export const WAVE_SKIP: Readonly<Record<Quadrant, Readonly<{ outer: Tile; inner:
 export const P1_CORNERS = [tile(5, 17), tile(17, 17), tile(17, 5), tile(5, 5)] as const;
 export const P1_CENTRE = tile(11, 11);
 
+/** Seven cracks stepping toward that corner. Unverified. The line points at him. */
+export function cornerTendril(corner: number, index: number): Tile {
+  switch (corner % 4) {
+    case 0:
+      return tile(12 - index, 18);
+    case 1:
+      return tile(10 + index, 18);
+    case 2:
+      return tile(18, 12 - index);
+    default:
+      return tile(12 - index, 6);
+  }
+}
+
+const CENTRE_PAIRS = [
+  [tile(12, 14), tile(12, 16)],
+  [tile(14, 12), tile(16, 12)],
+  [tile(12, 10), tile(12, 8)],
+  [tile(10, 12), tile(8, 12)],
+] as const;
+
+/** Clockwise from north: the closer crack, then the one beyond it. */
+export function centreTendril(pair: number, which: 0 | 1): Tile {
+  const row = CENTRE_PAIRS[pair % CENTRE_PAIRS.length] ?? CENTRE_PAIRS[0];
+  return row[which];
+}
+
+/** Four vines just outside a 3×3 footprint. */
+export function vinesAround(origin: Tile): readonly Tile[] {
+  return [tile(origin.x - 1, origin.y - 1), tile(origin.x + 3, origin.y - 1), tile(origin.x - 1, origin.y + 3), tile(origin.x + 3, origin.y + 3)];
+}
+
+/** The orange pad in a quadrant, and where it puts you. Unverified tiles inside that quadrant. */
+export const PORTAL_PAD: Readonly<Record<Quadrant, Readonly<{ at: Tile; next: Tile }>>> = {
+  NW: { at: tile(8, 20), next: tile(16, 16) },
+  NE: { at: tile(16, 20), next: tile(16, 8) },
+  SE: { at: tile(16, 4), next: tile(8, 8) },
+  SW: { at: tile(8, 4), next: tile(8, 16) },
+};
+
 /** West, east, south, north hops in local tiles. Unverified; template stones minus (19, 29). */
 export const HOPS = {
   west: [tile(2, 12), tile(5, 12), tile(8, 12)],

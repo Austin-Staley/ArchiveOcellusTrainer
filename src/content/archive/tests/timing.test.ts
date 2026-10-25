@@ -6,7 +6,7 @@ import { defaultOptions } from "../catalog";
 import type { RaidId } from "../catalog";
 import { patternOrder, project } from "../clock";
 import type { RaidInput } from "../clock";
-import { ROOMS, WAVE_SKIP, beamHits } from "../layout";
+import { ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
 import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
 
 const options = defaultOptions(seed(1));
@@ -99,11 +99,28 @@ describe("raid clocks", () => {
   });
 
   it("runs four centre pairs and then the annihilation", () => {
-    const rows = names("ocellus-p1", 69, hold("ocellus-p1", { bossHp: 1600 }));
-    expect(rows.filter((row) => row.name === "tendril")).toHaveLength(8);
-    expect(rows.filter((row) => row.name === "slam")).toHaveLength(4);
-    expect(rows.find((row) => row.name === "14810")?.text).toBe("Embrace... annihilation...");
-    expect(rows.find((row) => row.name === "14810")?.at).toBe(60);
+    const rows = project("ocellus-p1", options, 69, hold("ocellus-p1", { bossHp: 1600 }));
+    const attacks = rows.flatMap((stamp) => (stamp.event.kind === "attack" ? [stamp] : []));
+    expect(attacks.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "tendril")).toHaveLength(8);
+    expect(attacks.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "slam")).toHaveLength(4);
+    expect(attacks.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "14810")?.event).toMatchObject({ text: "Embrace... annihilation..." });
+    const shots = rows.filter((stamp) => stamp.event.kind === "damage" && stamp.event.name === "annihilation");
+    expect(shots).toHaveLength(8);
+    expect(shots.every((stamp) => stamp.at === 69)).toBe(true);
+  });
+
+  it("a fully blocked centre is one Death projectile", () => {
+    const blocked = project("ocellus-p1", options, 69, (at) => {
+      const local = at % 15;
+      const pair = Math.floor(at / 15);
+      const standing = local === 0 || local === 6 ? centreTendril(pair, local === 0 ? 0 : 1) : ROOMS["ocellus-p1"].player;
+      const base = hold("ocellus-p1", { bossHp: 1600 })(at);
+      return { ...base, player: standing, previous: standing };
+    });
+    const shout = blocked.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "14810");
+    const shots = blocked.filter((stamp) => stamp.event.kind === "damage" && stamp.event.name === "annihilation");
+    expect(shout?.event).toMatchObject({ text: "Death... awaits..." });
+    expect(shots).toHaveLength(1);
   });
 
   it("keeps the orange-on-orange pocket safe and the next purple tile hit", () => {
@@ -113,9 +130,13 @@ describe("raid clocks", () => {
     expect(WAVE_SKIP.NW.outer.x).toBe(6);
   });
 
-  it("fires six portal volleys from tick 11", () => {
-    const volleys = names("ocellus-p2", 36).filter((row) => row.name === "volley").map((row) => row.at);
+  it("fires six portal volleys from tick 11 and opens the orange pad", () => {
+    const rows = project("ocellus-p2", options, 38, hold("ocellus-p2"));
+    const volleys = rows.flatMap((stamp) => (stamp.event.kind === "attack" && stamp.event.name === "volley" ? [stamp.at] : []));
+    const pad = rows.find((stamp) => stamp.event.kind === "pad");
     expect(volleys).toEqual([11, 16, 21, 26, 31, 36]);
+    expect(pad?.at).toBe(38);
+    expect(pad?.event).toMatchObject({ kind: "pad", next: { x: 16, y: 16 } });
   });
 
   it("follows the phase 3 auto offsets and the 13-tick collapse", () => {

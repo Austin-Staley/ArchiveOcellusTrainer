@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25.2",
+    notes: [
+      "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",
+      "A click made right before the tick registers on that tick, instead of a tick late.",
+    ],
+  },
+  {
     version: "2026.10.25.1",
     notes: [
       "Melee attacks always hit a void rift for your max hit, as ranged attacks already did.",

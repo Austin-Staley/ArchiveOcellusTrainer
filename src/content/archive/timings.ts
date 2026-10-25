@@ -203,6 +203,12 @@ export const ARCHIVE = {
   },
   p3: {
     npcId: 16677,
+    /** Same monster as the phase 4 void rift. https://oldschool.runescape.wiki/w/Void_rift (25 Oct 2026). */
+    riftNpcId: 16678,
+    /** https://oldschool.runescape.wiki/w/Void_Siphon (25 Oct 2026). */
+    siphonNpcId: 16679,
+    /** https://oldschool.runescape.wiki/w/Void_Augmenter (25 Oct 2026). */
+    augmenterNpcId: 16680,
     hp: 5250,
     defence: 250,
     defenceFloor: 150,

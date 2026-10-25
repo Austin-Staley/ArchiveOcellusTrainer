@@ -1,5 +1,5 @@
-import { AmuletOfRancour, AttackStyle, AttackStylesController, AvernicTreadsMax, CollisionType, Entity, FerociousGloves, InfernalCape, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Region, ScytheOfVitur, Settings, UltorRing } from "osrs-sdk";
-import type { UnitBonuses } from "osrs-sdk";
+import { AmuletOfRancour, AttackStyle, AttackStylesController, AvernicTreadsMax, BasicModel, CacheRenderModel, CacheRenderReferences, CollisionType, Entity, FerociousGloves, InfernalCape, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Region, ScytheOfVitur, Settings, TileMarkerModel, UltorRing } from "osrs-sdk";
+import type { Model, RenderableListener, UnitBonuses } from "osrs-sdk";
 import type { Seed, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import { protectionOf } from "../../sim/sdk/EncounterBinding";
@@ -16,7 +16,10 @@ class PracticeMob extends Mob {
   immune = false;
   label = "Boss";
   tiles = 1;
+  npcId = 0;
   kind: "boss" | "add" | "censer" = "boss";
+  /** The first cache model is the one on screen. Later builds must not replace its animation listener. */
+  private hearListener = true;
 
   override get collisionType(): CollisionType {
     return this.blocks ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
@@ -50,6 +53,32 @@ class PracticeMob extends Mob {
     this.currentStats = { ...blank };
   }
 
+  override get color(): string {
+    switch (this.label) {
+      case "Bandosian censer":
+        return "#8a6a32";
+      case "Armadylean censer":
+        return "#d8d2c4";
+      case "Zarosian censer":
+        return "#7a4ea3";
+      case "Saradomin censer":
+        return "#3d6fbf";
+      default:
+        return "#c43c3c";
+    }
+  }
+
+  override setAnimationListener(listener: RenderableListener): void {
+    if (!this.hearListener) return;
+    super.setAnimationListener(listener);
+    this.hearListener = false;
+  }
+
+  override create3dModel(): Model {
+    if (modelledNpc(this.npcId)) return CacheRenderModel.forRenderable(this, CacheRenderReferences.npc(this.npcId));
+    return BasicModel.forRenderable(this);
+  }
+
   override get bonuses(): UnitBonuses {
     const melee = this.immune ? 10000 : 0;
     return {
@@ -59,12 +88,16 @@ class PracticeMob extends Mob {
     };
   }
 
-  fill(bar: Bar): void {
+  /** True when a live actor must be rebuilt. The first id, from 0, is not a swap. */
+  fill(bar: Bar): boolean {
+    const previous = this.npcId;
+    this.npcId = bar.npcId;
     const stats = { attack: 1, strength: 1, defence: bar.defence, range: 1, magic: 1, hitpoint: bar.hp };
     this.stats = stats;
     this.currentStats = { ...stats };
     this.tiles = bar.size;
     this.label = bar.name;
+    return previous !== 0 && previous !== bar.npcId;
   }
 }
 
@@ -92,6 +125,79 @@ class Mark extends Entity {
     context.globalAlpha = 0.55;
     context.fillRect(this.location.x * scale, this.location.y * scale, scale, scale);
     context.globalAlpha = 1;
+  }
+
+  override create3dModel(): Model {
+    return TileMarkerModel.forRenderable(this);
+  }
+}
+
+/** A coloured sphere. No projectile graphic id is recorded, so this is the stand-in. */
+class Shot extends Entity {
+  life = 1;
+  paint = "#e0a040";
+  private fromX = 0;
+  private fromY = 0;
+  private toX = 0;
+  private toY = 0;
+  private span = 1;
+  private age = 0;
+
+  override get size(): number {
+    return 1;
+  }
+
+  override entityName(): string {
+    return "Stand-in projectile";
+  }
+
+  override get color(): string {
+    return this.paint;
+  }
+
+  override create3dModel(): Model {
+    return BasicModel.sphereForRenderable(this);
+  }
+
+  fly(from: Tile, to: Tile, ticks: number, paint: string): void {
+    this.fromX = from.x + 0;
+    this.fromY = from.y + 0;
+    this.toX = to.x + 0;
+    this.toY = to.y + 0;
+    this.span = Math.max(1, ticks);
+    this.life = this.span;
+    this.paint = paint;
+    this.age = 0;
+    this.location = { x: this.fromX, y: this.fromY };
+  }
+
+  advance(): void {
+    this.age += 1;
+    this.life -= 1;
+    const along = Math.min(1, this.age / this.span);
+    this.location = {
+      x: Math.round(this.fromX + (this.toX - this.fromX) * along),
+      y: Math.round(this.fromY + (this.toY - this.fromY) * along),
+    };
+    if (this.life <= 0) this.dying = 0;
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const along = Math.min(1, (this.age + tickPercent) / this.span);
+    return {
+      x: this.fromX + (this.toX - this.fromX) * along,
+      y: this.fromY + (this.toY - this.fromY) * along,
+      z: 1.2,
+    };
+  }
+
+  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    const at = this.getPerceivedLocation(tickPercent);
+    const scale = Settings.tileSize;
+    context.fillStyle = this.paint;
+    context.beginPath();
+    context.arc((at.x + 0.5) * scale, (at.y + 0.5) * scale, scale * 0.28, 0, Math.PI * 2);
+    context.fill();
   }
 }
 
@@ -167,6 +273,7 @@ export class RaidRegion extends Region {
   private rooted: Tile | null = null;
   private spent = new Set<PracticeMob>();
   private marks: Mark[] = [];
+  private shots: Shot[] = [];
   private ended = false;
   private banked = 0;
   private escape: Readonly<{ tile: Tile; next: Tile; until: number }> | null = null;
@@ -188,8 +295,9 @@ export class RaidRegion extends Region {
     return ROOMS[this.launch.id].height;
   }
 
+  /** No map square is recorded for these rooms. The checkerboard is the coloured stand-in floor. */
   override drawDefaultFloor(): boolean {
-    return false;
+    return true;
   }
 
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
@@ -252,6 +360,7 @@ export class RaidRegion extends Region {
     this.clampDefence();
     this.collectCensers();
     this.expireMarks();
+    this.launchShots(step.events);
     if (player.currentStats.hitpoint <= 0) this.finish(this.invincible);
   }
 
@@ -276,14 +385,14 @@ export class RaidRegion extends Region {
   private boot(): void {
     if (!this.mounted) return;
     const bar = barFor(this.launch);
-    this.mounted.boss.fill(bar);
+    this.applyBar(this.mounted.boss, bar);
     this.realHp = this.launch.id === "guardian" ? ARCHIVE.guardian.hp : bar.hp;
     if (this.launch.bossHp !== null) {
       this.mounted.boss.currentStats.hitpoint = this.launch.bossHp;
       if (this.form === "grounded") this.realHp = this.launch.bossHp;
     }
-    this.mounted.adds.forEach((add) => add.fill(addBar(this.launch, add.label)));
-    this.mounted.censers.forEach((censer, index) => censer.fill({ npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
+    this.mounted.adds.forEach((add) => this.applyBar(add, addBar(this.launch, add.label)));
+    this.mounted.censers.forEach((censer, index) => this.applyBar(censer, { npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
     dressMelee(this.mounted.player);
     this.memory = initialMemory(this.launch.id);
     this.clockTick = 0;
@@ -301,6 +410,9 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
     const notice = standInNotice(this.launch.id);
     if (notice.length > 0) this.say(notice);
+    this.say("The arena floor is a coloured stand-in. No map id is recorded for this room.");
+    if (roomFiresShot(this.launch.id)) this.say("Flying shots are coloured stand-ins. No projectile graphic id is recorded.");
+    if (this.launch.id === "ocellus-p3") this.say("The censers are coloured stand-ins. They are scenery, and this view has no model for them.");
   }
 
   private present(event: RaidEvent): void {
@@ -383,11 +495,13 @@ export class RaidRegion extends Region {
       boss.stats.hitpoint = ARCHIVE.guardian.shield;
       boss.currentStats.hitpoint = ARCHIVE.guardian.shield;
       boss.label = "Archive Guardian";
+      this.wear(boss, ARCHIVE.guardian.flyingNpcId);
     }
     if (name === "grounded") {
       this.form = "grounded";
       boss.stats.hitpoint = this.realHp;
       boss.currentStats.hitpoint = this.realHp;
+      this.wear(boss, ARCHIVE.guardian.groundedNpcId);
     }
     if (name === "void-rift" || name === "void-siphon" || name === "void-augmenter") this.summonVoid(name);
     if (name === "complete") this.ended = true;
@@ -398,7 +512,7 @@ export class RaidRegion extends Region {
     if (!add) return;
     const label = name === "void-rift" ? "Void rift" : name === "void-siphon" ? "Void siphon" : "Void augmenter";
     add.label = label;
-    add.fill(addBar(this.launch, label));
+    this.applyBar(add, addBar(this.launch, label));
     this.spent.delete(add);
     if (!this.mobs.includes(add) && !this.newMobs.includes(add)) this.addMob(add);
   }
@@ -494,9 +608,38 @@ export class RaidRegion extends Region {
   private expireMarks(): void {
     this.marks.forEach((mark) => {
       mark.life -= 1;
-      if (mark.life <= 0) mark.dying = 1;
+      if (mark.life <= 0) mark.dying = 0;
     });
     this.marks = this.marks.filter((mark) => mark.life > 0);
+    this.shots.forEach((shot) => shot.advance());
+    this.shots = this.shots.filter((shot) => shot.life > 0);
+  }
+
+  private launchShots(events: readonly Stamp[]): void {
+    if (!this.mounted) return;
+    const { boss, player } = this.mounted;
+    const from = tile(boss.location.x, boss.location.y);
+    const to = tile(player.location.x, player.location.y);
+    events.forEach((stamp) => {
+      if (stamp.event.kind !== "attack") return;
+      const look = shotLook(this.launch, stamp.event.name);
+      if (!look) return;
+      const shot = new Shot(this, { x: from.x, y: from.y });
+      shot.fly(from, to, look.ticks, look.paint);
+      this.addEntity(shot);
+      this.shots.push(shot);
+    });
+  }
+
+  private applyBar(mob: PracticeMob, bar: Bar): void {
+    if (mob.fill(bar)) mob.invalidateModel();
+  }
+
+  private wear(mob: PracticeMob, npcId: number): void {
+    if (mob.npcId === npcId) return;
+    const refresh = mob.npcId !== 0;
+    mob.npcId = npcId;
+    if (refresh) mob.invalidateModel();
   }
 
   private finish(invincible: boolean): void {
@@ -538,7 +681,7 @@ export class RaidRegion extends Region {
       const rift = new PracticeMob(this, { x: room.player.x + 2, y: room.player.y });
       rift.kind = "add";
       rift.label = "Void rift";
-      rift.fill({ npcId: 16678, hp: 50, defence: 0, name: "Void rift", size: 1 });
+      rift.fill({ npcId: ARCHIVE.p3.riftNpcId, hp: 50, defence: 0, name: "Void rift", size: 1 });
       return [rift];
     }
     return [];
@@ -580,8 +723,95 @@ function dressMelee(player: Player): void {
 function addBar(launch: RaidLaunch, name: string): Bar {
   if (name === "Smorks") return { npcId: ARCHIVE.bork.smorkNpcId, hp: ARCHIVE.bork.smorkHp, defence: launch.options.smorkDefence, name, size: ARCHIVE.bork.smorkSize };
   if (name === "Undead binder") return { npcId: ARCHIVE.moia.binderNpcId, hp: ARCHIVE.moia.binderHp, defence: 1, name, size: 1 };
-  if (name === "Void rift") return { npcId: 16678, hp: 50, defence: 0, name, size: 1 };
-  if (name === "Void siphon") return { npcId: 16679, hp: 44, defence: 0, name, size: 1 };
-  if (name === "Void augmenter") return { npcId: 16680, hp: ARCHIVE.p3.augmenterHp, defence: 0, name, size: 1 };
+  if (name === "Void rift") return { npcId: ARCHIVE.p3.riftNpcId, hp: 50, defence: 0, name, size: 1 };
+  if (name === "Void siphon") return { npcId: ARCHIVE.p3.siphonNpcId, hp: 44, defence: 0, name, size: 1 };
+  if (name === "Void augmenter") return { npcId: ARCHIVE.p3.augmenterNpcId, hp: ARCHIVE.p3.augmenterHp, defence: 0, name, size: 1 };
   return { npcId: 0, hp: 1, defence: 1, name, size: 1 };
+}
+
+const RANGED_SHOT = "#7ec8ff";
+const MAGIC_SHOT = "#c45bff";
+const TYPELESS_SHOT = "#e0a040";
+
+type ShotLook = Readonly<{ ticks: number; paint: string }>;
+
+function roomFiresShot(id: RaidLaunch["id"]): boolean {
+  switch (id) {
+    case "guardian":
+    case "moia":
+    case "xarth":
+    case "dagonhai":
+    case "ocellus-p1":
+    case "ocellus-p2":
+      return true;
+    case "bork":
+    case "ezekiel":
+    case "ocellus-p3":
+      return false;
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}
+
+function shotLook(launch: RaidLaunch, name: string): ShotLook | null {
+  switch (launch.id) {
+    case "bork":
+    case "ezekiel":
+    case "ocellus-p3":
+      return null;
+    case "guardian":
+      if (name === "14751") return { ticks: ARCHIVE.guardian.autoFlight, paint: RANGED_SHOT };
+      if (name === "beam") return { ticks: launch.options.guardianBeamDelay, paint: MAGIC_SHOT };
+      return null;
+    case "moia":
+      if (name === "14785") return { ticks: ARCHIVE.moia.rangedFlight, paint: RANGED_SHOT };
+      if (name === "relocate") return { ticks: ARCHIVE.moia.magicFlight, paint: MAGIC_SHOT };
+      return null;
+    case "xarth":
+      if (name === "14984") return { ticks: ARCHIVE.xarth.autoFlight, paint: MAGIC_SHOT };
+      if (name === "14985") return { ticks: ARCHIVE.xarth.autoFlight, paint: RANGED_SHOT };
+      return null;
+    case "dagonhai":
+      if (name === "14597") return { ticks: ARCHIVE.dagonhai.autoFlight, paint: MAGIC_SHOT };
+      if (name === "14593") return { ticks: ARCHIVE.dagonhai.autoFlight, paint: RANGED_SHOT };
+      if (name === "throw") return { ticks: ARCHIVE.dagonhai.bookFlight, paint: TYPELESS_SHOT };
+      return null;
+    case "ocellus-p1":
+      if (name === "4229") return { ticks: ARCHIVE.p1.volleyFlight, paint: MAGIC_SHOT };
+      if (name === "4232") return { ticks: ARCHIVE.p1.volleyFlight, paint: RANGED_SHOT };
+      if (name === "14810") return { ticks: ARCHIVE.p1.annihilationDelay, paint: TYPELESS_SHOT };
+      return null;
+    case "ocellus-p2":
+      if (name === "volley") return { ticks: ARCHIVE.p2.hitDelay, paint: TYPELESS_SHOT };
+      return null;
+    default: {
+      const unhandled: never = launch.id;
+      return unhandled;
+    }
+  }
+}
+
+function modelledNpc(id: number): boolean {
+  switch (id) {
+    case ARCHIVE.bork.npcId:
+    case ARCHIVE.bork.smorkNpcId:
+    case ARCHIVE.ezekiel.npcId:
+    case ARCHIVE.guardian.flyingNpcId:
+    case ARCHIVE.guardian.groundedNpcId:
+    case ARCHIVE.moia.npcId:
+    case ARCHIVE.moia.binderNpcId:
+    case ARCHIVE.xarth.npcId:
+    case ARCHIVE.dagonhai.npcId:
+    case ARCHIVE.p1.npcId:
+    case ARCHIVE.p2.npcId:
+    case ARCHIVE.p3.npcId:
+    case ARCHIVE.p3.riftNpcId:
+    case ARCHIVE.p3.siphonNpcId:
+    case ARCHIVE.p3.augmenterNpcId:
+      return true;
+    default:
+      return false;
+  }
 }

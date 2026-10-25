@@ -4,6 +4,16 @@ Every number in `src/content/archive/timings.ts` is labelled unverified there. T
 
 Sources: the OSRS Wiki strategies page and the Ocellus page as of 25 Oct 2026, and the measured ledger in the research notes. A value with no measured tick is a practice stand-in and is named below.
 
+## 3D look
+
+No map id is recorded for these rooms. The 3D view draws the coloured checkerboard as the arena floor, and the room says so.
+
+The bosses and adds use the monster ids in `timings.ts`: Bork 16640, the Smorks 16641, Ezekiel 16652, the Archive Guardian 16659 while the shield holds and 16660 once grounded, Moia 16667, undead binders 16670, Xarth 16684, the Dagon'hai trio 16643, Ocellus phase 1 16674, the Blade 16676, Ocellus phase 3 16677 (the same monster the phase 4 view already uses), the void rift 16678, the void siphon 16679, and the void augmenter 16680. The siphon and augmenter ids are the wiki monster ids on [Void Siphon](https://oldschool.runescape.wiki/w/Void_Siphon) and [Void Augmenter](https://oldschool.runescape.wiki/w/Void_Augmenter) (25 Oct 2026). The vine id 16681 stays in the ledger. The room shows vines as tiles, not as a spawned monster.
+
+Flying shots are coloured spheres. No projectile graphic id is recorded, and the room says so. Tile hazards keep the colours they already use in 2D.
+
+The four censers are scenery, not monsters. [Bandosian Censer](https://oldschool.runescape.wiki/w/Bandosian_Censer) is object 62693, and the other three are objects 62695, 62697 and 62699. This view has no scenery-model reference, so the censers are coloured boxes, and the room says so. Dreadnoth (16665) is still not a room.
+
 ## Ocellus
 
 Demonbane weapons deal 20% less. The wiki states this for Ocellus and for Xarth. The practice scythe is not a demonbane weapon, so the room only says so.

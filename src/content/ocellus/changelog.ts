@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25.6",
+    notes: [
+      "Bork, Ezekiel, the Archive Guardian, Moia, Xarth, the Dagon'hai trio, and Ocellus phases 1 to 3 now show an arena, you, and the bosses in the 3D view.",
+      "The arena floor is a coloured stand-in, because no map id is recorded for these rooms. Flying shots are coloured stand-ins, because no projectile graphic id is recorded.",
+      "The phase 3 censers are coloured boxes. They are scenery, and this view has no model for them.",
+    ],
+  },
+  {
     version: "2026.10.25.5",
     notes: [
       "Killing a void augmenter sets Attack and Strength to 116 and Magic and Ranged to 112, the published buff for a player who started at 99. The augmenter has 44 hitpoints.",

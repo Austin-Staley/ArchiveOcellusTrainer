@@ -1,4 +1,5 @@
 import type { CacheAssets } from "osrs-sdk/asset-manifest";
+import { ARCHIVE } from "./content/archive/timings";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
 
@@ -10,6 +11,19 @@ export const ARCHIVE_OCELLUS_ASSETS = {
   npcs: {
     ocellus: { id: boss.npcId.value, animations: { ...sequences(presentation.bossPoses), ...sequences(OCELLUS_P3.bossPoses) } },
     voidRift: { id: rifts.npcId.value, animations: sequences(rifts.poses) },
+    bork: { id: ARCHIVE.bork.npcId },
+    smorks: { id: ARCHIVE.bork.smorkNpcId },
+    ezekiel: { id: ARCHIVE.ezekiel.npcId },
+    archiveGuardian: { id: ARCHIVE.guardian.flyingNpcId },
+    archiveGuardianGrounded: { id: ARCHIVE.guardian.groundedNpcId },
+    moia: { id: ARCHIVE.moia.npcId },
+    undeadBinder: { id: ARCHIVE.moia.binderNpcId },
+    xarth: { id: ARCHIVE.xarth.npcId },
+    dagonhai: { id: ARCHIVE.dagonhai.npcId },
+    ocellusPhase1: { id: ARCHIVE.p1.npcId },
+    theBlade: { id: ARCHIVE.p2.npcId },
+    voidSiphon: { id: ARCHIVE.p3.siphonNpcId },
+    voidAugmenter: { id: ARCHIVE.p3.augmenterNpcId },
   },
   models: {
     brazier: { id: geometry.brazier.value.model, animations: { burning: geometry.brazier.value.burning } },

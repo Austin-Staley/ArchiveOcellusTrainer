@@ -301,6 +301,7 @@ CUE_SOUND_WINDOW='[4,50]'
 CUE_CHAT="Ocellus manipulates your lifeforce!"
 AUTOPLAY_POLICY_JS='(() => { const Native = window.AudioContext; if (!Native) return; const made = []; window.__audioContexts = made; window.AudioContext = class extends Native { constructor(...args) { super(...args); made.push(this); void this.suspend(); } }; })();'
 PRODUCTION_PORT="${VERIFY_PRODUCTION_PORT:-8003}"
+PERF_GATE="src/perf/perfGate.json"
 PRODUCTION_QUERY="?seed=1&invincible=on"
 PRODUCTION_WATCH_SECONDS=20
 PRODUCTION_ORBS='["99","99","100","100"]'
@@ -2798,30 +2799,102 @@ release_production() {
   log "production: static server PID ${PRODUCTION_PID} is gone"
 }
 
-stage_production() {
+production_port_free() {
   case "$PRODUCTION_PORT" in 8000 | 8001 | "$VERIFY_PORT")
     log "port ${PRODUCTION_PORT} belongs to another server; refusing to use it"
     return 1
     ;;
   esac
   [[ -z "$(production_listener)" ]] || { log "port ${PRODUCTION_PORT} is already in use by PID $(production_listener)"; return 1; }
+}
+
+serve_static() {
+  python3 -m http.server "$PRODUCTION_PORT" --bind 127.0.0.1 --directory "$1" >"$2" 2>&1 &
+  PRODUCTION_PID=$!
+  log "started static server PID ${PRODUCTION_PID} on http://127.0.0.1:${PRODUCTION_PORT}/"
+  for _ in $(seq 1 30); do
+    curl -sf -o /dev/null "http://127.0.0.1:${PRODUCTION_PORT}/" && return 0
+    sleep 0.5
+  done
+  log "the static server never answered"
+  return 1
+}
+
+stage_production() {
+  production_port_free || return 1
   manifest_ready || { log "assets missing: run scripts/verify.sh assets"; return 1; }
   node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/production" >"$VERIFY_DIR/production-build.log" 2>&1 || { log "the production build failed"; return 1; }
 
-  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-production" result=1
-  python3 -m http.server "$PRODUCTION_PORT" --bind 127.0.0.1 --directory "$VERIFY_DIR/production" >"$VERIFY_DIR/production-server.log" 2>&1 &
-  PRODUCTION_PID=$!
+  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-production" PRODUCTION_PID= result=1
   trap 'release_production; exit 130' INT TERM
-  log "started static server PID ${PRODUCTION_PID} on http://127.0.0.1:${PRODUCTION_PORT}/"
-  for _ in $(seq 1 30); do
-    curl -sf -o /dev/null "http://127.0.0.1:${PRODUCTION_PORT}/" && break
-    sleep 0.5
-  done
-  if curl -sf -o /dev/null "http://127.0.0.1:${PRODUCTION_PORT}/"; then
+  if serve_static "$VERIFY_DIR/production" "$VERIFY_DIR/production-server.log"; then
     drive_production
     result=$?
+  fi
+  release_production || result=1
+  trap - INT TERM
+  return $result
+}
+
+perf_gate() {
+  json "$1" <"$PERF_GATE"
+}
+
+build_perf_base() {
+  local base src="$VERIFY_DIR/perf/base-src"
+  base="$(git rev-parse --verify "${VERIFY_PERF_BASE:-$(git merge-base origin/main HEAD)}^{commit}")" || { log "perf: no base revision; set VERIFY_PERF_BASE"; return 1; }
+  log "perf: comparing against base ${base}"
+  echo "$base" >"$VERIFY_DIR/perf/base-revision"
+  mkdir -p "$src/public" && git archive "$base" | tar -x -C "$src" || { log "perf: the base tree could not be exported"; return 1; }
+  ln -s "$ROOT/public/osrs-assets" "$src/public/osrs-assets"
+  if git diff --quiet "$base" -- package.json package-lock.json scripts/install-beta-sdk.sh; then
+    ln -s "$ROOT/node_modules" "$src/node_modules"
   else
-    log "the static server never answered"
+    log "perf: the base pins other dependencies; installing them"
+    (cd "$src" && npm ci --no-audit --no-fund && scripts/install-beta-sdk.sh) >"$VERIFY_DIR/perf/base-install.log" 2>&1 || { log "perf: the base install failed"; return 1; }
+  fi
+  (cd "$src" && node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/perf/www/base") >"$VERIFY_DIR/perf/base-build.log" 2>&1 || { log "perf: the base build failed"; return 1; }
+  rm -rf "$src"
+}
+
+perf_capture() {
+  local name=$1 side=$2 view=$3 until=$4
+  ab open about:blank >/dev/null &&
+    ab open "http://127.0.0.1:${PRODUCTION_PORT}/${side}/$(perf_gate workload.query)#perf-view=${view}" >/dev/null &&
+    ab wait --fn "window.__perfGate.p4Tick() >= ${until}" --timeout $((until * 600 + 120000)) >/dev/null &&
+    ab --json eval "JSON.stringify(window.__perfGate.capture())" | json data.result >"$VERIFY_DIR/perf/captures/${name}.json" ||
+    { log "perf: the ${name} run did not reach P4 tick ${until}"; return 1; }
+  log "perf: captured ${name}"
+}
+
+drive_perf() {
+  local pair view side order
+  ab --init-script "$ROOT/src/perf/observer.js" set viewport 1280 800 >/dev/null || { log "the perf session did not start"; return 1; }
+  for pair in $(seq 1 "$(perf_gate timing.pairs)"); do
+    order=(base head)
+    ((pair % 2 == 0)) && order=(head base)
+    for view in 3d 2d; do
+      for side in "${order[@]}"; do
+        perf_capture "${side}-${view}-${pair}" "$side" "$view" "$(perf_gate workload.window.to)" || return 1
+      done
+    done
+  done
+  perf_capture long-3d head 3d "$(perf_gate workload.resources.to)" || return 1
+  node node_modules/.bin/tsx src/perf/check.ts "$PERF_GATE" "$VERIFY_DIR/perf/captures" >"$VERIFY_DIR/perf-checks.json"
+}
+
+stage_perf() {
+  production_port_free || return 1
+  manifest_ready || { log "assets missing: run scripts/verify.sh assets"; return 1; }
+  mkdir -p "$VERIFY_DIR/perf/captures"
+  node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/perf/www/head" >"$VERIFY_DIR/perf/head-build.log" 2>&1 || { log "perf: the head build failed"; return 1; }
+  build_perf_base || return 1
+
+  local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-perf" PRODUCTION_PID= result=1
+  trap 'release_production; exit 130' INT TERM
+  if serve_static "$VERIFY_DIR/perf/www" "$VERIFY_DIR/perf/server.log"; then
+    drive_perf
+    result=$?
   fi
   release_production || result=1
   trap - INT TERM
@@ -2837,7 +2910,7 @@ esac
 stages=("$@")
 [[ ${#stages[@]} -gt 0 ]] || stages=(build types test assets browser production)
 for stage in "${stages[@]}"; do
-  case "$stage" in build | types | test | assets | browser | production) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
+  case "$stage" in build | types | test | assets | browser | production | perf) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
 done
 
 mkdir -p "$VERIFY_DIR"

@@ -11,6 +11,7 @@ The trainer is a web page: a three.js canvas (`#world`) with the osrs-sdk HUD ar
 source ~/osrs-sims/env.sh            # Node 22 on this machine; elsewhere use any Node 22
 scripts/verify.sh                    # build types test assets browser production
 scripts/verify.sh test browser       # any subset, in the order given
+scripts/verify.sh perf               # the performance budgets; not in the default run
 ```
 
 Run it from the repository root or a worktree. A passing run prints six `PASS` lines and ends with `verify: stop: PID <n> is gone; evidence kept in <dir>`.
@@ -34,6 +35,10 @@ It refuses ports 8000 and 8001, which belong to other trainers, and refuses any 
 ## Production
 
 The `production` stage builds the production bundle into `<evidence>/production/`, serves it with `python3 -m http.server` on 127.0.0.1:8003, and opens `?seed=1&invincible=on` in its own session. Set `VERIFY_PRODUCTION_PORT` for another port; it refuses 8000, 8001, `VERIFY_PORT` and any port with a listener, and stops the static server by its PID. A production build has no probe, so an init script records the four minimap orb numbers (hitpoints, prayer, run, special) that each frame draws. The page is watched for 20 s after the orbs first draw. It is then reopened with every request for a root-level `.png`, the SDK's bundled images, aborted until the page first requests one. Each check fails on a page error, on a frame since the first that drew no orb numbers, or on a first frame other than `["99","99","100","100"]`. The dropped images must each be requested again and answer 200.
+
+## Perf
+
+The `perf` stage measures performance against the budgets in `src/perf/perfGate.json`. It builds production bundles for the working tree and for a base, by default `git merge-base origin/main HEAD` and otherwise `VERIFY_PERF_BASE`, and serves both on `VERIFY_PRODUCTION_PORT` with the same port rules as `production`. When the base pins other dependencies than the working tree, the stage runs `npm ci` and the beta SDK install for the base in a scratch copy. `src/perf/observer.js` is the session's init script. It records frames, world ticks, 3D draw calls, the renderer's geometry and texture counts, and the largest canvas, and the stage reads them back with `window.__perfGate.capture()`. Each run is a passive `?seed=1&invincible=on` fight in its own fresh page, alternating base and head in each view, and one long 3D run closes the stage. `src/perf/check.ts` writes the verdict to `<evidence>/perf-checks.json` and prints one `PASS` or `FAIL` line per budget and timing measure. `CODE_REVIEW.md` explains each line, the timing rule and how to tighten a budget.
 
 ## Doctor
 
@@ -187,7 +192,7 @@ scripts/verify.sh stop
 
 ## Helpers
 
-- `scripts/verify.sh [build] [types] [test] [assets] [browser] [production]`: the stages; no argument runs all six. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, imports of the fight's internal modules from outside `src/content/ocellus/js`, test files inside it, and imports in `src/sim` of anything outside `src/sim`. Tests live in `src/content/ocellus/tests` and drive the region.
+- `scripts/verify.sh [build] [types] [test] [assets] [browser] [production] [perf]`: the stages; no argument runs all but `perf`. `types` runs `npm run typecheck`: strict `tsc` over `src` and `test`, then `scripts/check-types.mjs`, which fails on `any`, `as` casts other than `as const`, non-null and definite-assignment `!`, `@ts-` suppression comments in `src`, imports of the fight's internal modules from outside `src/content/ocellus/js`, test files inside it, and imports in `src/sim` of anything outside `src/sim`. Tests live in `src/content/ocellus/tests` and drive the region.
 - `scripts/check-types.test.sh`: planted violations and a clean control for `check-types.mjs`. Run it after changing the rule check; CI runs it too.
 - `scripts/verify.sh serve | doctor | stop`: a manual instance, as above.
 - `scripts/install-beta-sdk.sh`: installs the beta SDK packages with `--no-save`. A build stamps the commit it checked out into each pack's `gitHead`, and the install ends by checking that every installed package names `OSRS_SDK_COMMIT`. `--check` runs only that check. CI calls it without `OSRS_SDK_PACKS`, so it builds from the pinned commit.

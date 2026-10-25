@@ -15,7 +15,8 @@ type NoInfer<S> = [S][S extends unknown ? 0 : never];
 export type Stage<S extends string, P, B> = Readonly<{
   slots: readonly [Slot<P, B>, ...Slot<P, B>[]];
   breakable: boolean;
-  then: (ended: Visit<S>, before: readonly Visit<S>[]) => NoInfer<S>;
+  /** `visits(stage)` counts that stage's visits so far, the one that ended included. */
+  then: (ended: Visit<S>, visits: (stage: S) => number) => NoInfer<S>;
 }>;
 
 export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: NoInfer<S> }>;
@@ -33,42 +34,61 @@ export function slotTable<P, B>(slots: readonly Slot<P, B>[], stage: string): re
   return [slots[0], ...slots.slice(1)];
 }
 
-class Visits<S extends string, P, B> {
-  private readonly listed: Visit<S>[];
+type Entry<S extends string> = Readonly<{ visit: Visit<S>; visits: ReadonlyMap<S, number> }>;
 
-  constructor(private readonly script: Script<S, P, B>, decided: readonly Visit<S>[] = [{ stage: script.first, start: tick(0), number: cycle(1), entered: "first" }]) {
-    this.listed = [...decided];
+function enter<S extends string>(stage: S, start: Tick, entered: Visit<S>["entered"], before: ReadonlyMap<S, number>): Entry<S> {
+  const number = (before.get(stage) ?? 0) + 1;
+  return { visit: { stage, start, number: cycle(number), entered }, visits: new Map(before).set(stage, number) };
+}
+
+class Visits<S extends string, P, B> {
+  private latest: Entry<S>;
+
+  constructor(
+    private readonly script: Script<S, P, B>,
+    private readonly runStarts: readonly Entry<S>[] = [enter(script.first, tick(0), "first", new Map())],
+    private previous: Entry<S> | null = null,
+  ) {
+    this.latest = runStarts[runStarts.length - 1];
   }
 
   at(t: Tick): Visit<S> {
-    this.extendThrough(t);
-    for (let index = this.listed.length - 1; ; index--) {
-      if (this.listed[index].start <= t) return this.listed[index];
-    }
+    return this.entryAt(t).visit;
   }
 
   firedBefore(t: Tick): number {
-    return this.listed.filter((visit) => visit.entered === "breakpoint" && visit.start < t).length;
+    return this.runStarts.filter(({ visit }) => visit.entered === "breakpoint" && visit.start < t).length;
   }
 
   cutAt(t: Tick, stage: S): Visits<S, P, B> {
-    this.extendThrough(t);
-    const kept = this.listed.filter((visit) => visit.start < t);
-    return new Visits(this.script, [...kept, this.visit(stage, t, "breakpoint", kept)]);
+    const before = t === 0 ? null : this.entryAt(tick(t - 1));
+    const kept = this.runStarts.filter(({ visit }) => visit.start < t);
+    return new Visits(this.script, [...kept, enter(stage, t, "breakpoint", before?.visits ?? new Map())], before);
   }
 
-  private extendThrough(t: Tick): void {
-    for (let last = this.listed[this.listed.length - 1]; ; ) {
-      const { slots, then } = this.script.stages[last.stage];
-      const end = tick(last.start + slots.length);
-      if (t < end) return;
-      last = this.visit(then(last, this.listed.slice(0, -1)), end, "table-ended");
-      this.listed.push(last);
+  private entryAt(t: Tick): Entry<S> {
+    if (t >= this.latest.visit.start) {
+      while (t >= this.end(this.latest)) {
+        this.previous = this.latest;
+        this.latest = this.successor(this.previous);
+      }
+      return this.latest;
     }
+    if (this.previous !== null && t >= this.previous.visit.start) return this.previous;
+    let entry = this.runStarts[0];
+    for (const start of this.runStarts) if (start.visit.start <= t) entry = start;
+    while (t >= this.end(entry)) entry = this.successor(entry);
+    return entry;
   }
 
-  private visit(stage: S, start: Tick, entered: Visit<S>["entered"], before: readonly Visit<S>[] = this.listed): Visit<S> {
-    return { stage, start, number: cycle(before.filter((visit) => visit.stage === stage).length + 1), entered };
+  private end({ visit }: Entry<S>): Tick {
+    return tick(visit.start + this.script.stages[visit.stage].slots.length);
+  }
+
+  private successor(entry: Entry<S>): Entry<S> {
+    const { visit, visits } = entry;
+    const next = this.script.stages[visit.stage].then(visit, (stage) => visits.get(stage) ?? 0);
+    return enter(next, this.end(entry), "table-ended", visits);
   }
 }
 

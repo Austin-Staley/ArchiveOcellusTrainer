@@ -1,7 +1,10 @@
 import { dirname, resolve } from "node:path";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import type { Tick } from "./brands";
 import { hpFraction, tick } from "./brands";
-import type { Breakpoint, Script, Slot, Stage } from "./schedule";
+import type { Breakpoint, Script, Slot, Stage, Visit } from "./schedule";
 import { Schedule, slotTable } from "./schedule";
 
 const named = (name: string): Slot<string, string> => ({ phase: (visit) => `${name} #${visit}`, beats: [(visit, start) => `${name} of visit ${visit} from ${start}`] });
@@ -34,12 +37,12 @@ describe("a schedule of named stages", () => {
     ]);
   });
 
-  test("a stage's successor reads the visits before the one that ended", () => {
+  test("a stage's successor reads how often each stage has been entered", () => {
     type Rotation = "autos" | "smite" | "untether";
     const alternating = schedule<Rotation>({
       first: "autos",
       stages: {
-        autos: stage<Rotation>("autos", 2, true, (_, before) => (before.some((visit) => visit.stage === "autos") ? "untether" : "smite")),
+        autos: stage<Rotation>("autos", 2, true, (_, visits) => (visits("autos") > 1 ? "untether" : "smite")),
         smite: stage<Rotation>("smite", 1, true, () => "autos"),
         untether: stage<Rotation>("untether", 1, true, () => "autos"),
       },
@@ -84,6 +87,27 @@ describe("HP breakpoints", () => {
     ]);
     expect(at50.at(tick(2))).toEqual({ tick: 2, phase: "destroy-0 #1", beats: ["destroy-0 of visit 1 from 2"] });
     expect(ticks(1, 2).map((t) => at50.breakpointsFiredBy(t))).toEqual([0, 1]);
+  });
+
+  test("guard: a tick read after later ticks gets the visit a forward read gets", () => {
+    const repeat = <T>(count: number, value: T): T[] => Array.from({ length: count }, () => value);
+    const expected = [
+      ...repeat(2, { stage: "fight", start: 0, number: 1, entered: "first" }),
+      ...repeat(2, { stage: "destroy", start: 2, number: 1, entered: "breakpoint" }),
+      ...repeat(4, { stage: "fight", start: 4, number: 2, entered: "table-ended" }),
+      ...repeat(4, { stage: "fight", start: 8, number: 3, entered: "table-ended" }),
+      { stage: "fight", start: 12, number: 4, entered: "table-ended" },
+    ];
+    const cut = () => run([{ atOrBelow: hpFraction(0.5), enter: "destroy" }], "fight", [101, 101, 50]);
+    const [forward, backward] = [cut(), cut()];
+
+    expect({
+      forward: ticks(0, 12).map((t) => forward.visitAt(t)),
+      backward: ticks(0, 12)
+        .reverse()
+        .map((t) => backward.visitAt(t))
+        .reverse(),
+    }).toEqual({ forward: expected, backward: expected });
   });
 
   test("a breakpoint reached during an unbreakable stage fires on the first breakable tick", () => {
@@ -176,5 +200,52 @@ describe("the stage contract", () => {
     expect(build("fight", "fight")().visitAt(tick(0))).toEqual({ stage: "fight", start: 0, number: 1, entered: "first" });
     expect(build("fight", "unknown")).toThrow(new RangeError("the script names unknown, a stage it does not define"));
     expect(build("arrive", "fight")).toThrow(new RangeError("the script names arrive, a stage it does not define"));
+  });
+});
+
+declare const WeakRef: new <T extends object>(target: T) => Readonly<{ deref: () => T | undefined }>;
+setFlagsFromString("--expose-gc");
+const collectGarbage: () => void = runInNewContext("gc");
+
+describe("a long run", () => {
+  type Fight = "lead-in" | "cycle" | "destroy";
+
+  test("after 1000 cycles a schedule keeps as many visits, and calls its script as often in the next cycle, as after 10", async () => {
+    let calls = 0;
+    const counted = (length: number, breakable: boolean, next: Fight): Stage<Fight, string, string> => ({
+      slots: slotTable(Array.from({ length }, (): Slot<string, string> => ({ phase: () => `${calls++}`, beats: [] })), next),
+      breakable,
+      then: () => (calls++, next),
+    });
+    const script: Script<Fight, string, string> = {
+      first: "lead-in",
+      stages: { "lead-in": counted(2, false, "cycle"), cycle: counted(5, true, "cycle"), destroy: counted(1, false, "cycle") },
+      breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "destroy" }],
+    };
+    const ticksOfCycle = (n: number) => ticks(2 + 5 * (n - 1), 1 + 5 * n);
+    const afterCycles = async (cycles: number) => {
+      let fight = schedule(script);
+      const turn = (t: Tick) => {
+        fight = fight.advance(t, { hp: 100, maxHp: 100 });
+        fight.at(t);
+        fight.at(tick(t - 1));
+      };
+      const passed: Readonly<{ deref: () => Visit<Fight> | undefined }>[] = [];
+      for (let n = 1; n <= cycles; n++) {
+        ticksOfCycle(n).forEach(turn);
+        passed.push(new WeakRef(fight.visitAt(ticksOfCycle(n)[0])));
+      }
+      calls = 0;
+      ticksOfCycle(cycles + 1).forEach(turn);
+      const callsInNextCycle = calls;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      collectGarbage();
+      return { callsInNextCycle, visitsKept: passed.filter((visit) => visit.deref() !== undefined).length };
+    };
+
+    expect([await afterCycles(10), await afterCycles(1000)]).toEqual([
+      { callsInNextCycle: 11, visitsKept: 1 },
+      { callsInNextCycle: 11, visitsKept: 1 },
+    ]);
   });
 });

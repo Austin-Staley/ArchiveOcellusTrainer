@@ -1,5 +1,5 @@
 import type { ResolvedChoices } from "../OcellusTimings";
-import { OCELLUS_P4 } from "../OcellusTimings";
+import { dodgeCutTicks, OCELLUS_P4 } from "../OcellusTimings";
 import type { Seed, Tick, Tile } from "../../../../sim/brands";
 import type { HitReceipt } from "../../../../sim/combat";
 import { cutAttackDelay } from "../../../../sim/combat";
@@ -20,9 +20,9 @@ export type Reduction = Readonly<{ outcome: "passed" }> | Readonly<{ outcome: "r
 
 export const NO_MARKS: Marks = [];
 
-const { radius, attackDelayCut } = OCELLUS_P4.explosion.dodge.value;
+const { radius } = OCELLUS_P4.explosion.dodge.value;
 
-function detonate({ seed, choices }: ExplosionRules, marks: Marks, kind: VoidKind, pulse: number, at: Tick, player: Readonly<{ tile: Tile; attackDelay: number }>): ExplosionStep {
+function detonate({ seed, choices }: ExplosionRules, marks: Marks, kind: VoidKind, pulse: number, at: Tick, player: Readonly<{ tile: Tile; attackDelay: number; attackSpeed: number }>): ExplosionStep {
   const mark = marks.find((pending) => pending.void === kind && pending.pulse === pulse);
   if (!mark) return { marks, outputs: [] };
   const left = marks.filter((pending) => pending !== mark);
@@ -30,14 +30,15 @@ function detonate({ seed, choices }: ExplosionRules, marks: Marks, kind: VoidKin
   const distance = reach(mark.tile, player.tile);
   if (distance > radius) return { marks: left, outputs: [{ kind: "event", event: { ...impact, outcome: { kind: "avoided" } } }] };
   if (distance > 0) {
-    const attackDelay = { before: player.attackDelay, after: cutAttackDelay(player.attackDelay, attackDelayCut) };
-    return { marks: left, outputs: [{ kind: "cut-attack-delay", by: attackDelayCut }, { kind: "event", event: { ...impact, outcome: { kind: "dodged", attackDelay } } }] };
+    const cut = dodgeCutTicks(choices.perfectDodge.option.value, player.attackSpeed);
+    const attackDelay = { before: player.attackDelay, after: cutAttackDelay(player.attackDelay, cut) };
+    return { marks: left, outputs: [{ kind: "cut-attack-delay", by: cut }, { kind: "event", event: { ...impact, outcome: { kind: "dodged", attackDelay } } }] };
   }
   const damage = rollInt(seed, "explosionDamage", at, choices.explosions.option.value.damage, 0);
   return { marks: left, outputs: [{ kind: "hit", damage: { kind: "fixed", amount: damage }, cause: impact }] };
 }
 
-export function explode(rules: ExplosionRules, marks: Marks, beat: ExplosionBeat, at: Tick, player: Readonly<{ tile: Tile; attackDelay: number }>): ExplosionStep {
+export function explode(rules: ExplosionRules, marks: Marks, beat: ExplosionBeat, at: Tick, player: Readonly<{ tile: Tile; attackDelay: number; attackSpeed: number }>): ExplosionStep {
   switch (beat.kind) {
     case "explosion-series-starts":
       return { marks, outputs: [{ kind: "event", event: { kind: "explosion-series-started", at, void: beat.void } }] };

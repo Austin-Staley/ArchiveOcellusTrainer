@@ -2,6 +2,15 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25.4",
+    notes: [
+      "Settings has an encounter menu for Bork, Ezekiel, the Archive Guardian, Moia, Xarth, the Dagon'hai trio, and Ocellus phases 1 to 3. With no encounter chosen, phase 4 is the same fight as before.",
+      "A perfect dodge of a phase 4 explosion halves your weapon cooldown, rounded down. Settings can switch that to cooldown minus 3. The two agree for a 5-tick or 6-tick weapon and differ for a 4-tick weapon.",
+      "The airborne half is Deflect Melee and the grounded half is Deflect Range. The 60-tick loop is unchanged.",
+      "In phase 1 he walks the corners under Protect from Melee, then seven tendrils and a two-tile slam. At 66% and 25% he comes to the centre. In phase 3 you tank: two melee hits, a wave, and after two waves the charged blade.",
+    ],
+  },
+  {
     version: "2026.10.25.3",
     notes: [
       "The void shards of each explosion now come in high over your head, from the game's own effect, so you can see the cue to step while you move.",

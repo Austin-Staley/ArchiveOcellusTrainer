@@ -3,13 +3,16 @@ import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
+import { RaidRegion } from "./content/archive/RaidRegion";
+import { ENCOUNTERS, isRaidId, parseRaid } from "./content/archive/catalog";
+import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import { P3Region } from "./content/ocellus/js/P3Region";
 import type { DrillConfig, DrillRequest, P3Config } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P4, parseRequest } from "./content/ocellus/js/OcellusTimings";
 import type { P3End, P3Log, P3Snapshot } from "./content/ocellus/js/P3Types";
 import type { FightLog, FightSnapshot, RenderView, RunEnd } from "./content/ocellus/js/P4Types";
-import type { Tick } from "./sim/brands";
+import type { Seed, Tick } from "./sim/brands";
 import type { BuildFlags } from "./flags";
 import { readBuildFlags } from "./flags";
 import { CHANGELOG } from "./content/ocellus/changelog";
@@ -34,7 +37,7 @@ declare global {
   interface Window {
     __archiveOcellusProbe?: Readonly<{
       snapshot(): VerificationProbeSnapshot;
-      log(): FightLog | P3Log;
+      log(): FightLog | P3Log | Readonly<{ header: Readonly<{ seed: Seed }> }>;
       tileCentre(at: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> | null;
     }>;
   }
@@ -45,7 +48,7 @@ type VerificationProbeSnapshot = Readonly<{
   tick: number;
   player: Readonly<{ x: number; y: number }> | null;
   destination: Readonly<{ x: number; y: number }> | null;
-  fight: FightSnapshot | P3Snapshot | null;
+  fight: FightSnapshot | P3Snapshot | NonNullable<ReturnType<RaidRegion["snapshot"]>> | null;
   rejected: readonly string[];
   panel: Readonly<{ tab: string | null; keys: Readonly<Record<"inventory" | "spellbook" | "prayer" | "equipment" | "combat", string>> }>;
   menu: readonly string[] | null;
@@ -77,7 +80,7 @@ function mount(request: DrillRequest, view: RenderView): Drill {
   }
 }
 
-function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion | P3Region, rejected: readonly string[]) {
+function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion | P3Region | RaidRegion, rejected: readonly string[]) {
   window.__archiveOcellusProbe = Object.freeze({
     snapshot(): VerificationProbeSnapshot {
       const { player, world } = trainer.getSnapshot();
@@ -128,19 +131,34 @@ function readSettings() {
   Settings.set({ playsAudio: saved.playsAudio ?? SOUNDS_START_ON, playsAreaAudio: saved.playsAreaAudio ?? SOUNDS_START_ON });
 }
 
-function createTrainer() {
+type Session =
+  | Readonly<{ kind: "drill"; trainer: TrainerInstance; drill: Drill; flags: BuildFlags }>
+  | Readonly<{ kind: "raid"; trainer: TrainerInstance; region: RaidRegion; launch: RaidLaunch; flags: BuildFlags }>;
+
+function createSession(): Session {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
   readSettings();
   const flags = readBuildFlags();
-  const request = parseRequest(new URL(window.location.href), () => crypto.getRandomValues(new Uint32Array(1))[0], flags);
+  const url = new URL(window.location.href);
   const view: RenderView = Settings.use3dView ? "3d" : "2d";
+  const encounter = url.searchParams.get("encounter");
+  const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  if (encounter !== null && isRaidId(encounter)) {
+    const launch = parseRaid(url, encounter, freshSeed);
+    const region = new RaidRegion(launch);
+    const trainer = new TrainerInstance(region, { force2d: view === "2d" });
+    if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, region, launch.rejected);
+    loadWebAnalytics();
+    return { kind: "raid", trainer, region, launch, flags };
+  }
+  const request = parseRequest(url, freshSeed, flags);
   const drill = mount(request, view);
   drill.region.invincible = request.invincible;
   const trainer = new TrainerInstance(drill.region, { force2d: view === "2d" });
   if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, drill.region, request.rejected);
   loadWebAnalytics();
   if (drill.phase === "p4") void startPerfTelemetry(drill.region);
-  return { trainer, drill, flags };
+  return { kind: "drill", trainer, drill, flags };
 }
 
 const SETUP_KEYS = Object.keys(OCELLUS_P4.choices.setup.options);
@@ -163,6 +181,21 @@ function startRun(request: RunRequest) {
   else url.searchParams.delete("seed");
   if (invincible) url.searchParams.set("invincible", "on");
   else url.searchParams.delete("invincible");
+  window.location.assign(url.href);
+}
+
+function startPerfectDodge(rule: string) {
+  if (rule !== "halved" && rule !== "minus-3") return;
+  const url = new URL(window.location.href);
+  if (rule === "halved") url.searchParams.delete("perfectDodge");
+  else url.searchParams.set("perfectDodge", rule);
+  window.location.assign(url.href);
+}
+
+function startEncounter(id: string) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  if (id !== "ocellus-p4") url.searchParams.set("encounter", id);
   window.location.assign(url.href);
 }
 
@@ -249,6 +282,12 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
   return (
     <form id="drill_controls" ref={form} onSubmit={(event) => { event.preventDefault(); restart(currentFocus); }}>
       <div id="settings_menu" hidden={view !== "settings"}>
+        <label>
+          Encounter{" "}
+          <select id="encounter" value="ocellus-p4" onChange={(event) => startEncounter(event.target.value)}>
+            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
         {flags.p3 && (
           <label>
             Phase{" "}
@@ -268,6 +307,15 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
             Focus{" "}
             <select id="focus" value={currentFocus} onChange={(event) => restart(event.target.value)}>
               {FOCUS_KEYS.map((key) => <option key={key} value={key}>{label(key)}</option>)}
+            </select>
+          </label>
+        )}
+        {drill.phase === "p4" && (
+          <label>
+            Perfect dodge{" "}
+            <select id="perfect_dodge" value={drill.config.choices.perfectDodge.key} onChange={(event) => startPerfectDodge(event.target.value)}>
+              <option value="halved">Halved, rounded down</option>
+              <option value="minus-3">Cooldown minus 3</option>
             </select>
           </label>
         )}
@@ -445,17 +493,74 @@ function GameChat({ region }: Readonly<{ region: Readonly<{ chat(): readonly str
   );
 }
 
+function setRaidParam(key: string, value: string, absent: string) {
+  const url = new URL(window.location.href);
+  if (value === absent) url.searchParams.delete(key);
+  else url.searchParams.set(key, value);
+  window.location.assign(url.href);
+}
+
+function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
+  const [typedSeed, setTypedSeed] = useState<string | null>(null);
+  const [view, setView] = useState<MenuView>("closed");
+  return (
+    <form id="drill_controls" onSubmit={(event) => { event.preventDefault(); setRaidParam("seed", typedSeed?.trim() || "", ""); }}>
+      <div id="settings_menu" hidden={view !== "settings"}>
+        <label>
+          Encounter{" "}
+          <select id="encounter" value={launch.id} onChange={(event) => startEncounter(event.target.value)}>
+            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
+        {launch.id === "guardian" && (
+          <label>
+            Enrage{" "}
+            <select id="enrage" value={String(launch.options.guardianEnragePercent)} onChange={(event) => setRaidParam("enrage", event.target.value, "33")}>
+              <option value="33">33%</option>
+              <option value="30">30%</option>
+            </select>
+          </label>
+        )}
+        {launch.id === "ocellus-p2" && (
+          <label>
+            Beam cap{" "}
+            <select id="p2beam" value={String(launch.options.p2BeamMax)} onChange={(event) => setRaidParam("p2beam", event.target.value, "27")}>
+              <option value="27">27</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+        )}
+        <label>
+          Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(launch.options.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
+        </label>
+        <label>
+          Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+      </div>
+      <button id="settings" type="button" aria-expanded={view !== "closed"} onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>⚙ Settings</button>
+      <button id="restart" type="submit">Restart</button>
+    </form>
+  );
+}
+
 export function ArchiveOcellusApp() {
-  const [{ trainer, drill, flags }] = useState(createTrainer);
+  const [session] = useState(createSession);
   const [loading, setLoading] = useState<TrainerLoadingState>();
+  const region = session.kind === "drill" ? session.drill.region : session.region;
 
   return (
-    <TrainerApp trainer={trainer} onLoadingStateChange={setLoading}>
+    <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
       <GameOverlay>
         <TrainerLoadingSplash state={loading} />
-        <GameChat region={drill.region} />
-        <DrillControls drill={drill} flags={flags} />
-        <RunResultPanel drill={drill} />
+        <GameChat region={region} />
+        {session.kind === "drill" ? (
+          <>
+            <DrillControls drill={session.drill} flags={session.flags} />
+            <RunResultPanel drill={session.drill} />
+          </>
+        ) : (
+          <RaidControls launch={session.launch} region={session.region} />
+        )}
         <footer id="credits">
           <p id="maker_credit">
             Made by {MAKER}{" "}

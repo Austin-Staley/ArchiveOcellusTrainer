@@ -62,6 +62,21 @@ function mechanicOf(beat: Beat): Mechanic | null {
   }
 }
 
+/**
+ * Phase 4, in the wiki's order, on the measured offsets. S is the inner-void onset.
+ * The loop is 60 ticks and repeats until the boss dies. His stats are the phase 3 stats.
+ *
+ * 1. Airborne half (`inner-void`): he rises, the 5×5 under him is void, Deflect Melee is up.
+ *    Void rifts spawn before every later rise, and not before the first.
+ * 2. Soul Sap: the lifeforce hit takes floor(current HP / 2) into that player's orb.
+ * 3. Void explosions: six per-player marks, each hitting on the next tick.
+ * 4. Landing: the landing pose starts, then the void under him clears.
+ * 5. Soul Split and the quadrant blast (`after-inner`). The pattern names the style:
+ *    blades melee, arrows ranged, pulsing circle magic.
+ * 6. Grounded half (`outer-void`): the rest of the quadrant is void, Deflect Range is up.
+ * 7. Soul Sap and the explosions run again on that half.
+ * 8. The void clears and the blast repeats (`after-outer`), then step 1 starts again.
+ */
 export function compileSchedule(seed: Seed, choices: ResolvedChoices): P4Schedule {
   const { leadIn, cycle: stages, overheads, lifeforce, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
   const hidden = leadIn.hiddenFor.value;

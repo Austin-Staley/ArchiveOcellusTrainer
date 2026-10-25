@@ -1,6 +1,6 @@
 # Archive Ocellus Trainer
 
-A free practice simulator for phase 4 of the Ocellus fight in The Fractured Archive.
+A free practice simulator for The Fractured Archive. Settings has an encounter menu for Bork, Ezekiel, the Archive Guardian, Moia, Xarth, the Dagon'hai trio, and Ocellus phases 1 to 3. With no encounter chosen, the page is the phase 4 fight.
 
 **Status: early development.** Mechanics come from the community wiki and release-day reports. Timings are unverified and will change.
 

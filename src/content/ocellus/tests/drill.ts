@@ -27,12 +27,16 @@ function besideOnSameFloor(home: At, insideSquare: boolean): At {
   return sides.find((side) => onPlatform(side) && !underBoss(side) && inNearSquare(side) === insideSquare) ?? home;
 }
 
-export async function clickTile(world: World, on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}): Promise<void> {
+function pressTile(world: World, on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}): void {
   const at = Viewport.viewport.projectTile(on, world);
   if (!at) throw new Error(`tile (${on.x}, ${on.y}) is not on the canvas`);
   const press = new MouseEvent("mousedown", { button: 0, ...modifiers });
   Object.defineProperties(press, { offsetX: { value: at.x }, offsetY: { value: at.y } });
   Viewport.viewport.canvas.dispatchEvent(press);
+}
+
+export async function clickTile(world: World, on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}): Promise<void> {
+  pressTile(world, on, modifiers);
   await new Promise((queued) => setTimeout(queued, Settings.inputDelay));
 }
 
@@ -148,6 +152,10 @@ export function startDrill(options: DrillOptions = {}) {
     },
     walkTo,
     click: (on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}) => clickTile(region.world, on, modifiers),
+    clickRightBeforeTick(on: At) {
+      pressTile(region.world, on);
+      region.world.tickWorld();
+    },
     pray,
     clickInventory(cacheItemId: number) {
       const item = player().inventory.find((slot) => slot?.cacheItemId === cacheItemId);

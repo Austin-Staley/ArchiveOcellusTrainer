@@ -73,6 +73,12 @@ WALKWAY_MIN_SHARE=1
 WALKWAY_RUN_END_TILE='{"x":11,"y":3}'
 WALKWAY_RUN_TILES='[{"x":7,"y":1},{"x":9,"y":1},{"x":11,"y":2}]'
 CONTROL_MODIFIER=2
+CORRECTION_FIRST_TILE='{"x":8,"y":3}'
+CORRECTION_LAST_TILE='{"x":3,"y":2}'
+CORRECTION_FIRST_MS=150
+CORRECTION_LATE_MS=500
+CORRECTION_ATTEMPTS=3
+CORRECTION_EXPECTED='{"orders":[{"x":8,"y":3},{"x":3,"y":2}],"tiles":[{"x":3,"y":2},{"x":3,"y":2},{"x":3,"y":2}]}'
 CONTROL_WALK_TILES='[{"x":6,"y":1},{"x":7,"y":1},{"x":8,"y":1},{"x":9,"y":1},{"x":10,"y":1},{"x":11,"y":2}]'
 BACK_WALL_START_TILE='{"x":10,"y":3}'
 BACK_WALL_END_TILE='{"x":7,"y":6}'
@@ -1023,6 +1029,48 @@ drive_control_walk() {
   ab --json errors | json data.errors >"$VERIFY_DIR/control-walk-page-errors.json" || { log "page error capture failed"; return 1; }
 }
 
+click_twice_in_one_tick() {
+  local from
+  from="$(probe "snapshot().tick")" || return 1
+  printf '[["wait","--fn","((t, s) => t > %d && s !== undefined && performance.now() - s >= %d)(window.__archiveOcellusProbe.snapshot().tick, window.__worldTickStarts[window.__archiveOcellusProbe.snapshot().tick])","--timeout","10000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"],["wait","--fn","((d) => window.__archiveOcellusProbe.snapshot().tick > d.tick || performance.now() - window.__worldTickStarts[d.tick] >= %d)(window.__correctionDowns[0])","--timeout","10000"],["mouse","move","%d","%d"],["mouse","down","left"],["mouse","up","left"]]' \
+    "$from" "$CORRECTION_FIRST_MS" $1 "$CORRECTION_LATE_MS" $2 | ab batch --bail >/dev/null
+}
+
+drive_click_correction() {
+  local first last attempt downs
+  for attempt in $(seq 1 "$CORRECTION_ATTEMPTS"); do
+    ab open "${URL}${WALKWAY_QUERY}" >/dev/null && wait_until_ticking || return 1
+    record_tick_starts
+    tile_pixel correction "$CORRECTION_FIRST_TILE" now || return 1
+    first="$CLICK_X $CLICK_Y"
+    tile_pixel correction "$CORRECTION_LAST_TILE" now || return 1
+    last="$CLICK_X $CLICK_Y"
+    ab eval '(() => {
+      const downs = window.__correctionDowns = [];
+      document.querySelector("#world").addEventListener("mousedown", () => {
+        const tick = window.__archiveOcellusProbe.snapshot().tick;
+        downs.push({ tick, intoTickMs: Math.round(performance.now() - window.__worldTickStarts[tick]) });
+      }, true);
+    })()' >/dev/null || return 1
+    click_twice_in_one_tick "$first" "$last" || { log "the two correction clicks were not sent"; return 1; }
+    downs="$(ab --json eval "window.__correctionDowns" | json data.result)" || return 1
+    [[ "$(json '0.tick' <<<"$downs")" == "$(json '1.tick' <<<"$downs")" ]] && break
+    log "correction attempt ${attempt}: the second click fell after the tick boundary (${downs}); reloading"
+  done
+  ab wait --fn "window.__archiveOcellusProbe.snapshot().tick >= window.__correctionDowns[0].tick + 4" --timeout 15000 >/dev/null || return 1
+  ab --json eval '(() => {
+    const rows = window.__archiveOcellusProbe.log().rows, ordered = rows.filter((row) => row.inputs.some((input) => input.kind === "walk-ordered"));
+    const at = rows.indexOf(ordered[0]);
+    return {
+      downs: window.__correctionDowns,
+      orderRows: ordered.map((row) => ({ worldTick: row.worldTick, orders: row.inputs.filter((input) => input.kind === "walk-ordered").map((input) => input.destination) })),
+      tiles: at < 0 ? [] : rows.slice(at, at + 3).map((row) => row.playerAtPostTick.tile),
+    };
+  })()' | json data.result >"$VERIFY_DIR/click-correction.json" || return 1
+  ab screenshot "$VERIFY_DIR/click-correction.png" >/dev/null || { log "click correction screenshot failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/click-correction-page-errors.json" || { log "page error capture failed"; return 1; }
+}
+
 top_down_view() {
   local step
   ab mouse move "$CX" $((CY - BACK_WALL_TOP_DOWN_DRAG_PX / 2)) >/dev/null && ab mouse down middle >/dev/null || return 1
@@ -1876,7 +1924,7 @@ drive() {
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \
     --timeout 90000 >/dev/null || { log "trainer never started ticking"; return 1; }
-  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_explosion_views && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_back_wall && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
+  drive_walk && drive_edge && drive_cycle && drive_focus && drive_void_floor && drive_lifeforce_orb && drive_orb_late_and_entry && drive_explosions && drive_dodge_speedup && drive_explosion_views && drive_void_shot && drive_transition_attack && drive_loadouts && drive_defence_floor && drive_supplies && drive_keybinds && drive_overheads_rifts && drive_seed && drive_floor_holes && drive_orb_off_holes && drive_walkway && drive_control_walk && drive_click_correction && drive_back_wall && drive_corner && drive_boss_pathing && drive_invincible && drive_cues || return 1
 
   local capture
   for capture in hidden.json hidden.png before.json before.png after.json after.png edge-click.json edge-arrived.json edge.json edge.png boss.png boss-bar.json cycle-ring-click.json cycle-snapshot.json cycle.json console.log page-errors.json focus.json focus-audio.json focus.png focus-console.log focus-page-errors.json \
@@ -1903,6 +1951,7 @@ drive() {
     tile-clicks.jsonl walkway-click.json walkway-arrived.json walkway.json walkway-log.json walkway.png walkway-console.log walkway-page-errors.json \
     walkway-run-end.json walkway-run-end-log.json walkway-run-end.png walkway-run-end-page-errors.json \
     control-walk.png control-walk-menu.json control-walk-log.json control-walk-right-click.json control-walk-console.log control-walk-page-errors.json \
+    click-correction.json click-correction.png click-correction-page-errors.json \
     back-wall-log.json back-wall-top-down.png back-wall-flood.png back-wall-console.log back-wall-page-errors.json \
     corner-hole.json corner-hole-log.json corner-hole.png corner-nub.json corner-nub-log.json corner-console.log corner-page-errors.json corner-view.png corner-view-page-errors.json \
     pathing-around.png pathing.json pathing-console.log pathing-page-errors.json pathing-reroute.json pathing-reroute-console.log pathing-reroute-page-errors.json pathing-control.json pathing-control-console.log pathing-control-page-errors.json pathing-out.png pathing-out.json pathing-out-console.log pathing-out-page-errors.json \
@@ -1926,7 +1975,7 @@ drive() {
       riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, riftMeleeHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
       orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction, backWallStart, backWallEnd, backWallToward, backWallBack,
-      explosion2dGlowBox, explosion2dExpected, explosionRunEndExpected, explosionGlowMaxShare, explosionRunEndFrames] = process.argv.slice(1);
+      explosion2dGlowBox, explosion2dExpected, explosionRunEndExpected, explosionGlowMaxShare, explosionRunEndFrames, correctionExpected] = process.argv.slice(1);
     const fs = require("fs");
     const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
     const tileClicks = fs.readFileSync(`${dir}/tile-clicks.jsonl`, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -1947,6 +1996,7 @@ drive() {
       ["walkway-arrived.json", "walkway.json", "walkway-log.json", "walkway-run-end.json", "walkway-run-end-log.json", "corner-hole.json", "corner-hole-log.json", "corner-nub.json", "corner-nub-log.json"].map(read);
     const [seedErrors, walkwayErrors, walkwayRunEndErrors, cornerErrors, cornerViewErrors] = ["seed-page-errors.json", "walkway-page-errors.json", "walkway-run-end-page-errors.json", "corner-page-errors.json", "corner-view-page-errors.json"].map(read);
     const [controlWalkMenu, controlWalkLog, controlWalkRightClick, controlWalkErrors] = ["control-walk-menu.json", "control-walk-log.json", "control-walk-right-click.json", "control-walk-page-errors.json"].map(read);
+    const [correction, correctionErrors] = ["click-correction.json", "click-correction-page-errors.json"].map(read);
     const [backWallLog, backWallErrors] = ["back-wall-log.json", "back-wall-page-errors.json"].map(read);
     const [holesLog, holesErrors] = ["holes.json", "holes-page-errors.json"].map(read);
     const [pathingLog, pathingErrors] = ["pathing.json", "pathing-page-errors.json"].map(read);
@@ -2506,6 +2556,9 @@ drive() {
       plainClickRunsTwoTilesATick: sameJson(observed.walkway.paces, JSON.stringify(["run-setting"])) && sameJson(observed.walkway.tiles, walkwayRunTiles),
       controlClickWalksOneTileATick: sameJson(observed.controlWalk.orders, `[${walkwayOrder}]`) && sameJson(observed.controlWalk.paces, JSON.stringify(["walk"])) &&
         sameJson(observed.controlWalk.tiles, controlWalkTiles),
+      lastClickInATickWins: correction.downs.length === 2 && correction.downs[0].tick === correction.downs[1].tick &&
+        sameJson(correction.orderRows, JSON.stringify([{ worldTick: correction.downs[0].tick + 1, orders: JSON.parse(correctionExpected).orders }])) &&
+        sameJson(correction.tiles, JSON.stringify(JSON.parse(correctionExpected).tiles)),
       controlClickOpensNoMenu: observed.controlWalk.menu === null && (!observed.controlWalk.platform.startsWith("Mac") || observed.controlWalk.contextMenus > 0),
       rightClickStillOpensMenu: Array.isArray(observed.controlWalk.rightClickMenu) && observed.controlWalk.rightClickMenu.includes("Walk Here"),
       backWallWalksDiagonally: sameJson(observed.backWall.orders, `[${backWallStart},${backWallEnd},${backWallStart}]`) &&
@@ -2548,7 +2601,7 @@ drive() {
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
       projectedClicksOrderTheirTiles: tileClicks.length === Number(projectedTileClicks) && tileClicks.every(({ tile, ordered }) => same(ordered, tile)),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, explosion2dErrors, runEndPages["2d"].errors, runEndPages["3d"].errors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, meleeRiftErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, explosion2dErrors, runEndPages["2d"].errors, runEndPages["3d"].errors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, meleeRiftErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, correctionErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -2573,7 +2626,7 @@ drive() {
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
     "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" \
     "$BACK_WALL_START_TILE" "$BACK_WALL_END_TILE" "$BACK_WALL_TOWARD_TILES" "$BACK_WALL_BACK_TILES" \
-    "$EXPLOSION_2D_GLOW_BOX" "$EXPLOSION_2D_EXPECTED" "$EXPLOSION_RUN_END_EXPECTED" "$EXPLOSION_GLOW_MAX_SHARE" "$EXPLOSION_RUN_END_FRAMES" >"$VERIFY_DIR/observed.json"
+    "$EXPLOSION_2D_GLOW_BOX" "$EXPLOSION_2D_EXPECTED" "$EXPLOSION_RUN_END_EXPECTED" "$EXPLOSION_GLOW_MAX_SHARE" "$EXPLOSION_RUN_END_FRAMES" "$CORRECTION_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
   return $verdict

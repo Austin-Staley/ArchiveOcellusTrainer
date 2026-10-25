@@ -263,7 +263,7 @@ const BOSS: BossRecipe = {
   npcId: selected(16677, "inferred", "unscaled", "tfa_ocellus_p3, the only combat form after phase 2; live level 1601 differs from cache 1197 (C7)", BOSS_PAGE, cache("npc 16677")),
   size: selected(3, "spec-confirmed", "unscaled", "3x3 marker in both clips", BOSS_INFOBOX, cache("npc 16677 size"), vod("V1", "G29"), vod("V2", "k44")),
   combatLevel: selected(1601, "footage-repeated", "unscaled", "hover text Attack Ocellus (level-1601)", BOSS_INFOBOX, vod("V1", "frame 3317"), vod("V2", "k44")),
-  stats: selected({ attack: 325, strength: 250, defence: 250, range: 300, magic: 300 }, "spec-confirmed", "unscaled", "the wiki's phase 3 infobox, edited after the 21 October hotfix, lists the cache's levels", BOSS_PAGE, cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
+  stats: selected({ attack: 325, strength: 250, defence: 250, range: 300, magic: 300 }, "spec-confirmed", "unscaled", "the wiki's phase 3 infobox, edited after the 21 October hotfix, lists the cache's levels; the phase 4 text gives him these same stats", BOSS_PAGE, cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
   defenceBonuses: selected({ stab: 150, slash: 100, crush: 30, magic: 200 }, "spec-confirmed", "unscaled", "cache params 5 to 8 match the wiki's phase 3 infobox", BOSS_PAGE, cache("npc 16677 params 5, 6, 7, 8")),
   rangedDefence: selected({ light: 250, standard: 250, heavy: 250 }, "spec-single", "unscaled", "the wiki's phase 3 infobox; the cache decode has no ranged defence param", BOSS_PAGE),
   lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred)", BOSS_PAGE, DEFENCE_REDUCTION_TABLE, HOTFIX_NEWS),
@@ -271,7 +271,7 @@ const BOSS: BossRecipe = {
     { "lead-in": "walkable", "inner-void": "walkable", "after-inner": "walkable", "outer-void": "blocks-movement", "after-outer": "walkable" },
     "community-tested",
     "unscaled",
-    "community feedback 2026-10-23, unconfirmed: in the outer void, the melee phase, the boss's 3x3 blocks the player, who paths around his edge instead of under him; no report covers the other stages, so they keep the trainer's walkable footprint",
+    "community feedback 2026-10-23, unconfirmed: in the grounded half, while Deflect Range is up, the boss's 3x3 blocks the player, who paths around his edge instead of under him; no report covers the other stages, so they keep the trainer's walkable footprint",
     NO_WIKI_P4, owner("a redditor's comment relayed by the owner: you can run under the boss during the melee phase whereas in game it will path you around the edge of the boss", "2026-10-23"),
   ),
 };
@@ -330,8 +330,8 @@ const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
 const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
 
 const OVERHEADS: OverheadRecipe = {
-  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it", STRATEGIES, ...DEFLECT_MELEE_SEEN),
-  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed", STRATEGIES, ...DEFLECT_RANGE_SEEN),
+  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "the airborne half. Deflect Melee is up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it. The wiki's phase 4 text names Deflect Melee for this half, which closes the capture's open question of which window is melee", STRATEGIES, ...DEFLECT_MELEE_SEEN),
+  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "the grounded half. Deflect Range is up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed. The wiki's phase 4 text names Deflect Range for this half", STRATEGIES, ...DEFLECT_RANGE_SEEN),
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", STRATEGIES_P4, vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
   offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", NO_WIKI_TICKS, vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
@@ -339,8 +339,8 @@ const OVERHEADS: OverheadRecipe = {
 export type DeflectRule = Readonly<{ kind: "block"; reflectPercent: number }> | Readonly<{ kind: "none" }>;
 
 const DEFLECTS: Readonly<Record<BossOverhead, Selected<Style | null>>> = {
-  "deflect-melee": selected("melee", "inferred", "unscaled", "named for the style it turns away; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
-  "deflect-range": selected("ranged", "inferred", "unscaled", "named for the style it turns away; no capture shows a ranged hit landing during it (Q8)", STRATEGIES, vod("V2", "k80, k90")),
+  "deflect-melee": selected("melee", "inferred", "unscaled", "the airborne half's curse, named for the style it turns away; the wiki's phase 4 text says he uses Deflect Melee while risen; no capture shows a melee hit landing during it (Q8)", STRATEGIES, vod("V2", "k60, k71")),
+  "deflect-range": selected("ranged", "inferred", "unscaled", "the grounded half's curse, named for the style it turns away; the wiki's phase 4 text says he uses Deflect Range while the quadrant is flooded; no capture shows a ranged hit landing during it (Q8)", STRATEGIES, vod("V2", "k80, k90")),
   "soul-split": selected(null, "inferred", "unscaled", "a healing prayer that turns no style away", STRATEGIES, vod("V2", "k73")),
 };
 
@@ -381,7 +381,7 @@ const BOSS_HEALS: BossHealRecipe = {
 };
 
 const RIFTS: RiftRecipe = {
-  firstCycle: selected(cycle(2), "footage-repeated", "team-5", "rifts before every inner void after the first (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
+  firstCycle: selected(cycle(2), "footage-repeated", "team-5", "rifts before every airborne half after the first; the wiki says he spawns them except at the very start of the phase (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
   spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", NO_WIKI_TICKS, vod("V1", "G152"), vod("V2", "k107, k167, k227")),
   chargeAfterSpawn: selected(
     span(23),
@@ -618,7 +618,7 @@ type ExplosionSeriesRecipe = Readonly<{
   spotAnim: Selected<number>;
   shards: Selected<string>;
   look: Selected<ExplosionLook>;
-  dodge: Selected<Readonly<{ radius: number; attackDelayCut: TickSpan }>>;
+  dodge: Selected<Readonly<{ radius: number }>>;
 }>;
 type Between = readonly [from: number, to: number];
 type ExplosionLook = Readonly<{
@@ -669,14 +669,13 @@ const EXPLOSION: ExplosionSeriesRecipe = {
     owner("friends' screenshot of the explosion mark", "2026-10-22"),
   ),
   dodge: selected(
-    { radius: 1, attackDelayCut: span(3) },
+    { radius: 1 },
     "community-tested",
     "unscaled",
-    "community-tested, unconfirmed: stepping off the marked tile on the mark tick to a tile within 1 of it cuts the player's attack delay by 3 at the impact, never below 0, so a 5-tick Scythe or Twisted bow attacks every 2 ticks while each pulse is dodged and a 6-tick weapon every 3; a 2-tile run avoids the hit without the cut. The wiki tester's flat-3 theory, from an Elder maul that did not 2-tick; halving was the other theory",
+    "stepping off the marked tile on the mark tick to a tile within 1 of it is the perfect dodge; a 2-tile run avoids the hit and does not shorten the cooldown. How far the cooldown falls is the perfectDodge choice: halved, rounded down, or minus 3. Both leave a 5-tick weapon on 2 and a 6-tick weapon on 3, so this radius is unchanged",
     wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379685),
-    wiki("https://oldschool.runescape.wiki/w/Ocellus", 15379561),
-    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379780),
-    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379373),
+    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381070),
+    wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381068),
     owner("Scythe and Twisted bow on 2-tick gaps during the explosion series in the VOD", "2026-10-22"),
   ),
 };
@@ -918,6 +917,24 @@ export const OCELLUS_P4 = {
       rifts: drill("rifts"),
       "floor-holes": drill("floor-holes"),
     }),
+    perfectDodge: choice("halved", {
+      halved: selected<PerfectDodgeRule>(
+        "halved",
+        "community-tested",
+        "unscaled",
+        "the cooldown becomes half the weapon speed, rounded down: a 4-tick weapon attacks every 2 ticks, a 5-tick weapon every 2 and a 6-tick weapon every 3. The trainer shortens the remaining cooldown by the difference, which is 3 ticks for a 5-tick or 6-tick weapon, the cut the explosion drills measured. Strategies rev 15381070; the other revision is the minus-3 choice",
+        wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381070),
+        owner("Scythe and Twisted bow on 2-tick gaps during the explosion series in the VOD", "2026-10-22"),
+      ),
+      "minus-3": selected<PerfectDodgeRule>(
+        "minus-3",
+        "community-tested",
+        "unscaled",
+        "the cooldown loses 3 ticks, and never goes below 0: a 4-tick weapon attacks every 1 tick, a 5-tick weapon every 2 and a 6-tick weapon every 3. This is the wiki revert and the W4 reading. It matches halved on 5-tick and 6-tick weapons and is the cut the explosion drills measured for those speeds",
+        wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381068),
+        owner("Scythe and Twisted bow on 2-tick gaps during the explosion series in the VOD", "2026-10-22"),
+      ),
+    }),
     drillStart: choice("at-mechanic", {
       "at-mechanic": selected<DrillStart>({ kind: "before-first-beat", lead: span(5) }, "assumption", "unscaled", "a drill starts 5 ticks before its first focused beat, or at tick 0 when it has none, as floor holes do; the full fight always starts at 0", NO_WIKI_PRACTICE, owner("jumping straight to a mechanic", "2026-10-22")),
       "cycle-start": selected<DrillStart>({ kind: "cycle-start" }, "assumption", "unscaled", "a drill starts at P4 tick 0 with the full fight", NO_WIKI_PRACTICE, PRACTICE),
@@ -1092,8 +1109,30 @@ function resolveChoices(lookup: (name: ChoiceName) => string | undefined, reject
     orbPickupRadius: pick("orbPickupRadius"),
     outerOrbTile: pick("outerOrbTile"),
     focus: pick("focus"),
+    perfectDodge: pick("perfectDodge"),
     drillStart: pick("drillStart"),
   };
+}
+
+/** The cooldown a perfect dodge leaves. Disputed: halved (default) or minus 3. They meet at 5→2 and 6→3 and split at 4→2 or 4→1. */
+export type PerfectDodgeRule = "halved" | "minus-3";
+
+export function rewardedCooldown(rule: PerfectDodgeRule, weaponSpeed: number): number {
+  switch (rule) {
+    case "halved":
+      return Math.floor(weaponSpeed / 2);
+    case "minus-3":
+      return Math.max(0, weaponSpeed - 3);
+    default: {
+      const unhandled: never = rule;
+      return unhandled;
+    }
+  }
+}
+
+/** Ticks removed from the remaining cooldown so a full-speed weapon lands on `rewardedCooldown`. */
+export function dodgeCutTicks(rule: PerfectDodgeRule, weaponSpeed: number): TickSpan {
+  return span(Math.max(0, weaponSpeed - rewardedCooldown(rule, weaponSpeed)));
 }
 
 function isChoiceName(name: string): name is ChoiceName {

@@ -159,6 +159,10 @@ export class Ocellus extends Mob {
     return OCELLUS_P4.boss.combatLevel.value;
   }
 
+  private weaponSpeed(): number {
+    return this.target.equipment.weapon?.attackSpeed ?? 4;
+  }
+
   override get size(): number {
     return OCELLUS_P4.boss.size.value;
   }
@@ -306,7 +310,7 @@ export class Ocellus extends Mob {
       case "explosion-mark":
       case "explosion-impact":
       case "explosions-occurring":
-        return this.stepMarks(explode(this.config, this.marks, beat, at, player));
+        return this.stepMarks(explode(this.config, this.marks, beat, at, { ...player, attackSpeed: this.weaponSpeed() }));
       case "special-tell":
         return logs({ kind: "special-told", ...specialAttack(at, beat.ordinal, beat.variant) });
       case "special-hit":

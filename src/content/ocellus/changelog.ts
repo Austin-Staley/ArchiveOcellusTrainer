@@ -2,10 +2,10 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
-    version: "2026.10.25",
+    version: "2026.10.25.1",
     notes: [
-      "The bottom-left corner credits the makers, with links to the trainer's GitHub page and to @ShadowJdas on X.",
-      "Settings and Restart sit a little higher to make room for the credit.",
+      "Melee attacks always hit a void rift for your max hit, as ranged attacks already did.",
+      "A special attack, such as Ralos's Division, still rolls its damage against a void rift.",
     ],
   },
   {

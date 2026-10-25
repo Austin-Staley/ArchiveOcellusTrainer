@@ -1,3 +1,4 @@
+import { BladeOfSaeldor } from "osrs-sdk";
 import type { Fill } from "../../../../test/paintedTiles";
 import { paintedFills } from "../../../../test/paintedTiles";
 import type { DrillSelection } from "../js/OcellusTimings";
@@ -12,8 +13,18 @@ const FIRST_ATTACK_ON_SEED_100 = {
 
 type Drill = ReturnType<typeof startDrill>;
 
+const NORTH_EAST_RIFT = { x: 10, y: 2 } as const;
+
+async function attackNorthEastRift(drill: Drill, special: boolean) {
+  drill.tickTo(68);
+  drill.player().useSpecialAttack = special;
+  await drill.click(NORTH_EAST_RIFT);
+  drill.tickTo(79);
+  return [drill.events("rift-hit").map((e) => [e.at, e.damage]), drill.events("rift-destroyed").map((e) => e.at)];
+}
+
 function northEastRift(drill: Drill) {
-  const rift = drill.region.mobs.find((mob) => mob.location.x === 10 && mob.location.y === 2);
+  const rift = drill.region.mobs.find((mob) => mob.location.x === NORTH_EAST_RIFT.x && mob.location.y === NORTH_EAST_RIFT.y);
   if (!rift) throw new Error("no rift on (10, 2)");
   return rift;
 }
@@ -188,15 +199,24 @@ describe("U6 boss overheads, heals and rifts", () => {
     { attack: "the ranged setup's Ralos", seed: 2, setup: "ranged", wield: 28922, special: false, landed: [[72, 18], [72, 18], [78, 8], [78, 8]], destroyedAt: [79] },
     { attack: "the melee setup's Ralos", seed: 2, setup: "melee", wield: 28922, special: false, landed: [[72, 15], [72, 15], [78, 14], [78, 14]], destroyedAt: [79] },
     { attack: "a Division special, which rolls", seed: 3, setup: "ranged", wield: 28922, special: true, landed: [[72, 15], [72, 5], [78, 18], [78, 18]], destroyedAt: [79] },
-    { attack: "a scythe swing, which rolls", seed: 4, setup: "melee", wield: null, special: false, landed: [[71, 4], [76, 25]], destroyedAt: [] },
-  ] as const)("a standard ranged attack always lands its max hit on a Void Rift: $attack", ({ seed, setup, wield, special, landed, destroyedAt }) => {
+  ] as const)("a standard ranged attack always lands its max hit on a Void Rift: $attack", async ({ seed, setup, wield, special, landed, destroyedAt }) => {
     const drill = startDrill({ seed, selection: { focus: "rifts", setup } });
-    drill.tickTo(68);
     if (wield !== null) drill.clickInventory(wield);
-    drill.player().useSpecialAttack = special;
-    drill.player().setAggro(northEastRift(drill));
-    drill.tickTo(79);
-    expect([drill.events("rift-hit").map((e) => [e.at, e.damage]), drill.events("rift-destroyed").map((e) => e.at)]).toEqual([landed, destroyedAt]);
+    expect(await attackNorthEastRift(drill, special)).toEqual([landed, destroyedAt]);
+    drill.dispose();
+  });
+
+  test.each([
+    { attack: "the melee setup's scythe, one hit a swing on the size-1 rift", carried: null, landed: [[71, 35], [76, 9]], destroyedAt: [77] },
+    { attack: "a Blade of saeldor", carried: () => new BladeOfSaeldor(), landed: [[71, 38], [75, 6]], destroyedAt: [76] },
+  ] as const)("a standard melee attack always lands its max hit on a Void Rift: $attack", async ({ carried, landed, destroyedAt }) => {
+    const drill = startDrill({ seed: 4, selection: { focus: "rifts", setup: "melee" } });
+    if (carried !== null) {
+      const weapon = carried();
+      drill.player().inventory[0] = weapon;
+      drill.clickInventory(weapon.cacheItemId);
+    }
+    expect(await attackNorthEastRift(drill, false)).toEqual([landed, destroyedAt]);
     drill.dispose();
   });
 

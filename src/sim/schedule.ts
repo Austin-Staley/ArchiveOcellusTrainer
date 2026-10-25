@@ -21,7 +21,7 @@ export type Stage<S extends string, P, B> = Readonly<{
 
 export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: S }>;
 
-type IsWideStageName<S extends string> = {} extends Record<S, unknown> ? true : false;
+type IsWideStageName<S extends string> = true extends (S extends unknown ? ({} extends Record<S, unknown> ? true : false) : never) ? true : false;
 type StageName<S extends string> = IsWideStageName<S> extends true ? Readonly<{ "stage names must be string literals": S }> : NoInfer<S>;
 
 export type Script<S extends string, P, B> = Readonly<{

@@ -173,7 +173,7 @@ describe("the stage contract", () => {
     return Object.fromEntries(Object.keys(probes).map((name) => [name, errorsIn(resolve(__dirname, `stage-contract-${name}.ts`))]));
   };
 
-  test("stage names come from the stage table's keys alone, so no other position can widen them to string", () => {
+  test("stage names come from the stage table's keys alone and must each be a literal, so no position can widen them to string", () => {
     expect(
       compileErrors({
         valid: [
@@ -216,6 +216,17 @@ describe("the stage contract", () => {
         "explicit-string-type-argument": [
           `export const schedule = new Schedule<string, string, string, string>({ first: "unknown", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [] }, ${rest});`,
         ],
+        "empty-table": [`export const schedule = new Schedule({ first: "fight", stages: {}, breakpoints: [] }, ${rest});`],
+        "table-typed-literal-or-open-string": [
+          'type Names = "fight" | (string & {});',
+          'const stages: Record<Names, Stage<Names, string, string>> = { fight: { slots: [slot], breakable: true, then: () => "unknown" } };',
+          `export const schedule = new Schedule({ first: "fight", stages, breakpoints: [] }, ${rest});`,
+        ],
+        "table-typed-literal-or-pattern": [
+          "type Names = \"fight\" | `stage-${string}`;",
+          'const stages: Record<Names, Stage<Names, string, string>> = { fight: { slots: [slot], breakable: true, then: () => "fight" } };',
+          `export const schedule = new Schedule({ first: "fight", stages, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "stage-unknown" }] }, ${rest});`,
+        ],
       }),
     ).toEqual({
       valid: [],
@@ -230,6 +241,9 @@ describe("the stage contract", () => {
       ],
       "table-typed-record-string": ["5: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": string; }>'."],
       "explicit-string-type-argument": ["4: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": string; }>'."],
+      "empty-table": ["4: Type 'string' is not assignable to type 'never'."],
+      "table-typed-literal-or-open-string": ["6: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": Names; }>'."],
+      "table-typed-literal-or-pattern": ["6: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": Names; }>'."],
     });
   });
 

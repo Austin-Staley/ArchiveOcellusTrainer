@@ -1,4 +1,4 @@
-import { CacheRenderModel, CacheRenderReferences, Mob, RangedWeapon } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderReferences, MeleeWeapon, Mob, RangedWeapon } from "osrs-sdk";
 import type { IncomingAttackRoll, IncomingAttackRollModifiers, Model, Region, UnitBonuses } from "osrs-sdk";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { TickSpan, Tile } from "../../../../sim/brands";
@@ -71,8 +71,8 @@ export class VoidRift extends Mob {
   }
 
   override incomingAttackRollModifiers(attack: IncomingAttackRoll): IncomingAttackRollModifiers {
-    const standardRanged = attack.weapon instanceof RangedWeapon && attack.bonuses.isSpecialAttack !== true;
-    return standardRanged ? { ...RIFT.standardRangedRoll.value } : super.incomingAttackRollModifiers(attack);
+    const rangedOrMelee = attack.weapon instanceof RangedWeapon || attack.weapon instanceof MeleeWeapon;
+    return rangedOrMelee && attack.bonuses.isSpecialAttack !== true ? { ...RIFT.standardRangedAndMeleeRoll.value } : super.incomingAttackRollModifiers(attack);
   }
 
   override movementStep(): void {}

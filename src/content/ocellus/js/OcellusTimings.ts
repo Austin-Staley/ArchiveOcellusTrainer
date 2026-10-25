@@ -16,7 +16,7 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
-type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23";
+type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23" | "2026-10-24";
 
 type Source =
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
@@ -154,7 +154,7 @@ type RiftRecipe = Readonly<{
   defenceBonuses: Selected<Readonly<{ stab: number; slash: number; crush: number; magic: number; range: number }>>;
   offsetsFromBoss: Selected<readonly [RiftOffset, ...RiftOffset[]]>;
   burstDamage: Selected<DamageRange>;
-  standardRangedRoll: Selected<Readonly<{ guaranteedHit: boolean; maxDamage: boolean }>>;
+  standardRangedAndMeleeRoll: Selected<Readonly<{ guaranteedHit: boolean; maxDamage: boolean }>>;
   killChat: Selected<string>;
   poses: Readonly<Record<RiftPose, Selected<number>>>;
   burstFlare: Selected<number>;
@@ -412,13 +412,14 @@ const RIFTS: RiftRecipe = {
     vod("V2", "k167-k173"),
   ),
   burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared, with a rift still standing; taken as the burst's damage, though the burst now lands 23 ticks after spawn (inferred)", noWiki("the wiki says an unkilled rift damages all players but gives no amount (Strategies rev 15381030)"), vod("V2", "k118, k178")),
-  standardRangedRoll: selected(
+  standardRangedAndMeleeRoll: selected(
     { guaranteedHit: true, maxDamage: true },
-    "spec-single",
+    "community-tested",
     "unscaled",
-    "the wiki: \"Ocellus will spawn void crystals that the player will always max hit with standard range attacks\"; the owner saw them almost always one-shot; standard read as every ranged attack but a special attack, and melee, magic and special attacks roll as on any target (inferred)",
+    "the wiki: \"Ocellus will spawn void crystals that the player will always max hit with standard range attacks\"; the owner saw them almost always one-shot; a player who played the trainer on stream said melee attacks also always max-hit them in game; standard read as every ranged or melee attack but a special attack, and magic and special attacks roll as on any target (inferred)",
     BOSS_PAGE,
     owner("rifts almost always one-shot", "2026-10-22"),
+    owner("Gnomonkey, playing the trainer on stream: melee attacks also always max-hit void rifts", "2026-10-24"),
   ),
   killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", NO_WIKI_P4, vod("V1", "3:55:21.98"), vod("V2", "k116")),
   poses: {

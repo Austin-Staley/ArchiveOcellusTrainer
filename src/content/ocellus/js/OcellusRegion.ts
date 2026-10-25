@@ -1,8 +1,8 @@
 import { InvisibleMovementBlocker, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
-import type { Item, Player } from "osrs-sdk";
+import type { Player } from "osrs-sdk";
 import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
-import { dress } from "./OcellusLoadout";
+import { dress, loadoutSnapshot } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { SoundId, Tile } from "../../../sim/brands";
 import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, VoidKind } from "./P4Types";
@@ -13,11 +13,6 @@ import { BossFootprint, Ocellus } from "./mobs/Ocellus";
 import { BRAZIERS, CURB, PLATFORM, voidUnder } from "./p4/floor";
 
 const GRID = PLATFORM.extent();
-
-function itemId(item: Item | null | undefined): number | null {
-  const id = item?.cacheItemId;
-  return typeof id === "number" ? id : null;
-}
 
 type Views = Readonly<{
   field: VoidField;
@@ -183,9 +178,14 @@ export class OcellusRegion extends Region {
   }
 
   initialiseRegion(): { player: Player } {
-    const player: OcellusPlayer = new OcellusPlayer(this, { ...OCELLUS_P4.geometry.playerSpawn.value }, () => ocellus.binding);
+    const player: OcellusPlayer = new OcellusPlayer(
+      this,
+      { ...OCELLUS_P4.geometry.playerSpawn.value },
+      () => ocellus.binding,
+      (target) => target instanceof Ocellus && target.outOfMeleeReach(),
+    );
     const ocellus: Ocellus = new Ocellus(this, this.config, player, () => this.invincible);
-    dress(player, this.config.choices.setup);
+    dress(player, this.config.choices.setup.option.value);
     Object.values(sounds).forEach((sound) => SoundCache.preload(cacheSound(sound.value)));
     const views: Views = {
       field: new VoidField(this),
@@ -234,27 +234,10 @@ export class OcellusRegion extends Region {
   snapshot(): FightSnapshot | null {
     if (this.mounted.kind === "unmounted") return null;
     const { ocellus, player } = this.mounted;
-    const { weapon, offhand, helmet, chest, legs, gloves, cape, necklace, feet, ring, ammo } = player.equipment;
     return {
       run: ocellus.runState(),
       boss: { npcId: OCELLUS_P4.boss.npcId.value, hp: ocellus.currentStats.hitpoint, maxHp: ocellus.stats.hitpoint, visible: ocellus.visible(), defence: ocellus.currentStats.defence },
-      player: {
-        equipped: {
-          weapon: itemId(weapon),
-          offhand: itemId(offhand),
-          helmet: itemId(helmet),
-          chest: itemId(chest),
-          legs: itemId(legs),
-          gloves: itemId(gloves),
-          cape: itemId(cape),
-          necklace: itemId(necklace),
-          feet: itemId(feet),
-          ring: itemId(ring),
-          ammo: itemId(ammo),
-        },
-        inventory: player.inventory.map(itemId),
-        specialEnergy: player.currentStats.specialAttack,
-      },
+      player: loadoutSnapshot(player),
     };
   }
 

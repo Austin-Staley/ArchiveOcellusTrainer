@@ -6,7 +6,7 @@ import type { Basis, Citations, Evidence, WikiRef } from "../../../sim/provenanc
 import { noWiki, wiki } from "../../../sim/provenance";
 import type { DrillStart, Focus } from "../../../sim/schedule";
 import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, TransitionKind, VoidKind } from "./P4Types";
-import { roll } from "./p4/roll";
+import { roll } from "./roll";
 
 type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5";
 

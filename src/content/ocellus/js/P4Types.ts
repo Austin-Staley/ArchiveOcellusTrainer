@@ -131,7 +131,7 @@ export type RunState =
   | Readonly<{ kind: "ended"; at: Tick; reason: RunEnd }>;
 
 type EquipmentSlot = GearSlot | "offhand";
-type LoadoutSnapshot = Readonly<{
+export type LoadoutSnapshot = Readonly<{
   equipped: Readonly<Record<EquipmentSlot, number | null>>;
   inventory: readonly (number | null)[];
   specialEnergy: number;

@@ -1,8 +1,9 @@
 import { CacheRenderModel, CacheRenderReferences, CollisionType, InvisibleMovementBlocker, Mob } from "osrs-sdk";
-import type { Model, Projectile, Region, UnitBonuses, UnitStats } from "osrs-sdk";
+import type { Model, Projectile, Region, UnitBonuses } from "osrs-sdk";
 import type { DamageRange, DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
+import { withDefenceFloor } from "../bossStats";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { IncomingStyle, Style } from "../../../../sim/combat";
@@ -36,7 +37,7 @@ import { damageReduction, explode, explosionHit, NO_MARKS } from "../p4/explosio
 import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
 import type { Orbs, OrbStep } from "../p4/orb";
 import { drain, expireOrb, forgiveOrbDebt, formOrb, matureOrb, moveOver, NO_ORBS, releaseUnclaimedOuterOrb, returnDueOrbs } from "../p4/orb";
-import { rollInt } from "../p4/roll";
+import { rollInt } from "../roll";
 import { compileSchedule } from "../p4/schedule";
 import { VoidRift } from "./VoidRift";
 
@@ -44,7 +45,7 @@ type BossStep = Readonly<{ player: PlayerObservation; bossHp: number; rifts: rea
 
 type P4Run = Readonly<{ input: InputObservation; event: FightEvent; cause: PlayerHit; snapshot: BossStep; row: TickRow; end: RunEnd }>;
 
-export type OcellusBinding = EncounterBinding<P4Run>;
+type OcellusBinding = EncounterBinding<P4Run>;
 
 type Output = Logged<FightEvent> | HitRequest<PlayerHit>;
 type TurnOutput = Output | AttackDelayCut;
@@ -66,19 +67,6 @@ function sdkRangedDefence(): number {
 }
 
 const DEFENCE_BONUSES = { ...OCELLUS_P4.boss.defenceBonuses.value, range: sdkRangedDefence() };
-
-function withDefenceFloor(stats: UnitStats, lowest: number): UnitStats {
-  let defence = stats.defence;
-  return {
-    ...stats,
-    get defence() {
-      return defence;
-    },
-    set defence(value: number) {
-      defence = Math.max(lowest, value);
-    },
-  };
-}
 
 function logs(...events: readonly (FightEvent | null)[]): readonly Logged<FightEvent>[] {
   return events.flatMap((event) => (event === null ? [] : [{ kind: "event", event }]));

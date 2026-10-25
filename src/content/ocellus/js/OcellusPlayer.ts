@@ -1,13 +1,20 @@
 import { Collision, Player } from "osrs-sdk";
-import type { Location, MovePace, Region } from "osrs-sdk";
-import type { PlayerObservation } from "./P4Types";
+import type { Location, MovePace, Region, Unit } from "osrs-sdk";
+import type { InputObservation, PlayerObservation } from "./P4Types";
 import { tile } from "../../../sim/brands";
 import { protectionOf } from "../../../sim/sdk/EncounterBinding";
-import type { OcellusBinding } from "./mobs/Ocellus";
-import { Ocellus } from "./mobs/Ocellus";
+
+export type PlayerHost = Readonly<{
+  input(observed: InputObservation): void;
+  playerHitsSettled(): void;
+  playerMovement(resolve: () => void): void;
+  combat(step: () => void): void;
+}>;
+
+export type MeleeGuard = (target: Unit) => boolean;
 
 export class OcellusPlayer extends Player {
-  constructor(region: Region, location: Location, private readonly binding: () => OcellusBinding) {
+  constructor(region: Region, location: Location, private readonly host: () => PlayerHost, private readonly meleeBlocked: MeleeGuard) {
     super(region, location);
   }
 
@@ -17,7 +24,7 @@ export class OcellusPlayer extends Player {
 
   override moveTo(x: number, y: number, pace: MovePace = "run-setting"): void {
     super.moveTo(x, y, pace);
-    this.binding().input({ kind: "walk-ordered", destination: tile(x, y), pace });
+    this.host().input({ kind: "walk-ordered", destination: tile(x, y), pace });
   }
 
   /** The SDK redirects a blocked tile only when it is ordered, and a walk stops dead when its tile becomes blocked later. */
@@ -31,25 +38,25 @@ export class OcellusPlayer extends Player {
     const before = protectionOf(this);
     super.pretick();
     const after = protectionOf(this);
-    if (after !== before) this.binding().input({ kind: "prayer-published", prayer: after });
+    if (after !== before) this.host().input({ kind: "prayer-published", prayer: after });
   }
 
   override postAttacksEvent(): void {
     super.postAttacksEvent();
-    this.binding().playerHitsSettled();
+    this.host().playerHitsSettled();
   }
 
   override movementStep(): void {
-    this.binding().playerMovement(() => super.movementStep());
+    this.host().playerMovement(() => super.movementStep());
   }
 
   override attack(): boolean {
     const swingsMelee = !this.manualSpellCastSelection && this.equipment.weapon?.isMeleeAttack === true;
-    if (swingsMelee && this.aggro instanceof Ocellus && this.aggro.outOfMeleeReach()) return false;
+    if (swingsMelee && this.aggro && this.meleeBlocked(this.aggro)) return false;
     return super.attack();
   }
 
   override attackStep(): void {
-    this.binding().combat(() => super.attackStep());
+    this.host().combat(() => super.attackStep());
   }
 }

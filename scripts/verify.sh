@@ -245,7 +245,7 @@ RIFT_MELEE_HITS='[[71,"rift-67-1","melee",35],[76,"rift-67-1","melee",9]]'
 RIFT_MELEE_SPLAT_TICK=71
 RIFT_MELEE_LAST_TICK=77
 CHAT_POLL_WAIT_MS=600
-MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible","whats_new"]'
+MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible","perf_data","whats_new"]'
 MENU_QUERY="?seed=1"
 MENU_SMALL_VIEWPORT="800 600"
 MENU_MOBILE_DEVICE="iPhone 14"
@@ -257,6 +257,8 @@ KILL_RESULT_BOSS_HP=1
 KILL_RESULT_CLICK_TICK=12
 KILL_RESULT_LINES='["Ocellus defeated","P4 time: 16 ticks (0:09.6)"]'
 RESULT_BUTTONS='["Restart","Retry seed"]'
+TELEMETRY_FIELDS='["version","view","gpu","browser","stage","end","sampleRate","frames","frameMedianMs","frameP95Ms","frameP99Ms","framesOver50Ms","runTicks","tickMedianMs","tickP95Ms","tickMaxMs","lateTicks","devicePixelRatio","canvasWidth","canvasHeight","cores"]'
+TELEMETRY_BEACON_WAIT_MS=1800
 LOAD_RETRY_QUERY="?seed=1"
 GET_READY_QUERY="?seed=1"
 GET_READY_TICKS=6
@@ -1713,6 +1715,67 @@ drive_run_results() {
   return $verdict
 }
 
+telemetry_box() {
+  ab --json eval "({ checked: document.getElementById('perf_data')?.checked ?? null, saved: localStorage.getItem('archive-ocellus:perf-data'), version: document.getElementById('app_version')?.textContent ?? null, search: location.search })" | json data.result
+}
+
+kill_and_wait_for_beacon() {
+  fight_tick_at_least 0 120000 || { log "the telemetry page never took its first P4 step"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$KILL_RESULT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the boss was not clicked on the telemetry page"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe.snapshot().fight?.run.kind === 'ended'" --timeout 60000 >/dev/null || { log "the telemetry run never ended"; return 1; }
+  ab wait "$TELEMETRY_BEACON_WAIT_MS" >/dev/null
+}
+
+drive_telemetry() {
+  local before after restored
+  ab network route "**/telemetry.json" --body '{"sampleRate":1}' >/dev/null && ab network route "**/t" --body '' >/dev/null || { log "the telemetry routes were not set"; ab network unroute >/dev/null; return 1; }
+  ab network requests --clear >/dev/null || return 1
+  ab open "${URL}${KILL_RESULT_QUERY}" >/dev/null || return 1
+  kill_and_wait_for_beacon || { ab network unroute >/dev/null; return 1; }
+  open_settings && ab wait 300 >/dev/null || { ab network unroute >/dev/null; return 1; }
+  before="$(telemetry_box)" || return 1
+  ab click "#perf_data" >/dev/null && ab press Escape >/dev/null || { log "the performance data box was not clicked"; ab network unroute >/dev/null; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/telemetry-page-errors.json" || { log "page error capture failed"; return 1; }
+  click_result result_retry || { ab network unroute >/dev/null; return 1; }
+  after="$(telemetry_box)" || return 1
+  kill_and_wait_for_beacon || { ab network unroute >/dev/null; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/telemetry-opted-out-page-errors.json" || { log "page error capture failed"; return 1; }
+  ab --json network requests | json data.requests >"$VERIFY_DIR/telemetry-requests.json" || { log "telemetry request capture failed"; return 1; }
+  open_settings && ab wait 300 >/dev/null && ab click "#perf_data" >/dev/null && ab press Escape >/dev/null || { log "the performance data box was not ticked again"; ab network unroute >/dev/null; return 1; }
+  restored="$(telemetry_box)" || return 1
+  ab network unroute >/dev/null || { log "the telemetry routes were not lifted"; return 1; }
+  printf '{"before":%s,"after":%s,"restored":%s}\n' "$before" "$after" "$restored" >"$VERIFY_DIR/telemetry-box.json"
+
+  node -e '
+    const fs = require("fs"), [dir, fields, query] = process.argv.slice(1);
+    const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
+    const [requests, box, errors, optedOutErrors] = ["telemetry-requests.json", "telemetry-box.json", "telemetry-page-errors.json", "telemetry-opted-out-page-errors.json"].map(read);
+    const page = (request) => new URL(request.headers.Referer ?? request.headers.referer ?? "http://unknown/").search;
+    const beacons = requests.filter((request) => request.method === "POST" && new URL(request.url).pathname === "/t").map((request) => ({ page: page(request), summary: JSON.parse(request.postData) }));
+    const configReads = requests.filter((request) => new URL(request.url).pathname === "/telemetry.json").map(page);
+    fs.writeFileSync(`${dir}/telemetry-beacons.json`, JSON.stringify(beacons, null, 2));
+    const [beacon] = beacons, summary = beacon?.summary ?? {};
+    const optedOutPage = box.after.search;
+    const checks = {
+      finishedRunSendsExactlyOneBeacon: beacons.length === 1 && beacon.page === query,
+      beaconHasOnlyTheDocumentedFields: JSON.stringify(Object.keys(summary)) === fields,
+      beaconDescribesTheKill: summary.end === "kill" && summary.runTicks === 16 && summary.view === "3d" && summary.sampleRate === 1 && summary.browser === "chrome" &&
+        `v${summary.version}` === box.before.version && summary.frames > 0 && summary.frameMedianMs > 0 && summary.tickMedianMs > 0 && summary.tickMaxMs >= summary.tickMedianMs,
+      optOutIsSavedAndShownAfterReload: box.before.checked === true && box.before.saved === null && box.after.checked === false && box.after.saved === "off" && optedOutPage !== query,
+      optedOutPageReadsNoConfigAndSendsNothing: !configReads.includes(optedOutPage) && !beacons.some((sent) => sent.page === optedOutPage),
+      tickingTheBoxAgainClearsTheChoice: box.restored.checked === true && box.restored.saved === null,
+      noTelemetryPageErrors: errors.length === 0 && optedOutErrors.length === 0,
+    };
+    console.log(JSON.stringify(checks, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$TELEMETRY_FIELDS" "$KILL_RESULT_QUERY" >"$VERIFY_DIR/telemetry-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/telemetry-checks.json"
+  [[ $verdict -eq 0 ]] || log "a telemetry check failed"
+  return $verdict
+}
+
 record_get_ready() {
   ab eval '(() => {
     const now = () => window.__archiveOcellusProbe?.snapshot() ?? null;
@@ -1919,7 +1982,7 @@ drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
   ab open about:blank >/dev/null && ab screenshot "$VERIFY_DIR/warm-up.png" >/dev/null || { log "warm-up screenshot failed"; return 1; }
-  drive_load_retry && drive_get_ready && drive_settings_menu && drive_run_results && drive_whats_new || return 1
+  drive_load_retry && drive_get_ready && drive_settings_menu && drive_run_results && drive_whats_new && drive_telemetry || return 1
   ab open "${URL}${DRILL_QUERY}" >/dev/null || return 1
   drive_lead_in || return 1
   ab wait --fn "window.__archiveOcellusProbe?.snapshot().ticking === true && window.__archiveOcellusProbe.snapshot().tick >= 8" \

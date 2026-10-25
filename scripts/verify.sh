@@ -207,6 +207,7 @@ SPECIAL_DRILL="transition-attacks"
 SPECIAL_QUERY="?seed=1&focus=${SPECIAL_DRILL}&specialSelection=replay-v2"
 PROTECT_MAGIC_RIGHT_PX=514
 PROTECT_RANGE_RIGHT_PX=551
+PROTECT_MELEE_RIGHT_PX=588
 PROTECT_DOWN_PX=218
 SPECIAL_PRAY_TICK=33
 SPECIAL_RANGE_PRAY_TICK=61
@@ -302,9 +303,25 @@ CUE_CHAT="Ocellus manipulates your lifeforce!"
 AUTOPLAY_POLICY_JS='(() => { const Native = window.AudioContext; if (!Native) return; const made = []; window.__audioContexts = made; window.AudioContext = class extends Native { constructor(...args) { super(...args); made.push(this); void this.suspend(); } }; })();'
 PRODUCTION_PORT="${VERIFY_PRODUCTION_PORT:-8003}"
 PRODUCTION_QUERY="?seed=1&invincible=on"
+PRODUCTION_P3_QUERY="?phase=p3&seed=1"
 PRODUCTION_WATCH_SECONDS=20
 PRODUCTION_ORBS='["99","99","100","100"]'
 PRODUCTION_ORBS_JS='(() => { const orbs = { framesSinceFirst: 0, blankSinceFirst: 0, first: null, last: null }; window.__orbs = orbs; let frame = []; const fillText = CanvasRenderingContext2D.prototype.fillText; CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) { if (this.textAlign === "center" && this.font.endsWith("px Stats_11") && this.fillStyle !== "#000000" && /^\d+$/.test(String(text))) frame.push(String(text)); return fillText.call(this, text, ...rest); }; const close = () => { if (frame.length > 0) { orbs.first ??= frame; orbs.last = frame; } if (orbs.first) { orbs.framesSinceFirst++; if (frame.length === 0) orbs.blankSinceFirst++; } frame = []; requestAnimationFrame(close); }; requestAnimationFrame(close); })();'
+P3_QUERY="?phase=p3&seed=1"
+P3_CLEAR_QUERY="?phase=p3&seed=100&bosshp=3991"
+P3_ARENA_SHOT_TICK=3
+P3_ARENA_TILES='{"open":[{"x":25,"y":11},{"x":26,"y":11}],"closed":[{"x":16,"y":13},{"x":17,"y":13}],"rim":[{"x":28,"y":10}]}'
+P3_PRAY_TICK=1
+P3_SWINGS_LAST_TICK=21
+P3_SWINGS='[[7,"swing",5,5,"melee"],[10,"swing",2,2,"melee"],[17,"swing",1,1,"melee"],[20,"swing",2,2,"melee"]]'
+P3_FAR_EAST_TILE='{"x":27,"y":9}'
+P3_ESCAPE_TICK=6
+P3_VOID_SHOT_LAST_TICK=11
+P3_VOID_SHOT='[[7,"swing",5,5,"melee"],[10,"void-shot",20,20,"melee"]]'
+P3_BOSS_TILE='{"x":20,"y":7}'
+P3_BOSS_CLICK_TICK=2
+P3_CLEAR='{"panel":{"lines":["Quadrant 1 cleared (interim end)","P3 time: 5 ticks (0:03.0)"],"buttons":["Repeat P3","Retry seed","Start P4"]},"tick":5,"bossHp":3937}'
+P3_START_P4='{"search":"?phase=p4&setup=ranged","bossHp":1312}'
 CREDIT_LINE="Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex."
 
 log() { echo "verify: $*"; }
@@ -389,7 +406,7 @@ serve() {
   fi
   manifest_ready || { log "assets missing: run scripts/verify.sh assets"; return 1; }
 
-  node node_modules/.bin/webpack serve --mode development --host 127.0.0.1 --port "$VERIFY_PORT" \
+  ARCHIVE_P3=on node node_modules/.bin/webpack serve --mode development --host 127.0.0.1 --port "$VERIFY_PORT" \
     >"$VERIFY_DIR/server.log" 2>&1 &
   local pid=$!
   LAUNCHED_PID=$pid
@@ -1978,6 +1995,147 @@ drive_whats_new() {
   return $verdict
 }
 
+p3_page_done() {
+  probe "log()" >"$VERIFY_DIR/$1.json" || { log "$1: fight log capture failed"; return 1; }
+  ab console >"$VERIFY_DIR/$1-console.log" 2>&1 || { log "$1: console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/$1-page-errors.json" || { log "$1: page error capture failed"; return 1; }
+}
+
+p3_tile_samples() {
+  ab --json eval "(() => {
+    const probe = window.__archiveOcellusProbe, box = document.querySelector('#world').getBoundingClientRect();
+    const at = (tile) => { const p = probe.tileCentre(tile); return p && { x: Math.round(box.x + p.x), y: Math.round(box.y + p.y) }; };
+    return Object.fromEntries(Object.entries(${P3_ARENA_TILES}).map(([kind, tiles]) => [kind, tiles.map((tile) => ({ tile, at: at(tile) }))]));
+  })()" | json data.result
+}
+
+p3_arena_page() {
+  local mode=$1 samples
+  save_settings "{ use3dView: $([[ "$mode" == 3d ]] && echo true || echo false) }" || { log "the ${mode} view setting was not saved"; return 1; }
+  ab open "${URL}${P3_QUERY}" >/dev/null || return 1
+  fight_tick_at_least "$P3_ARENA_SHOT_TICK" 120000 || { log "the ${mode} P3 drill never reached P3 tick ${P3_ARENA_SHOT_TICK}"; return 1; }
+  samples="$(p3_tile_samples)" || { log "the ${mode} P3 tile pixels were not read"; return 1; }
+  ab screenshot "$VERIFY_DIR/p3-arena-${mode}.png" >/dev/null || { log "the ${mode} P3 arena screenshot failed"; return 1; }
+  echo "$samples" >"$VERIFY_DIR/p3-arena-${mode}-tiles.json"
+}
+
+drive_p3_drill() {
+  ab open "${URL}${P3_QUERY}" >/dev/null || return 1
+  p3_arena_page 2d || return 1
+  ab --json errors | json data.errors >"$VERIFY_DIR/p3-arena-2d-page-errors.json" || { log "page error capture failed"; return 1; }
+  p3_arena_page 3d || return 1
+  record_boss_bar || { log "the boss bar probe was not installed"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$P3_PRAY_TICK" "$PROTECT_MELEE_RIGHT_PX" "$PROTECT_DOWN_PX" || { log "Protect from Melee was not clicked in P3"; return 1; }
+  fight_tick_at_least "$P3_SWINGS_LAST_TICK" 60000 || { log "the P3 drill never reached P3 tick ${P3_SWINGS_LAST_TICK}"; return 1; }
+  probe "snapshot()" >"$VERIFY_DIR/p3-snapshot.json"
+  ab --json eval "window.__bossBar" | json data.result >"$VERIFY_DIR/p3-boss-bar.json" || { log "P3 boss bar capture failed"; return 1; }
+  p3_page_done p3-swings || return 1
+
+  ab open "${URL}${P3_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the P3 void shot page never started"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$P3_PRAY_TICK" "$PROTECT_MELEE_RIGHT_PX" "$PROTECT_DOWN_PX" || { log "Protect from Melee was not clicked on the void shot page"; return 1; }
+  if tile_pixel p3-void-shot "$P3_FAR_EAST_TILE" "$P3_ESCAPE_TICK"; then
+    click_after_tick "$P3_ESCAPE_TICK" $((CLICK_X - CX)) $((CLICK_Y - CY)) || { log "the run to the far east was not clicked"; return 1; }
+  fi
+  fight_tick_at_least "$P3_VOID_SHOT_LAST_TICK" 30000 || { log "the void shot page never reached P3 tick ${P3_VOID_SHOT_LAST_TICK}"; return 1; }
+  p3_page_done p3-void-shot || return 1
+
+  ab open "${URL}${P3_CLEAR_QUERY}" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the P3 interim clear page never started"; return 1; }
+  tile_pixel p3-clear "$P3_BOSS_TILE" "$P3_BOSS_CLICK_TICK" || return 1
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$P3_BOSS_CLICK_TICK" $((CLICK_X - CX)) $((CLICK_Y - CY)) || { log "the P3 boss was not clicked"; return 1; }
+  ab wait --fn "window.__archiveOcellusProbe.snapshot().fight?.run.kind === 'ended'" --timeout 30000 >/dev/null || log "the P3 run never reached the 75% break"
+  ab wait "$CHAT_POLL_WAIT_MS" >/dev/null
+  result_panel >"$VERIFY_DIR/p3-clear-panel.json" || { log "P3 result panel capture failed"; return 1; }
+  ab screenshot "$VERIFY_DIR/p3-clear.png" >/dev/null || { log "P3 result screenshot failed"; return 1; }
+  p3_page_done p3-clear || return 1
+  click_result result_start_p4 || log "Start P4 loaded no new run"
+  ab --json eval "(() => { const probe = window.__archiveOcellusProbe, box = document.getElementById('phase'); return { search: location.search, logPhase: probe.log().header.phase ?? null, bossHp: probe.snapshot().fight?.boss.hp ?? null, rejected: probe.snapshot().rejected, phaseBox: box ? box.value : null }; })()" |
+    json data.result >"$VERIFY_DIR/p3-start-p4.json" || { log "the P4 page after Start P4 was not read"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/p3-start-p4-page-errors.json" || { log "page error capture failed"; return 1; }
+
+  local capture
+  for capture in p3-arena-2d.png p3-arena-2d-tiles.json p3-arena-2d-page-errors.json p3-arena-3d.png p3-arena-3d-tiles.json p3-snapshot.json p3-boss-bar.json \
+    p3-swings.json p3-swings-console.log p3-swings-page-errors.json p3-void-shot.json p3-void-shot-console.log p3-void-shot-page-errors.json \
+    p3-clear-panel.json p3-clear.png p3-clear.json p3-clear-console.log p3-clear-page-errors.json p3-start-p4.json p3-start-p4-page-errors.json; do
+    [[ -s "$VERIFY_DIR/$capture" ]] || { log "required capture ${capture} is missing or empty"; return 1; }
+  done
+
+  node -e '
+    const fs = require("fs"), zlib = require("zlib"), [dir, bossNpc, swings, voidShot, clear, startP4] = process.argv.slice(1);
+    const read = (file) => JSON.parse(fs.readFileSync(`${dir}/${file}`, "utf8"));
+    function decode(file) {
+      const buf = fs.readFileSync(`${dir}/${file}`);
+      let at = 8, width = 0, channels = 4;
+      const idat = [];
+      while (at < buf.length) {
+        const len = buf.readUInt32BE(at), type = buf.toString("ascii", at + 4, at + 8), data = buf.subarray(at + 8, at + 8 + len);
+        if (type === "IHDR") [width, channels] = [data.readUInt32BE(0), data[9] === 6 ? 4 : 3];
+        if (type === "IDAT") idat.push(data);
+        at += 12 + len;
+      }
+      const raw = zlib.inflateSync(Buffer.concat(idat)), stride = width * channels, height = raw.length / (stride + 1), px = Buffer.alloc(height * stride);
+      for (let y = 0; y < height; y++) {
+        for (let i = 0; i < stride; i++) {
+          const a = i >= channels ? px[y * stride + i - channels] : 0, b = y ? px[(y - 1) * stride + i] : 0, c = y && i >= channels ? px[(y - 1) * stride + i - channels] : 0;
+          const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          px[y * stride + i] = (raw[y * (stride + 1) + 1 + i] + [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][raw[y * (stride + 1)]]) & 255;
+        }
+      }
+      return { width, channels, px };
+    }
+    const tileColours = (mode) => {
+      const { width, channels, px } = decode(`p3-arena-${mode}.png`);
+      const mean = ({ at }) => {
+        if (!at) return null;
+        const sum = [0, 0, 0];
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) for (let c = 0; c < 3; c++) sum[c] += px[((at.y + dy) * width + at.x + dx) * channels + c];
+        return sum.map((v) => Math.round(v / 49));
+      };
+      return Object.fromEntries(Object.entries(read(`p3-arena-${mode}-tiles.json`)).map(([kind, tiles]) => [kind, tiles.map(mean)]));
+    };
+    const lum = (rgb) => (rgb[0] + rgb[1] + rgb[2]) / 3;
+    const grey = (rgb) => rgb !== null && Math.abs(rgb[1] - rgb[2]) < 20;
+    const arena = Object.fromEntries(["2d", "3d"].map((mode) => [mode, tileColours(mode)]));
+    const arenaDrawn = ({ open, closed, rim }) => [...open, ...closed].every(grey) && rim.every((rgb) => rgb !== null && rgb[1] - rgb[2] >= 20) &&
+      Math.min(...open.map(lum)) >= Math.max(...closed.map(lum)) + 12;
+    const hits = (log) => log.rows.flatMap((row) => row.events).filter((event) => event.kind === "player-hit").map(({ at, hit, receipt }) => [at, hit.kind, receipt.requested, receipt.applied, receipt.prayer]);
+    const [snapshot, bar, swingLog, voidLog, clearLog, panel, p4] = ["p3-snapshot.json", "p3-boss-bar.json", "p3-swings.json", "p3-void-shot.json", "p3-clear.json", "p3-clear-panel.json", "p3-start-p4.json"].map(read);
+    const expectedClear = JSON.parse(clear), expectedStart = JSON.parse(startP4);
+    const clearedAt = clearLog.rows.find((row) => row.events.some((event) => event.kind === "run-ended"));
+    const observed = {
+      arena,
+      bossBar: [...new Set(Object.values(bar).flat())],
+      swings: hits(swingLog).filter(([at]) => at <= 20),
+      prayerOrders: swingLog.rows.flatMap((row) => row.inputs.filter((input) => input.kind === "prayer-published").map((input) => [row.tick, input.prayer])),
+      voidShot: hits(voidLog).filter(([at]) => at <= 10),
+      escape: voidLog.rows.flatMap((row) => row.inputs.filter((input) => input.kind === "walk-ordered").map((input) => [row.tick, input.destination])),
+      clear: { panel: { lines: panel.lines, buttons: panel.buttons }, run: panel.run, row: clearedAt && { tick: clearedAt.tick, bossHp: clearedAt.bossHp, events: clearedAt.events.map((event) => event.kind) } },
+      startP4: p4,
+    };
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const checks = {
+      p3BossIsNpc16677: swingLog.header.phase === "p3" && snapshot.fight?.boss.npcId === Number(bossNpc) && snapshot.fight.boss.visible && observed.bossBar.includes("5250 / 5250 (100.0%)"),
+      p3ArenaDrawn: arenaDrawn(arena["2d"]) && arenaDrawn(arena["3d"]),
+      p3SwingsChipUnderMeleePrayer: observed.prayerOrders.length > 0 && observed.prayerOrders[0][0] < 7 && observed.prayerOrders[0][1] === "melee" && same(observed.swings, JSON.parse(swings)),
+      p3VoidShotOutOfReach: same(observed.voidShot, JSON.parse(voidShot)) && observed.escape.length === 1,
+      p3InterimClear: same(observed.clear.panel, expectedClear.panel) && observed.clear.run?.kind === "ended" && observed.clear.run.reason.kind === "quadrant-cleared" &&
+        observed.clear.row?.tick === expectedClear.tick && observed.clear.run.at === expectedClear.tick && observed.clear.row.bossHp.atPostTick === expectedClear.bossHp && observed.clear.row.events.includes("run-ended"),
+      p3StartP4OpensP4: p4.search === expectedStart.search && p4.bossHp === expectedStart.bossHp && same(p4.rejected, []) && p4.logPhase === null && p4.phaseBox === "p4",
+      noP3PageErrors: ["p3-arena-2d-page-errors.json", "p3-swings-page-errors.json", "p3-void-shot-page-errors.json", "p3-clear-page-errors.json", "p3-start-p4-page-errors.json"].map(read).every((list) => list.length === 0),
+    };
+    console.log(JSON.stringify({ observed, checks }, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$BOSS_NPC" "$P3_SWINGS" "$P3_VOID_SHOT" "$P3_CLEAR" "$P3_START_P4" >"$VERIFY_DIR/p3-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/p3-checks.json"
+  [[ $verdict -eq 0 ]] || log "a P3 drill check failed"
+  return $verdict
+}
+
 drive() {
   ab set viewport 1280 800 >/dev/null || return 1
   # A new browser's first screenshot takes about 10 s, longer than the hidden lead-in, so it goes to a blank page.
@@ -2692,6 +2850,7 @@ drive() {
     "$EXPLOSION_2D_GLOW_BOX" "$EXPLOSION_2D_EXPECTED" "$EXPLOSION_RUN_END_EXPECTED" "$EXPLOSION_GLOW_MAX_SHARE" "$EXPLOSION_RUN_END_FRAMES" "$CORRECTION_EXPECTED" >"$VERIFY_DIR/observed.json"
   local verdict=$?
   cat "$VERIFY_DIR/observed.json"
+  drive_p3_drill || verdict=1
   return $verdict
 }
 
@@ -2786,6 +2945,39 @@ drive_production() {
   local verdict=$?
   cat "$VERIFY_DIR/production-checks.json"
   [[ $verdict -eq 0 ]] || log "a production check failed"
+  drive_production_hidden_p3 || verdict=1
+  return $verdict
+}
+
+drive_production_hidden_p3() {
+  ab open "http://127.0.0.1:${PRODUCTION_PORT}/${PRODUCTION_P3_QUERY}" >/dev/null || return 1
+  ab eval '(() => {
+    const bars = window.__bossBars = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      if (/^\d+ \/ \d+ \(\d+\.\d%\)$/.test(String(text)) && !bars.includes(String(text))) bars.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  })()' >/dev/null || { log "the production boss bar probe was not installed"; return 1; }
+  ab wait --fn "window.__bossBars.length > 0" --timeout 90000 >/dev/null || log "the production page never drew a boss bar"
+  ab click "#settings" >/dev/null && ab wait 300 >/dev/null || { log "the production Settings button was not clicked"; return 1; }
+  ab --json eval "({ search: location.search, bars: window.__bossBars, menuOpen: document.getElementById('settings_menu')?.checkVisibility() === true, setupBox: document.getElementById('setup') !== null, phaseBox: document.getElementById('phase') !== null })" |
+    json data.result >"$VERIFY_DIR/production-phase-p3.json" || { log "the production phase=p3 page was not read"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/production-phase-p3-page-errors.json" || { log "page error capture failed"; return 1; }
+  node -e '
+    const fs = require("fs"), [dir, entryBar] = process.argv.slice(1);
+    const page = JSON.parse(fs.readFileSync(`${dir}/production-phase-p3.json`, "utf8"));
+    const errors = JSON.parse(fs.readFileSync(`${dir}/production-phase-p3-page-errors.json`, "utf8"));
+    const checks = {
+      phaseP3OpensP4: page.search === "?phase=p3&seed=1" && page.bars[0] === entryBar && errors.length === 0,
+      noPhaseBox: page.menuOpen && page.setupBox && !page.phaseBox,
+    };
+    console.log(JSON.stringify({ page, errors: errors.length, checks }, null, 2));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  ' "$VERIFY_DIR" "$BOSS_BAR_AT_ENTRY" >"$VERIFY_DIR/production-phase-p3-checks.json"
+  local verdict=$?
+  cat "$VERIFY_DIR/production-phase-p3-checks.json"
+  [[ $verdict -eq 0 ]] || log "a hidden P3 production check failed"
   return $verdict
 }
 
@@ -2806,7 +2998,7 @@ stage_production() {
   esac
   [[ -z "$(production_listener)" ]] || { log "port ${PRODUCTION_PORT} is already in use by PID $(production_listener)"; return 1; }
   manifest_ready || { log "assets missing: run scripts/verify.sh assets"; return 1; }
-  node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/production" >"$VERIFY_DIR/production-build.log" 2>&1 || { log "the production build failed"; return 1; }
+  ARCHIVE_P3=off node node_modules/.bin/webpack --mode production --output-path "$VERIFY_DIR/production" >"$VERIFY_DIR/production-build.log" 2>&1 || { log "the production build failed"; return 1; }
 
   local BROWSER_SESSION="archive-ocellus-verify-$(basename "$VERIFY_DIR")-production" result=1
   python3 -m http.server "$PRODUCTION_PORT" --bind 127.0.0.1 --directory "$VERIFY_DIR/production" >"$VERIFY_DIR/production-server.log" 2>&1 &

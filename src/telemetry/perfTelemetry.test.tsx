@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { OcellusRegion } from "../content/ocellus/js/OcellusRegion";
 import { loadPage } from "../content/ocellus/tests/page";
 
 const TICK_MS = 600;
 const DEATH_RUN = "/?seed=1&focus=void-floor";
+const TODAYS_DAILY_LOADS = 45_000;
+const DAILY_SUMMARY_BUDGET = 20_000;
 
 type Beacon = Readonly<{ url: string; summary: unknown }>;
 
@@ -59,6 +63,12 @@ function openRun(url: string) {
     return run?.kind === "running" && run.tick >= t;
   };
   return { page, region, playUntil, runEnded, atTick, close };
+}
+
+function shippedSampleRate(): number {
+  const config: unknown = JSON.parse(readFileSync(resolve(__dirname, "../telemetry.json"), "utf8"));
+  if (typeof config !== "object" || config === null || !("sampleRate" in config) || typeof config.sampleRate !== "number") throw new Error("src/telemetry.json has no numeric sampleRate");
+  return config.sampleRate;
 }
 
 function hidePage(hidden: boolean) {
@@ -143,18 +153,20 @@ describe("Performance telemetry", () => {
     });
   });
 
-  test("a page hidden mid-run sends one summary that ends in left, and hiding it again or leaving sends no other", async () => {
+  test("a page load sends one summary however many of hide, run end and leave fire, so the shipped rate keeps 45,000 loads a day under 20,000 summaries", async () => {
     const beacons = network(1);
-    const { playUntil, atTick, close } = openRun(DEATH_RUN);
+    const { playUntil, atTick, runEnded, close } = openRun(DEATH_RUN);
     await playUntil(atTick(20));
     hidePage(true);
     hidePage(false);
-    await playUntil(atTick(30));
+    await playUntil(runEnded);
+    await play(3 * TICK_MS);
     hidePage(true);
     window.dispatchEvent(new Event("pagehide"));
     close();
     expect(beacons.map(({ summary }) => summary)).toEqual([
       expect.objectContaining({ end: "left", stage: "inner-void", runTicks: 14, frames: 562, lateTicks: 0 }),
     ]);
+    expect(shippedSampleRate() * TODAYS_DAILY_LOADS * beacons.length).toBeLessThanOrEqual(DAILY_SUMMARY_BUDGET);
   });
 });

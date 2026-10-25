@@ -2,7 +2,7 @@ import type { CacheAssets } from "osrs-sdk/asset-manifest";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
 
-const { boss, gear, presentation, lifeforceOrb, rifts, geometry, floorHoles } = OCELLUS_P4;
+const { boss, gear, presentation, lifeforceOrb, rifts, explosion, geometry, floorHoles } = OCELLUS_P4;
 
 const sequences = (poses: Readonly<Record<string, Readonly<{ value: number }>>>) => Object.fromEntries(Object.entries(poses).map(([pose, sequence]) => [pose, sequence.value]));
 
@@ -20,6 +20,7 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     ...Object.entries(lifeforceOrb.look).map(([visual, spotAnim]) => [visual, { id: spotAnim.value }]),
     ...Object.entries(presentation.transitionTells).map(([variant, spotAnim]) => [`${variant.replace(/-(.)/g, (_, letter: string) => letter.toUpperCase())}Tell`, { id: spotAnim.value }]),
     ["riftFlare", { id: rifts.burstFlare.value }],
+    ["explosion", { id: explosion.spotAnim.value }],
   ]),
   sounds: Object.fromEntries(Object.entries(presentation.sounds).map(([cue, sound]) => [cue, { id: sound.value }])),
 } as const satisfies CacheAssets;

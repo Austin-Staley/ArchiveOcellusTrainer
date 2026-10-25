@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25.3",
+    notes: [
+      "The void shards of each explosion now come in high over your head, from the game's own effect, so you can see the cue to step while you move.",
+      "In 2D the shards draw on top of your square instead of under it.",
+    ],
+  },
+  {
     version: "2026.10.25.2",
     notes: [
       "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",

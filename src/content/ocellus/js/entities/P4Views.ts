@@ -296,7 +296,7 @@ class Playing {
 }
 
 /** The SDK plays a cache spotanim once, so a looping cue gets a fresh instance each time one ends. */
-class SpotAnimModel implements Model {
+export class SpotAnimModel implements Model {
   private playing: Playing | null = null;
 
   constructor(private readonly renderable: Renderable, private readonly cue: () => Cue | null) {}

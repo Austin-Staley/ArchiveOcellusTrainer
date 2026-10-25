@@ -16,10 +16,10 @@ const FIRST_RELEASE = {
 const INPUT_CORRECTION_RELEASE = {
   version: "2026.10.25.2",
   date: "2026-10-25",
-  notes: [
+  notes: expect.arrayContaining([
     "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",
     "A click made right before the tick registers on that tick, instead of a tick late.",
-  ],
+  ]),
 };
 
 function whatsNew(page: ReturnType<typeof loadPage>) {

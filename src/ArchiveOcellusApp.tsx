@@ -11,6 +11,7 @@ import { CHANGELOG } from "./content/ocellus/changelog";
 import type { ReleaseVersion } from "./releases";
 import { releaseDate } from "./releases";
 import { keepHoverTextOnCanvas } from "./hoverText";
+import { loadWebAnalytics, perfDataAllowed, setPerfDataAllowed, startPerfTelemetry } from "./telemetry/perfTelemetry";
 
 keepHoverTextOnCanvas();
 // Desktop browsers start the SDK's AudioContext suspended until a user gesture, and the SDK never resumes it.
@@ -115,6 +116,8 @@ function createTrainer() {
   region.invincible = invincible;
   const trainer = new TrainerInstance(region);
   if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, region, rejected);
+  loadWebAnalytics();
+  void startPerfTelemetry(region);
   return { trainer, region, config };
 }
 
@@ -161,6 +164,7 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   const [unseen, setUnseen] = useState(() => seenRelease() !== LATEST_RELEASE.version);
+  const [sendsPerfData, setSendsPerfData] = useState(perfDataAllowed);
   const form = useRef<HTMLFormElement>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const whatsNewTitle = useRef<HTMLHeadingElement>(null);
@@ -227,6 +231,9 @@ function DrillControls({ config, region }: Readonly<{ config: DrillConfig; regio
         </label>
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+        <label>
+          Send anonymous performance data <input id="perf_data" type="checkbox" checked={sendsPerfData} onChange={(event) => { setPerfDataAllowed(event.target.checked); setSendsPerfData(event.target.checked); }} />
         </label>
         <button id="whats_new" type="button" onClick={openWhatsNew}>What's new{unseen && <UnseenDot />}</button>
       </div>

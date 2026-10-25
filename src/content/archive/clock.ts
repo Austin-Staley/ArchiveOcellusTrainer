@@ -330,7 +330,7 @@ function stepMoia(memory: MoiaMemory, options: RaidOptions, input: RaidInput, at
     events.push(phase("p2"));
     events.push(bossAt(tile(7, 7)));
     events.push({ kind: "heal-boss", amount: 0 });
-    events.push(chat("She reappears. The heal is inside 0–5%; this room uses 0."));
+    events.push(chat("She reappears. The heal is inside 0–5%; this room uses 0, an unsourced practice stand-in."));
     next = { ...next, phase: "p2", nextChant: at + rules.chantLead, chants: 0 };
   }
   const gone = next.phase === "gone";

@@ -1,3 +1,5 @@
+import type { RaidId } from "./catalog";
+
 /**
  * Every raid timing and count. Each value is unverified in this file.
  * docs/MECHANICS-STATUS.md records the ledger grade. Where the ledger measured
@@ -71,10 +73,12 @@ export const ARCHIVE = {
     beamAligned: 13,
     beamPrayed: 16,
     beamUnprayed: 100,
-    /** Unverified. Practice stand-in inside the 20–30 tick mushroom range. */
+    /** Unverified. Unsourced practice stand-in inside the 20–30 tick mushroom range. */
     mushroomInterval: 25,
     mushroomArm: 3,
+    /** Wiki strategies, 25 Oct 2026: within one tile the mushroom deals 10. */
     mushroomClose: 10,
+    /** Wiki strategies, 25 Oct 2026: two tiles away deals 3–4. The room uses the top of that range. */
     mushroomEdge: 4,
   },
   moia: {
@@ -100,6 +104,7 @@ export const ARCHIVE = {
     vanish: 12,
     chantLead: 6,
     chantGaps: [41, 39, 37, 35],
+    /** Unverified. Unsourced point inside the wiki's roughly 20–30 per living binder. */
     detonationEach: 25,
     markLead: 5,
   },
@@ -225,16 +230,53 @@ export const ARCHIVE = {
     magicPrayed: 10,
     magicUnprayed: 40,
     vineAt: 30,
-    /** Unverified. Inside the 10–12 tick vine window. Solo cannot strike their own vine. */
+    /** Unverified. Unsourced practice stand-in inside the 10–12 tick vine window. Solo cannot strike their own vine. */
     vineDelay: 12,
     vineDamage: 50,
     vineNpcId: 16681,
+    /** Unverified. Unsourced practice stand-in inside the 15–20 tick charge. */
     voidCharge: 18,
     voidBurst: 30,
     siphonHeal: 22,
-    /** Unverified. The wiki says an augmenter boosts combat stats and gives no amount. */
-    augmenterBoost: 4,
+    /**
+     * Killing an augmenter sets these levels when the player started at 99.
+     * https://oldschool.runescape.wiki/w/Void_Augmenter (25 Oct 2026).
+     * The same page lists 44 hitpoints.
+     */
+    augmenterAttack: 116,
+    augmenterStrength: 116,
+    augmenterRanged: 112,
+    augmenterMagic: 112,
+    augmenterHp: 44,
     censerHeal: 50,
     censerPrayer: 50,
   },
 } as const;
+
+/** Spoken once when a room loads. Xarth has no unsourced count, so its notice is empty. */
+export function standInNotice(id: RaidId): string {
+  switch (id) {
+    case "bork":
+      return `The bomb every ${ARCHIVE.bork.bombInterval} ticks is an unsourced practice stand-in inside the measured 33–88 tick range.`;
+    case "ezekiel":
+      return `Unprayed melee of ${ARCHIVE.ezekiel.unprayed} is an unsourced practice stand-in. No single measured maximum is recorded.`;
+    case "guardian":
+      return `Mushrooms every ${ARCHIVE.guardian.mushroomInterval} ticks are an unsourced practice stand-in inside 20–30. Within one tile a mushroom deals ${ARCHIVE.guardian.mushroomClose}. Two tiles away it deals ${ARCHIVE.guardian.mushroomEdge}, the top of the published 3–4.`;
+    case "moia":
+      return `The ${ARCHIVE.moia.vanish}-tick vanish is an unsourced practice stand-in inside 10–14. Each living binder detonates for ${ARCHIVE.moia.detonationEach}, an unsourced point inside the published roughly 20–30.`;
+    case "xarth":
+      return "";
+    case "dagonhai":
+      return `The book every ${ARCHIVE.dagonhai.bookInterval} ticks is one fight's gap, kept as an unsourced practice stand-in.`;
+    case "ocellus-p1":
+      return `Corner walks are ${ARCHIVE.p1.walk} ticks, the meter step is ${ARCHIVE.p1.meterStep}, a blocked tendril heals ${ARCHIVE.p1.tendrilHeal}, and a miss heals him ${ARCHIVE.p1.tendrilBossHeal}. Those four counts are unsourced practice stand-ins. The slam deals ${ARCHIVE.p1.slamDamage}, the published cap; captures saw 25–40.`;
+    case "ocellus-p2":
+      return `Missing the orange pad deals ${ARCHIVE.p2.padMiss}, an unsourced practice stand-in for a heavy hit.`;
+    case "ocellus-p3":
+      return `The vine hits after ${ARCHIVE.p3.vineDelay} ticks, an unsourced practice stand-in inside 10–12. A void that lives ${ARCHIVE.p3.voidCharge} ticks bursts; that charge is an unsourced practice stand-in inside 15–20.`;
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}

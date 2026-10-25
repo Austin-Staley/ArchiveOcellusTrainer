@@ -7,7 +7,7 @@ import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { CENSERS, ROOMS } from "./layout";
-import { ARCHIVE, DEMONBANE_RESISTANCE } from "./timings";
+import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
 
@@ -299,6 +299,8 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p1") this.say("Block the tendrils. At 66% and 25% he comes to the centre.");
     if (this.launch.id === "ocellus-p2") this.say("Stand where the orange arms cross. The Blade passes on half its damage.");
     if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
+    const notice = standInNotice(this.launch.id);
+    if (notice.length > 0) this.say(notice);
   }
 
   private present(event: RaidEvent): void {
@@ -415,6 +417,22 @@ export class RaidRegion extends Region {
     }
   }
 
+  private applyAugmenter(player: Player): void {
+    const base = player.stats;
+    const publishedFor99 = base.attack === 99 && base.strength === 99 && base.range === 99 && base.magic === 99;
+    if (publishedFor99) {
+      player.currentStats.attack = ARCHIVE.p3.augmenterAttack;
+      player.currentStats.strength = ARCHIVE.p3.augmenterStrength;
+      player.currentStats.range = ARCHIVE.p3.augmenterRanged;
+      player.currentStats.magic = ARCHIVE.p3.augmenterMagic;
+      this.say(
+        `The augmenter sets Attack and Strength to ${ARCHIVE.p3.augmenterAttack} and Magic and Ranged to ${ARCHIVE.p3.augmenterRanged}. That is the published buff for a player who started at 99.`,
+      );
+      return;
+    }
+    this.say("The published augmenter buff assumes 99 Attack, Strength, Magic and Ranged, so another base is left unchanged.");
+  }
+
   private rewardVoids(): void {
     if (!this.mounted) return;
     const { player } = this.mounted;
@@ -431,11 +449,7 @@ export class RaidRegion extends Region {
           this.say("The rift resets your attack.");
           return;
         case "Void augmenter":
-          player.currentStats.attack += ARCHIVE.p3.augmenterBoost;
-          player.currentStats.strength += ARCHIVE.p3.augmenterBoost;
-          player.currentStats.range += ARCHIVE.p3.augmenterBoost;
-          player.currentStats.magic += ARCHIVE.p3.augmenterBoost;
-          this.say("The augmenter raises your combat stats.");
+          this.applyAugmenter(player);
           return;
         default:
           return;
@@ -568,6 +582,6 @@ function addBar(launch: RaidLaunch, name: string): Bar {
   if (name === "Undead binder") return { npcId: ARCHIVE.moia.binderNpcId, hp: ARCHIVE.moia.binderHp, defence: 1, name, size: 1 };
   if (name === "Void rift") return { npcId: 16678, hp: 50, defence: 0, name, size: 1 };
   if (name === "Void siphon") return { npcId: 16679, hp: 44, defence: 0, name, size: 1 };
-  if (name === "Void augmenter") return { npcId: 16680, hp: 50, defence: 0, name, size: 1 };
+  if (name === "Void augmenter") return { npcId: 16680, hp: ARCHIVE.p3.augmenterHp, defence: 0, name, size: 1 };
   return { npcId: 0, hp: 1, defence: 1, name, size: 1 };
 }

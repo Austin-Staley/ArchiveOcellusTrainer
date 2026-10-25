@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25.5",
+    notes: [
+      "Killing a void augmenter sets Attack and Strength to 116 and Magic and Ranged to 112, the published buff for a player who started at 99. The augmenter has 44 hitpoints.",
+      "Each room's chat names any count that is still an unsourced practice stand-in, including the bomb interval, the mushroom interval, Moia's vanish, and the phase 1 tendril counts.",
+      "A mushroom within one tile deals 10. Two tiles away it deals 4, the top of the published 3–4.",
+    ],
+  },
+  {
     version: "2026.10.25.4",
     notes: [
       "Settings has an encounter menu for Bork, Ezekiel, the Archive Guardian, Moia, Xarth, the Dagon'hai trio, and Ocellus phases 1 to 3. With no encounter chosen, phase 4 is the same fight as before.",

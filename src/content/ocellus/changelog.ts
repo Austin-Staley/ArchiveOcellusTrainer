@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.25",
+    notes: [
+      "The bottom-left corner credits the makers, with links to the trainer's GitHub page and to @ShadowJdas on X.",
+      "Settings and Restart sit a little higher to make room for the credit.",
+    ],
+  },
+  {
     version: "2026.10.24",
     notes: [
       "Ocellus has 5,250 HP for a solo or duo team, as the wiki lists, so phase 4 starts at 1,312.",

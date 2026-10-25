@@ -3226,8 +3226,7 @@ throttle_perf() {
   return 1
 }
 
-start_if_set_up() {
-  # A base built before the set-up state starts its run by itself.
+start_or_await_run() {
   ab wait --fn "document.getElementById('start')?.checkVisibility() === true || window.__perfGate.p4Tick() >= 0" --timeout 120000 >/dev/null || return 1
   [[ "$(ab --json eval "document.getElementById('start')?.checkVisibility() === true" | json data.result)" != true ]] || ab click "#start" >/dev/null
 }
@@ -3235,7 +3234,7 @@ start_if_set_up() {
 perf_capture() {
   local name=$1 side=$2 view=$3 until=$4 heap_from=${5:-} at
   ab open about:blank >/dev/null && ab open "http://127.0.0.1:${PRODUCTION_PORT}/${side}/$(perf_gate workload.query)#perf-view=${view}" >/dev/null || { log "perf: the ${name} page did not open"; return 1; }
-  start_if_set_up || { log "perf: the ${name} run did not start"; return 1; }
+  start_or_await_run || { log "perf: the ${name} run did not start"; return 1; }
   for at in $heap_from "$until"; do
     ab wait --fn "window.__perfGate.p4Tick() >= ${at}" --timeout $((until * 600 + 120000)) >/dev/null || { log "perf: the ${name} run did not reach P4 tick ${at}"; return 1; }
     [[ -z "$heap_from" ]] || node --import tsx src/perf/devtools.ts heap "$(ab get cdp-url)" "$(perf_tab)" >>"$VERIFY_DIR/perf/heap.log" || { log "perf: no heap reading at P4 tick ${at} of ${name}"; return 1; }

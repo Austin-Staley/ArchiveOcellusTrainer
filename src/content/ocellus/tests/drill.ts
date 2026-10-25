@@ -1,11 +1,11 @@
 import { Projectile, Settings, TrainerInstance, Viewport } from "osrs-sdk";
-import type { Mob, Player, Unit, World } from "osrs-sdk";
+import type { Entity, Mob, Player, Unit, World } from "osrs-sdk";
 import { paintedFills } from "../../../../test/paintedTiles";
 import { OcellusRegion } from "../js/OcellusRegion";
 import type { DrillSelection } from "../js/OcellusTimings";
 import { OCELLUS_P4, parseDrillRequest } from "../js/OcellusTimings";
 import type { Style } from "../../../sim/combat";
-import type { FightEvent, TickRow } from "../js/P4Types";
+import type { FightEvent, RenderView, TickRow } from "../js/P4Types";
 
 export type DrillOptions = Readonly<{ seed?: number; bossHp?: number; selection?: DrillSelection }>;
 export type At = Readonly<{ x: number; y: number }>;
@@ -25,6 +25,16 @@ const onPlatform = ({ x, y }: At) => OCELLUS_P4.geometry.platform.value[y]?.[x] 
 function besideOnSameFloor(home: At, insideSquare: boolean): At {
   const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({ x: home.x + dx, y: home.y + dy }));
   return sides.find((side) => onPlatform(side) && !underBoss(side) && inNearSquare(side) === insideSquare) ?? home;
+}
+
+export function drawOverUnits(entity: Entity, tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+  const top = { x: (entity.location.x + entity.size / 2) * Settings.tileSize, y: (entity.location.y - entity.size + 1) * Settings.tileSize };
+  entity.drawUILayer(tickPercent, { logicalHeight: entity.logicalHeight, visible: true, atHeight: () => top }, context, Settings.tileSize);
+}
+
+export function drawIn2d(entity: Entity, tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+  entity.draw(tickPercent, context);
+  drawOverUnits(entity, tickPercent, context);
 }
 
 function pressTile(world: World, on: At, modifiers: Readonly<{ ctrlKey?: boolean }> = {}): void {
@@ -50,8 +60,9 @@ export function startDrill(options: DrillOptions = {}) {
     throw new Error(`the drill link has no usable seed: ${link.search}`);
   });
   if (rejected.length > 0) throw new Error(`the drill link has options the trainer rejects: ${rejected.join(", ")}`);
-  const region = new OcellusRegion(config);
-  const trainer = new TrainerInstance(region, { force2d: true });
+  const view: RenderView = "2d";
+  const region = new OcellusRegion(config, view);
+  const trainer = new TrainerInstance(region, { force2d: view === "2d" });
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   // The world tick after the last held one ends GET READY and is the boss's first step, P4 tick 0.
   const tickThroughGetReady = () => region.world.tickWorld(region.world.getReadyTimer - 1);
@@ -143,10 +154,10 @@ export function startDrill(options: DrillOptions = {}) {
         .map((fill) => ({ x: Math.floor(fill.x / Settings.tileSize), y: Math.floor(fill.y / Settings.tileSize) }))
         .sort((a, b) => a.x - b.x || a.y - b.y);
     },
-    drawnShardReach(around: At, tickPercent: number): readonly number[] {
+    drawnShardReach(around: At, tickPercent: number, paint: typeof drawIn2d = drawIn2d): readonly number[] {
       const shard = OCELLUS_P4.explosion.shards.value;
       const scale = Settings.tileSize;
-      return paintedFills((context) => region.entities.forEach((entity) => entity.draw(tickPercent, context)))
+      return paintedFills((context) => region.entities.forEach((entity) => paint(entity, tickPercent, context)))
         .filter((fill) => fill.style === shard)
         .map((fill) => Math.hypot((fill.x + fill.width / 2) / scale - (around.x + 0.5), (fill.y + fill.height / 2) / scale - (around.y + 0.5)));
     },

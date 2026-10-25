@@ -615,6 +615,7 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
 
 type ExplosionSeriesRecipe = Readonly<{
   seriesStartsAfterHit: Selected<TickSpan>;
+  spotAnim: Selected<number>;
   shards: Selected<string>;
   look: Selected<ExplosionLook>;
   dodge: Selected<Readonly<{ radius: number; attackDelayCut: TickSpan }>>;
@@ -624,21 +625,30 @@ type ExplosionLook = Readonly<{
   glow: string;
   glowOpacity: number;
   glowTiles: number;
-  dust: string;
-  dustOpacity: number;
-  dustTiles: number;
-  shardTiles2d: number;
-  mark: Readonly<{ shardsFadeIn: number; glowFrom: number; glowRamp: number; shardRadius: Between; shardLean: Between; glowScale: Between }>;
-  impact: Readonly<{ glowFadeOut: number; shardRadius: Between; shardLean: Between; glowScale: Between; dustScale: Between }>;
+  shardTiles: number;
+  shardsFadeIn: number;
+  glowFrom: number;
+  glowRamp: number;
+  shardRadius: Between;
 }>;
 
 const EXPLOSION: ExplosionSeriesRecipe = {
   seriesStartsAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "sound 12638 two ticks after the lifeforce hit, before the first mark of every option; what the server marks with it is inferred", NO_WIKI_TICKS, vod("V1", "3:54:04.77, t14"), vod("V2", "5:20:27.89, t14")),
+  spotAnim: selected(
+    4339,
+    "inferred",
+    "unscaled",
+    "the 3D view plays it on the marked tile from the mark tick: long thin purple shards high around the player's head close in on the tile through the first half of the tick, a purple glow fills it, and on the impact tick grey dust and spikes burst out; its 55 client cycles end before the impact tick does. The name, the lifecycle the footage shows and a render in the trainer identify it; the glow and burst staying on a tile the player left place it on the tile, not the player. Spotanim 4340 vfx_void_chain_player_telegraph is the ring of dark ovals around the player's legs from the series start (3:54:04.77) to the first mark, and spotanims 4299 to 4302 are vfx_ocellus_quadrant_bomb, another attack",
+    NO_WIKI_PRESENTATION,
+    cache("spotanim 4339 vfx_void_chain_explosion: model 62616, seq 14933 vfx_void_chain_explosion_full, 21 frames, 55 client cycles; 1990 of 2135 faces opaque and 145 with base alphas, none textured"),
+    vod("V1", "3:54:06.40 to 3:54:07.35, shards high around the head at 6.45 to 6.55, glow on the left tile from 6.75, burst at 7.0"),
+    owner("the void shards come in high over the player's head at the start of each mark, not at the feet", "2026-10-24"),
+  ),
   shards: selected(
     "#5e317b",
     "footage-repeated",
     "team-5",
-    "dark purple shards stand around the player's tile on each mark tick; median colour of the shards on four mark ticks. The spec's cache candidate, spotanims 4299 to 4302 (model 62509), renders a white disc and a white flash, which the footage does not show",
+    "the 2D view's stand-in for the shards of spotanim 4339: median colour of the shards on four mark ticks",
     STRATEGIES, vod("V2", "k57, k59, k61, k65"),
   ),
   look: selected(
@@ -646,19 +656,17 @@ const EXPLOSION: ExplosionSeriesRecipe = {
       glow: "#761ba2",
       glowOpacity: 0.85,
       glowTiles: 1.2,
-      dust: "#bcb6a2",
-      dustOpacity: 0.55,
-      dustTiles: 1.4,
-      shardTiles2d: 0.12,
-      mark: { shardsFadeIn: 0.1, glowFrom: 0.5, glowRamp: 0.2, shardRadius: [0.8, 0.25], shardLean: [1.2, 0.3], glowScale: [0.7, 1] },
-      impact: { glowFadeOut: 0.2, shardRadius: [0.2, 1.2], shardLean: [0, -1], glowScale: [1, 1.2], dustScale: [0.6, 1.3] },
+      shardTiles: 0.12,
+      shardsFadeIn: 0.1,
+      glowFrom: 0.5,
+      glowRamp: 0.2,
+      shardRadius: [0.8, 0.25],
     },
     "footage-repeated",
     "unscaled",
-    "each mark lasts the mark tick and the impact tick. In the mark tick, purple motes and thin shards fly in to the tile, and for its second half a translucent hexagonal purple glow fills the tile; on the impact tick the glow collapses, crystals burst outward and a grey dust puff fades. Three cycles at 20 fps put the glow from 6 to 8 of the tick's 12 frames, so it starts halfway and ramps in over about 2 frames. The glow colour and opacity solve the 120, 55, 150 glow seen over the 126, 140, 115 floor. The dust, the glow and dust sizes and the 2D view's shard squares in tiles, the shards' paths (radius in tiles, lean in radians) and the scale ranges are chosen by eye against the same frames; times are fractions of the tick. The SDK cannot play spotanims 4299 to 4302 instead: it makes a spotanim translucent only from base face alphas, model 62509's alphas all come from its animation, and it draws the 588 faces textured with 215 as white",
+    "the 2D view's stand-in for spotanim 4339 on the mark tick: square shards close in on the marked tile over the units, so they show over the player's square, and for the tick's second half a translucent hexagonal purple glow fills the tile under them. Three cycles at 20 fps put the glow from 6 to 8 of the tick's 12 frames, so it starts halfway and ramps in over about 2 frames. The glow colour and opacity solve the 120, 55, 150 glow seen over the 126, 140, 115 floor. The glow size, the shard squares' size and the shards' path (radius in tiles) are chosen by eye against the same frames; times are fractions of the tick",
     NO_WIKI_PRESENTATION, owner("explosion mark in https://www.twitch.tv/videos/2907533010 from 8:38:50 to 8:38:53, frames at 20 fps", "2026-10-22"),
     owner("friends' screenshot of the explosion mark", "2026-10-22"),
-    cache("model 62509: all 1176 faces in animated alpha groups, none with a base alpha; 588 faces textured with 215"),
   ),
   dodge: selected(
     { radius: 1, attackDelayCut: span(3) },

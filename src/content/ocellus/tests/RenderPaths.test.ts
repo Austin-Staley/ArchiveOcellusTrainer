@@ -3,7 +3,7 @@ import type { Entity } from "osrs-sdk";
 import { renderPathGaps } from "../../../../review-ratchet/checks/render-paths.mjs";
 import { drawsVisibly, zeroSizeFillRects } from "../../../../test/paintedTiles";
 import type { DrillSelection } from "../js/OcellusTimings";
-import { startDrill } from "./drill";
+import { drawIn2d, startDrill } from "./drill";
 
 const FRACTIONS = Array.from({ length: 10 }, (_, step) => (step + 1) / 10);
 const FOCUSES = ["void-floor", "lifeforce-orb", "explosions", "transition-attacks", "rifts", "floor-holes"] as const;
@@ -27,7 +27,7 @@ function modelDraws(entity: Entity, at: number): boolean {
 
 type Paint2d = (entity: Entity, at: number, context: OffscreenCanvasRenderingContext2D) => void;
 
-function sampleTracks(selection: DrillSelection, ticks: number, paint2d: Paint2d = (entity, at, context) => entity.draw(at, context)) {
+function sampleTracks(selection: DrillSelection, ticks: number, paint2d: Paint2d = drawIn2d) {
   const drill = startDrill({ selection });
   const tracks = [];
   let previous = Number.NaN;
@@ -50,22 +50,22 @@ function sampleTracks(selection: DrillSelection, ticks: number, paint2d: Paint2d
 }
 
 describe("render paths", () => {
-  test("guard: every entity drawn in both 2D and 3D during a tick is drawn over the same fractions of it, including the explosion mark from its first fifth", () => {
+  test("guard: every entity drawn in both 2D and 3D during a tick is drawn over the same fractions of it, and the 2D explosion mark shows through its whole mark tick as the 3D spotanim does", () => {
     const tracks = FOCUSES.flatMap((focus) => sampleTracks({ focus }, 60));
     const firstMark = tracks.find((track) => track.entity === "explosions:ExplosionView@5,1" && track.tick === 17);
     expect({
-      earlyMark: firstMark?.samples.find((sample) => sample.at === 0.2),
+      markDrawnIn2dAt: firstMark?.samples.filter((sample) => sample.flat).map((sample) => sample.at),
       gaps: renderPathGaps(tracks),
     }).toEqual({
-      earlyMark: { at: 0.2, flat: true, model: true },
+      markDrawnIn2dAt: FRACTIONS,
       gaps: [],
     });
   }, 30_000);
 
-  test("guard: a 2D mark whose shards draw at zero size is a gap until its glow shows halfway through the tick", () => {
-    const zeroSizeShards: Paint2d = (entity, at, context) => entity.draw(at, zeroSizeFillRects(context));
-    const firstMark = sampleTracks({ focus: "explosions" }, 20, zeroSizeShards).filter((track) => track.entity === "explosions:ExplosionView@5,1" && track.tick === 17);
-    expect(renderPathGaps(firstMark)).toEqual([{ entity: "explosions:ExplosionView@5,1", tick: 17, flatOnly: [], modelOnly: [0.1, 0.2, 0.3, 0.4, 0.5] }]);
+  test("guard: a 2D mark whose shards draw at zero size shows only from its glow, halfway through the mark tick", () => {
+    const zeroSizeShards: Paint2d = (entity, at, context) => drawIn2d(entity, at, zeroSizeFillRects(context));
+    const firstMark = sampleTracks({ focus: "explosions" }, 20, zeroSizeShards).find((track) => track.entity === "explosions:ExplosionView@5,1" && track.tick === 17);
+    expect(firstMark?.samples.filter((sample) => sample.flat).map((sample) => sample.at)).toEqual([0.6, 0.7, 0.8, 0.9, 1]);
   }, 30_000);
 
   test("guard: the 2D observer counts a draw only when it covers pixels", () => {

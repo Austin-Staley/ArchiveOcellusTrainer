@@ -11,6 +11,7 @@ export type Seed = Brand<"Seed">;
 export type TileX = Brand<"TileX">;
 export type TileY = Brand<"TileY">;
 export type SoundId = Brand<"SoundId">;
+export type HpFraction = Brand<"HpFraction">;
 export type Tile = Readonly<{ x: TileX; y: TileY }>;
 
 export const isCount = (n: number): boolean => Number.isInteger(n) && n >= 0;
@@ -22,6 +23,7 @@ const isSeed = (n: Unbranded): n is Unbranded & Seed => isCount(n) && n <= 0xfff
 const isTileX = (n: Unbranded): n is Unbranded & TileX => Number.isInteger(n);
 const isTileY = (n: Unbranded): n is Unbranded & TileY => Number.isInteger(n);
 const isSoundId = (n: Unbranded): n is Unbranded & SoundId => isCount(n) && n <= 0xffff;
+const isHpFraction = (n: Unbranded): n is Unbranded & HpFraction => n > 0 && n < 1;
 
 export function tick(n: Unbranded): Tick {
   if (!isTick(n)) throw new RangeError(`not a tick: ${n}`);
@@ -49,6 +51,10 @@ export function tile(x: Unbranded, y: Unbranded): Tile {
 }
 export function soundId(n: Unbranded): SoundId {
   if (!isSoundId(n)) throw new RangeError(`not a cache sound id: ${n}`);
+  return n;
+}
+export function hpFraction(n: Unbranded): HpFraction {
+  if (!isHpFraction(n)) throw new RangeError(`not a fraction of max HP strictly between 0 and 1: ${n}`);
   return n;
 }
 export function after(start: Tick, offset: TickSpan): Tick {

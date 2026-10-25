@@ -15,7 +15,6 @@ import type {
   FightEvent,
   HealCause,
   InputObservation,
-  Mechanic,
   Ordinal,
   Phase,
   PlayerHit,
@@ -30,7 +29,7 @@ import type {
 } from "../P4Types";
 import { riftId } from "../P4Types";
 import { drawHealSplats, drawOverheadIcon } from "../entities/P4Views";
-import type { Schedule } from "../../../../sim/schedule";
+import type { P4Schedule } from "../p4/schedule";
 import { TileSet } from "../../../../sim/tiles";
 import type { ExplosionStep, Marks, Reduction } from "../p4/explosions";
 import { damageReduction, explode, explosionHit, NO_MARKS } from "../p4/explosions";
@@ -120,7 +119,7 @@ function specialAttack<V extends Special>(at: Tick, ordinal: Ordinal, variant: V
 }
 
 export class Ocellus extends Mob {
-  private readonly schedule: Schedule<Phase, Beat, Mechanic>;
+  private readonly schedule: P4Schedule;
   readonly holes: TileSet;
   readonly binding: OcellusBinding;
   private orbs: Orbs = NO_ORBS;

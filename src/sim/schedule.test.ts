@@ -1,3 +1,5 @@
+import { dirname, resolve } from "node:path";
+import ts from "typescript";
 import { hpFraction, tick } from "./brands";
 import type { Breakpoint, Script, Slot, Stage } from "./schedule";
 import { Schedule, slotTable } from "./schedule";
@@ -116,5 +118,63 @@ describe("HP breakpoints", () => {
     expect(ticks(0, 5).map((t) => fired.visitAt(t).stage)).toEqual(["fight", "q2", "q3", "q3", "q3", "q3"]);
     expect(fired.visitAt(tick(5))).toEqual({ stage: "q3", start: 2, number: 1, entered: "breakpoint" });
     expect(ticks(0, 5).map((t) => fired.breakpointsFiredBy(t))).toEqual([0, 1, 2, 2, 2, 2]);
+  });
+});
+
+describe("the stage contract", () => {
+  const control = resolve(__dirname, "stage-contract-control.ts");
+  const compileErrors = (lines: readonly string[]): readonly string[] => {
+    const config = ts.findConfigFile(__dirname, ts.sys.fileExists);
+    if (config === undefined) throw new Error("no tsconfig.json above src/sim");
+    const options = { ...ts.parseJsonConfigFileContent(ts.readConfigFile(config, ts.sys.readFile).config, ts.sys, dirname(config)).options, noEmit: true, types: [] };
+    const host = ts.createCompilerHost(options);
+    const getSourceFile = host.getSourceFile;
+    host.getSourceFile = (file, language, ...rest) => (file === control ? ts.createSourceFile(file, lines.join("\n"), language) : getSourceFile(file, language, ...rest));
+    const program = ts.createProgram([control], options, host);
+    return ts.getPreEmitDiagnostics(program, program.getSourceFile(control)).map((diagnostic) => {
+      const line = diagnostic.file === undefined || diagnostic.start === undefined ? 0 : diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
+      const chain = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n").split("\n");
+      return `${line}: ${chain[chain.length - 1].trim()}`;
+    });
+  };
+  const imports = ['import { Schedule, slotTable, type Script, type Slot } from "./schedule";', 'import { hpFraction, tick } from "./brands";', 'const slot: Slot<string, string> = { phase: () => "fight", beats: [] };'];
+
+  test("stage names are inferred from the stage table alone, so a successor typed string cannot widen them", () => {
+    const valid = [
+      ...imports,
+      'const script: Script<"fight", string, string> = { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "fight" }] };',
+      'export const annotated = new Schedule(script, () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0));',
+      "export const inferred = new Schedule(",
+      '  { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" }, destroy: { slots: [slot], breakable: false, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "destroy" }] },',
+      '  () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0),',
+      ");",
+      'export const stage: "fight" | "destroy" = inferred.visitAt(tick(0)).stage;',
+    ];
+    const widened = [
+      ...imports,
+      'const stages = { fight: { slots: slotTable([slot], "fight"), breakable: true, then: () => "fight" } };',
+      "export const widened = new Schedule(",
+      "  {",
+      '    first: "fight",',
+      "    stages,",
+      '    breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "unknown" }],',
+      "  },",
+      '  () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0),',
+      ");",
+    ];
+
+    expect({ valid: compileErrors(valid), widened: compileErrors(widened) }).toEqual({
+      valid: [],
+      widened: ["8: Type 'string' is not assignable to type '\"fight\"'.", "9: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+    });
+  });
+
+  test("a script that names a stage it does not define is refused when its schedule is built", () => {
+    const stages = { fight: stage<string>("fight", 1, true, () => "fight") };
+    const build = (first: string, enter: string) => () => schedule<string>({ first, stages, breakpoints: [{ atOrBelow: hpFraction(0.5), enter }] });
+
+    expect(build("fight", "fight")().visitAt(tick(0))).toEqual({ stage: "fight", start: 0, number: 1, entered: "first" });
+    expect(build("fight", "unknown")).toThrow(new RangeError("the script names unknown, a stage it does not define"));
+    expect(build("arrive", "fight")).toThrow(new RangeError("the script names arrive, a stage it does not define"));
   });
 });

@@ -10,16 +10,18 @@ export type DrillStart = Readonly<{ kind: "before-first-beat"; lead: TickSpan }>
 
 export type Visit<S extends string> = Readonly<{ stage: S; start: Tick; number: Cycle; entered: "first" | "table-ended" | "breakpoint" }>;
 
+type NoInfer<S> = [S][S extends unknown ? 0 : never];
+
 export type Stage<S extends string, P, B> = Readonly<{
   slots: readonly [Slot<P, B>, ...Slot<P, B>[]];
   breakable: boolean;
-  then: (ended: Visit<S>, before: readonly Visit<S>[]) => S;
+  then: (ended: Visit<S>, before: readonly Visit<S>[]) => NoInfer<S>;
 }>;
 
-export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: S }>;
+export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: NoInfer<S> }>;
 
 export type Script<S extends string, P, B> = Readonly<{
-  first: S;
+  first: NoInfer<S>;
   stages: Readonly<Record<S, Stage<S, P, B>>>;
   breakpoints: readonly Breakpoint<S>[];
 }>;
@@ -81,6 +83,8 @@ export class Schedule<S extends string, P, B, M extends string> {
     private readonly horizon: Tick,
     private readonly visits: Visits<S, P, B> = new Visits(script),
   ) {
+    const unknown = [script.first, ...script.breakpoints.map((breakpoint) => breakpoint.enter)].find((stage) => !Object.prototype.hasOwnProperty.call(script.stages, stage));
+    if (unknown !== undefined) throw new RangeError(`the script names ${unknown}, a stage it does not define`);
     this.start = this.startTick(new Visits(script));
   }
 

@@ -146,60 +146,122 @@ describe("HP breakpoints", () => {
 });
 
 describe("the stage contract", () => {
-  const control = resolve(__dirname, "stage-contract-control.ts");
-  const compileErrors = (lines: readonly string[]): readonly string[] => {
+  const header = [
+    'import { Schedule, slotTable, type Script, type Slot, type Stage, type Visit } from "./schedule";',
+    'import { hpFraction, tick } from "./brands";',
+    'const slot: Slot<string, string> = { phase: () => "fight", beats: [] };',
+  ];
+  const rest = '() => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0)';
+  const compileErrors = (probes: Readonly<Record<string, readonly string[]>>): Readonly<Record<string, readonly string[]>> => {
     const config = ts.findConfigFile(__dirname, ts.sys.fileExists);
     if (config === undefined) throw new Error("no tsconfig.json above src/sim");
     const options = { ...ts.parseJsonConfigFileContent(ts.readConfigFile(config, ts.sys.readFile).config, ts.sys, dirname(config)).options, noEmit: true, types: [] };
+    const files = new Map(Object.entries(probes).map(([name, lines]) => [resolve(__dirname, `stage-contract-${name}.ts`), [...header, ...lines].join("\n")]));
     const host = ts.createCompilerHost(options);
     const getSourceFile = host.getSourceFile;
-    host.getSourceFile = (file, language, ...rest) => (file === control ? ts.createSourceFile(file, lines.join("\n"), language) : getSourceFile(file, language, ...rest));
-    const program = ts.createProgram([control], options, host);
-    return ts.getPreEmitDiagnostics(program, program.getSourceFile(control)).map((diagnostic) => {
-      const line = diagnostic.file === undefined || diagnostic.start === undefined ? 0 : diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
-      const chain = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n").split("\n");
-      return `${line}: ${chain[chain.length - 1].trim()}`;
-    });
+    host.getSourceFile = (file, language, ...more) => {
+      const text = files.get(file);
+      return text === undefined ? getSourceFile(file, language, ...more) : ts.createSourceFile(file, text, language);
+    };
+    const program = ts.createProgram([...files.keys()], options, host);
+    const errorsIn = (file: string) =>
+      ts.getPreEmitDiagnostics(program, program.getSourceFile(file)).map((diagnostic) => {
+        const line = diagnostic.file === undefined || diagnostic.start === undefined ? 0 : diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1;
+        const chain = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n").split("\n");
+        return `${line}: ${chain[chain.length - 1].trim()}`;
+      });
+    return Object.fromEntries(Object.keys(probes).map((name) => [name, errorsIn(resolve(__dirname, `stage-contract-${name}.ts`))]));
   };
-  const imports = ['import { Schedule, slotTable, type Script, type Slot } from "./schedule";', 'import { hpFraction, tick } from "./brands";', 'const slot: Slot<string, string> = { phase: () => "fight", beats: [] };'];
 
-  test("stage names are inferred from the stage table alone, so a successor typed string cannot widen them", () => {
-    const valid = [
-      ...imports,
-      'const script: Script<"fight", string, string> = { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "fight" }] };',
-      'export const annotated = new Schedule(script, () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0));',
-      "export const inferred = new Schedule(",
-      '  { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" }, destroy: { slots: [slot], breakable: false, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "destroy" }] },',
-      '  () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0),',
-      ");",
-      'export const stage: "fight" | "destroy" = inferred.visitAt(tick(0)).stage;',
-    ];
-    const widened = [
-      ...imports,
-      'const stages = { fight: { slots: slotTable([slot], "fight"), breakable: true, then: () => "fight" } };',
-      "export const widened = new Schedule(",
-      "  {",
-      '    first: "fight",',
-      "    stages,",
-      '    breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "unknown" }],',
-      "  },",
-      '  () => null, { kind: "full-fight" }, { kind: "cycle-start" }, tick(0),',
-      ");",
-    ];
-
-    expect({ valid: compileErrors(valid), widened: compileErrors(widened) }).toEqual({
+  test("stage names come from the stage table's keys alone, so no other position can widen them to string", () => {
+    expect(
+      compileErrors({
+        valid: [
+          'const annotated: Script<"fight", string, string> = { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "fight" }] };',
+          `export const fromAnnotation = new Schedule(annotated, ${rest});`,
+          'const builtFirst = { fight: { slots: slotTable([slot], "fight"), breakable: true, then: (_ended: Visit<string>): "fight" => "fight" } };',
+          `export const fromTableBuiltFirst = new Schedule({ first: "fight", stages: builtFirst, breakpoints: [] }, ${rest});`,
+          "export const inferred = new Schedule(",
+          '  { first: "fight", stages: { fight: { slots: [slot], breakable: true, then: (_ended: Visit<string>) => "destroy" }, destroy: { slots: [slot], breakable: false, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "destroy" }] },',
+          `  ${rest},`,
+          ");",
+          'export const stage: "fight" | "destroy" = inferred.visitAt(tick(0)).stage;',
+        ],
+        "table-built-first": [
+          'const stages = { fight: { slots: slotTable([slot], "fight"), breakable: true, then: () => "fight" } };',
+          `export const schedule = new Schedule({ first: "fight", stages, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "unknown" }] }, ${rest});`,
+        ],
+        "table-built-first-successor-parameter-visit-string": [
+          'const stages = { fight: { slots: slotTable([slot], "fight"), breakable: true, then: (_ended: Visit<string>) => "unknown" } };',
+          `export const schedule = new Schedule({ first: "fight", stages, breakpoints: [] }, ${rest});`,
+        ],
+        "successor-parameter-visit-string": [
+          `export const schedule = new Schedule({ first: "fight", stages: { fight: { slots: [slot], breakable: true, then: (_ended: Visit<string>) => "unknown" } }, breakpoints: [] }, ${rest});`,
+        ],
+        "successor-method-string-parameters": [
+          `export const schedule = new Schedule({ first: "fight", stages: { fight: { slots: [slot], breakable: true, then(_ended: Visit<string>, _visits: (stage: string) => number) { return "unknown"; } } }, breakpoints: [] }, ${rest});`,
+        ],
+        "unknown-breakpoint": [
+          `export const schedule = new Schedule({ first: "fight", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [{ atOrBelow: hpFraction(0.5), enter: "unknown" }] }, ${rest});`,
+        ],
+        "unknown-first": [`export const schedule = new Schedule({ first: "unknown", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [] }, ${rest});`],
+        "stage-typed-string": [
+          'const fight: Stage<string, string, string> = { slots: [slot], breakable: true, then: () => "unknown" };',
+          `export const schedule = new Schedule({ first: "fight", stages: { fight }, breakpoints: [] }, ${rest});`,
+        ],
+        "table-typed-record-string": [
+          'const stages: Record<string, Stage<string, string, string>> = { fight: { slots: [slot], breakable: true, then: () => "fight" } };',
+          `export const schedule = new Schedule({ first: "unknown", stages, breakpoints: [] }, ${rest});`,
+        ],
+        "explicit-string-type-argument": [
+          `export const schedule = new Schedule<string, string, string, string>({ first: "unknown", stages: { fight: { slots: [slot], breakable: true, then: () => "fight" } }, breakpoints: [] }, ${rest});`,
+        ],
+      }),
+    ).toEqual({
       valid: [],
-      widened: ["8: Type 'string' is not assignable to type '\"fight\"'.", "9: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+      "table-built-first": ["5: Type 'string' is not assignable to type '\"fight\"'.", "5: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+      "table-built-first-successor-parameter-visit-string": ["5: Type 'string' is not assignable to type '\"fight\"'."],
+      "successor-parameter-visit-string": ["4: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+      "successor-method-string-parameters": ["4: Type 'string' is not assignable to type '\"fight\"'."],
+      "unknown-breakpoint": ["4: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+      "unknown-first": ["4: Type '\"unknown\"' is not assignable to type '\"fight\"'."],
+      "stage-typed-string": [
+        "5: Type '(ended: Readonly<{ stage: string; start: Tick; number: Cycle; entered: \"first\" | \"table-ended\" | \"breakpoint\"; }>, visits: (stage: string) => number) => string' is not assignable to type '(ended: Readonly<{ stage: \"fight\"; start: Tick; number: Cycle; entered: \"first\" | \"table-ended\" | \"breakpoint\"; }>, visits: (stage: \"fight\") => number) => \"fight\"'.",
+      ],
+      "table-typed-record-string": ["5: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": string; }>'."],
+      "explicit-string-type-argument": ["4: Type 'string' is not assignable to type 'Readonly<{ \"stage names must be string literals\": string; }>'."],
     });
   });
 
-  test("a script that names a stage it does not define is refused when its schedule is built", () => {
-    const stages = { fight: stage<string>("fight", 1, true, () => "fight") };
-    const build = (first: string, enter: string) => () => schedule<string>({ first, stages, breakpoints: [{ atOrBelow: hpFraction(0.5), enter }] });
+  test("a stage name the types cannot vouch for is refused by name, at construction for the first stage and breakpoint targets and on the transition for a successor", () => {
+    type Rotation = "autos" | "smite";
+    const rotation: readonly Rotation[] = ["autos", "smite"];
+    const build = (first: Rotation, enter: Rotation) =>
+      schedule<Rotation>({
+        first,
+        stages: { autos: stage<Rotation>("autos", 2, true, (_, visits) => rotation[visits("autos")]), smite: stage<Rotation>("smite", 1, true, () => "autos") },
+        breakpoints: [{ atOrBelow: hpFraction(0.5), enter }],
+      });
+    const refusal = (run: () => unknown) => {
+      try {
+        run();
+      } catch (error) {
+        return error instanceof Error ? `${error.name}: ${error.message}` : error;
+      }
+      return "no error";
+    };
+    const valid = build(rotation[0], rotation[1]);
 
-    expect(build("fight", "fight")().visitAt(tick(0))).toEqual({ stage: "fight", start: 0, number: 1, entered: "first" });
-    expect(build("fight", "unknown")).toThrow(new RangeError("the script names unknown, a stage it does not define"));
-    expect(build("arrive", "fight")).toThrow(new RangeError("the script names arrive, a stage it does not define"));
+    expect(ticks(0, 4).map((t) => valid.visitAt(t).stage)).toEqual(["autos", "autos", "smite", "autos", "autos"]);
+    expect({
+      first: refusal(() => build(rotation[2], "smite")),
+      breakpoint: refusal(() => build("autos", rotation[2])),
+      successor: refusal(() => valid.visitAt(tick(5))),
+    }).toEqual({
+      first: "UnknownStage: the script names undefined, a stage it does not define",
+      breakpoint: "UnknownStage: the script names undefined, a stage it does not define",
+      successor: "UnknownStage: the script names undefined, a stage it does not define",
+    });
   });
 });
 

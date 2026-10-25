@@ -16,15 +16,18 @@ export type Stage<S extends string, P, B> = Readonly<{
   slots: readonly [Slot<P, B>, ...Slot<P, B>[]];
   breakable: boolean;
   /** `visits(stage)` counts that stage's visits so far, the one that ended included. */
-  then: (ended: Visit<S>, visits: (stage: S) => number) => NoInfer<S>;
+  then: (ended: Visit<S>, visits: (stage: S) => number) => S;
 }>;
 
-export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: NoInfer<S> }>;
+export type Breakpoint<S extends string> = Readonly<{ atOrBelow: HpFraction; enter: S }>;
+
+type IsWideStageName<S extends string> = {} extends Record<S, unknown> ? true : false;
+type StageName<S extends string> = IsWideStageName<S> extends true ? Readonly<{ "stage names must be string literals": S }> : NoInfer<S>;
 
 export type Script<S extends string, P, B> = Readonly<{
-  first: NoInfer<S>;
-  stages: Readonly<Record<S, Stage<S, P, B>>>;
-  breakpoints: readonly Breakpoint<S>[];
+  first: StageName<S>;
+  stages: Readonly<Record<S, Stage<NoInfer<S>, P, B>>>;
+  breakpoints: readonly Breakpoint<NoInfer<S>>[];
 }>;
 
 export type BossHp = Readonly<{ hp: number; maxHp: number }>;
@@ -32,6 +35,18 @@ export type BossHp = Readonly<{ hp: number; maxHp: number }>;
 export function slotTable<P, B>(slots: readonly Slot<P, B>[], stage: string): readonly [Slot<P, B>, ...Slot<P, B>[]] {
   if (slots.length === 0) throw new RangeError(`the ${stage} stage has an empty table`);
   return [slots[0], ...slots.slice(1)];
+}
+
+class UnknownStage extends RangeError {
+  override readonly name = "UnknownStage";
+
+  constructor(stage: unknown) {
+    super(`the script names ${stage}, a stage it does not define`);
+  }
+}
+
+function assertStage<S extends string>(stages: Readonly<Record<S, unknown>>, stage: unknown): asserts stage is S {
+  if (typeof stage !== "string" || !Object.prototype.hasOwnProperty.call(stages, stage)) throw new UnknownStage(stage);
 }
 
 type Entry<S extends string> = Readonly<{ visit: Visit<S>; visits: ReadonlyMap<S, number> }>;
@@ -44,9 +59,16 @@ function enter<S extends string>(stage: S, start: Tick, entered: Visit<S>["enter
 class Visits<S extends string, P, B> {
   private latest: Entry<S>;
 
-  constructor(
+  static of<S extends string, P, B>(script: Script<S, P, B>): Visits<S, P, B> {
+    const { first, stages, breakpoints } = script;
+    assertStage(stages, first);
+    for (const breakpoint of breakpoints) assertStage(stages, breakpoint.enter);
+    return new Visits(script, [enter<S>(first, tick(0), "first", new Map())]);
+  }
+
+  private constructor(
     private readonly script: Script<S, P, B>,
-    private readonly runStarts: readonly Entry<S>[] = [enter(script.first, tick(0), "first", new Map())],
+    private readonly runStarts: readonly Entry<S>[],
     private previous: Entry<S> | null = null,
   ) {
     this.latest = runStarts[runStarts.length - 1];
@@ -88,7 +110,8 @@ class Visits<S extends string, P, B> {
   private successor(entry: Entry<S>): Entry<S> {
     const { visit, visits } = entry;
     const next = this.script.stages[visit.stage].then(visit, (stage) => visits.get(stage) ?? 0);
-    return enter(next, this.end(entry), "table-ended", visits);
+    assertStage(this.script.stages, next);
+    return enter<S>(next, this.end(entry), "table-ended", visits);
   }
 }
 
@@ -101,11 +124,9 @@ export class Schedule<S extends string, P, B, M extends string> {
     private readonly focus: Focus<M>,
     private readonly drillStart: DrillStart,
     private readonly horizon: Tick,
-    private readonly visits: Visits<S, P, B> = new Visits(script),
+    private readonly visits: Visits<S, P, B> = Visits.of(script),
   ) {
-    const unknown = [script.first, ...script.breakpoints.map((breakpoint) => breakpoint.enter)].find((stage) => !Object.prototype.hasOwnProperty.call(script.stages, stage));
-    if (unknown !== undefined) throw new RangeError(`the script names ${unknown}, a stage it does not define`);
-    this.start = this.startTick(new Visits(script));
+    this.start = this.startTick(Visits.of(script));
   }
 
   private startTick(unadvanced: Visits<S, P, B>): Tick {

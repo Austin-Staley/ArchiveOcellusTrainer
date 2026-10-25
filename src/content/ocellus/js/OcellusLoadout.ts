@@ -15,8 +15,9 @@ import {
   VenatorRing,
 } from "osrs-sdk";
 import type { Item, Player, UnitEquipment } from "osrs-sdk";
-import type { GearKeys, GearSlot, ResolvedChoices, Setup, SupplyKey } from "./OcellusTimings";
+import type { GearKeys, GearSlot, Setup, SupplyKey } from "./OcellusTimings";
 import { GEAR_SLOTS, OCELLUS_P4 } from "./OcellusTimings";
+import type { LoadoutSnapshot } from "./P4Types";
 import {
   InquisitorsGreatHelm,
   InquisitorsHauberk,
@@ -76,19 +77,43 @@ function wear<S extends GearSlot>(equipment: UnitEquipment, slot: S, setup: Setu
 
 const STANCES: Readonly<Record<typeof OCELLUS_P4.gear.scytheStance.value, AttackStyle>> = { jab: AttackStyle.AGGRESSIVECRUSH };
 
-export function dress(player: Player, setup: ResolvedChoices["setup"]): void {
-  const worn = setup.option.value;
+export function dress(player: Player, worn: Setup): void {
   for (const slot of GEAR_SLOTS) wear(player.equipment, slot, worn);
 
-  const others = Object.values(OCELLUS_P4.choices.setup.options).filter((option) => option !== setup.option);
   const switches: Item[] = [create("weapon", OCELLUS_P4.gear.specialWeapon.value)];
-  for (const other of others) {
+  for (const option of Object.values(OCELLUS_P4.choices.setup.options)) {
     for (const slot of GEAR_SLOTS) {
-      if (other.value[slot] !== worn[slot]) switches.push(create(slot, other.value[slot]));
+      if (option.value[slot] !== worn[slot]) switches.push(create(slot, option.value[slot]));
     }
   }
   const supplies = OCELLUS_P4.gear.supplies.value.map((key) => SUPPLIES[key]());
   [...switches, ...supplies].forEach((item, index) => (player.inventory[index] = item));
   player.equipmentChanged();
   AttackStylesController.controller.setWeaponAttackStyle(new OcellusScythe(), STANCES[OCELLUS_P4.gear.scytheStance.value]);
+}
+
+function itemId(item: Item | null | undefined): number | null {
+  const id = item?.cacheItemId;
+  return typeof id === "number" ? id : null;
+}
+
+export function loadoutSnapshot(player: Player): LoadoutSnapshot {
+  const { weapon, offhand, helmet, chest, legs, gloves, cape, necklace, feet, ring, ammo } = player.equipment;
+  return {
+    equipped: {
+      weapon: itemId(weapon),
+      offhand: itemId(offhand),
+      helmet: itemId(helmet),
+      chest: itemId(chest),
+      legs: itemId(legs),
+      gloves: itemId(gloves),
+      cape: itemId(cape),
+      necklace: itemId(necklace),
+      feet: itemId(feet),
+      ring: itemId(ring),
+      ammo: itemId(ammo),
+    },
+    inventory: player.inventory.map(itemId),
+    specialEnergy: player.currentStats.specialAttack,
+  };
 }

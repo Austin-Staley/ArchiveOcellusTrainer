@@ -45,7 +45,7 @@ type BossStep = Readonly<{ player: PlayerObservation; bossHp: number; rifts: rea
 
 type P4Run = Readonly<{ input: InputObservation; event: FightEvent; cause: PlayerHit; snapshot: BossStep; row: TickRow; end: RunEnd }>;
 
-export type OcellusBinding = EncounterBinding<P4Run>;
+type OcellusBinding = EncounterBinding<P4Run>;
 
 type Output = Logged<FightEvent> | HitRequest<PlayerHit>;
 type TurnOutput = Output | AttackDelayCut;

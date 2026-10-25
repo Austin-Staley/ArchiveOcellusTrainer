@@ -178,7 +178,12 @@ export class OcellusRegion extends Region {
   }
 
   initialiseRegion(): { player: Player } {
-    const player: OcellusPlayer = new OcellusPlayer(this, { ...OCELLUS_P4.geometry.playerSpawn.value }, () => ocellus.binding);
+    const player: OcellusPlayer = new OcellusPlayer(
+      this,
+      { ...OCELLUS_P4.geometry.playerSpawn.value },
+      () => ocellus.binding,
+      (target) => target instanceof Ocellus && target.outOfMeleeReach(),
+    );
     const ocellus: Ocellus = new Ocellus(this, this.config, player, () => this.invincible);
     dress(player, this.config.choices.setup.option.value);
     Object.values(sounds).forEach((sound) => SoundCache.preload(cacheSound(sound.value)));

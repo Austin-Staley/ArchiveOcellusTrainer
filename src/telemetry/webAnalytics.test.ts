@@ -4,7 +4,7 @@ const TOKEN = "0123456789abcdef0123456789abcdef";
 async function loadWith(token: string | undefined) {
   vi.resetModules();
   vi.stubEnv("CF_WEB_ANALYTICS_TOKEN", token ?? "");
-  const { loadWebAnalytics } = await import("./perfTelemetry");
+  const { loadWebAnalytics } = await vi.importActual<typeof import("./perfTelemetry")>("./perfTelemetry");
   loadWebAnalytics();
   return [...document.querySelectorAll("script")].map((script) => ({ src: script.src, beacon: script.dataset.cfBeacon, defer: script.defer }));
 }

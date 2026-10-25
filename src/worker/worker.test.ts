@@ -1,6 +1,7 @@
 import type { DataPoint } from "../telemetry/perfSummary";
 import type { Env } from "./worker";
-import worker from "./worker";
+
+const loadWorkerInEachTest = () => vi.importActual<typeof import("./worker")>("./worker");
 
 const SUMMARY = {
   version: "2026.10.25.2",
@@ -36,6 +37,7 @@ function bindings() {
 }
 
 async function send(env: Env, path: string, init?: RequestInit) {
+  const { default: worker } = await loadWorkerInEachTest();
   const response = await worker.fetch(new Request(`https://trainer.example${path}`, init), env);
   return { status: response.status, body: await response.text() };
 }

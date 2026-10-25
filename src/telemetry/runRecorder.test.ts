@@ -1,7 +1,8 @@
-import { RunRecorder } from "./runRecorder";
+const loadRecorderInEachTest = () => vi.importActual<typeof import("./runRecorder")>("./runRecorder");
 
 describe("Run recorder", () => {
-  test("percentiles are nearest-rank over frame and tick gaps, and slow frames and late ticks count gaps past 50 ms and 700 ms", () => {
+  test("percentiles are nearest-rank over frame and tick gaps, and slow frames and late ticks count gaps past 50 ms and 700 ms", async () => {
+    const { RunRecorder } = await loadRecorderInEachTest();
     const recorder = new RunRecorder();
     const frameGaps = [...Array<number>(90).fill(16), 20, 20, 20, 20, 20, 33, 33, 33, 51, 120];
     let at = 1000;
@@ -23,7 +24,8 @@ describe("Run recorder", () => {
     });
   });
 
-  test("a gap past the last bucket still counts and reports the true maximum", () => {
+  test("a gap past the last bucket still counts and reports the true maximum", async () => {
+    const { RunRecorder } = await loadRecorderInEachTest();
     const recorder = new RunRecorder();
     [0, 16, 32, 2032].forEach((at) => recorder.frame(at));
     [0, 9000].forEach((at) => recorder.tick(at));

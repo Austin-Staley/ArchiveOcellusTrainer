@@ -1,5 +1,5 @@
 
-import { browserFamily, gpuFamily } from "./device";
+const loadDeviceInEachTest = () => vi.importActual<typeof import("./device")>("./device");
 
 describe("Device families", () => {
   test.each([
@@ -18,7 +18,8 @@ describe("Device families", () => {
     ["Mesa Virtio GPU", "other"],
     ["", "unavailable"],
     [null, "unavailable"],
-  ])("renderer %j is the %s family", (renderer, family) => {
+  ])("renderer %j is the %s family", async (renderer, family) => {
+    const { gpuFamily } = await loadDeviceInEachTest();
     expect(gpuFamily(renderer)).toBe(family);
   });
 
@@ -32,7 +33,8 @@ describe("Device families", () => {
     ["Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1", "chrome"],
     ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15", "safari"],
     ["Mozilla/5.0 (darwin) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/30.1.2", "other"],
-  ])("user agent %j is the %s family", (userAgent, family) => {
+  ])("user agent %j is the %s family", async (userAgent, family) => {
+    const { browserFamily } = await loadDeviceInEachTest();
     expect(browserFamily(userAgent)).toBe(family);
   });
 });

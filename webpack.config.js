@@ -1,5 +1,5 @@
 const path = require("path");
-const { DefinePlugin } = require("webpack");
+const { DefinePlugin, EnvironmentPlugin } = require("webpack");
 const CopyPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 
@@ -32,6 +32,7 @@ module.exports = {
   },
   plugins: [
     new DefinePlugin({ "process.env.CF_WEB_ANALYTICS_TOKEN": JSON.stringify(WEB_ANALYTICS_TOKEN) }),
+    new EnvironmentPlugin({ ARCHIVE_P3: "off" }),
     new HtmlWebpackPlugin({ template: "src/index.html", inject: "body", scriptLoading: "blocking" }),
     new CopyPlugin({
       patterns: [

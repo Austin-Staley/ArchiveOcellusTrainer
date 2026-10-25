@@ -1,6 +1,6 @@
 import type { CacheAssets } from "osrs-sdk/asset-manifest";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
-import { OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
+import { OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
 
 const { boss, gear, presentation, lifeforceOrb, rifts, geometry, floorHoles } = OCELLUS_P4;
 
@@ -8,7 +8,7 @@ const sequences = (poses: Readonly<Record<string, Readonly<{ value: number }>>>)
 
 export const ARCHIVE_OCELLUS_ASSETS = {
   npcs: {
-    ocellus: { id: boss.npcId.value, animations: sequences(presentation.bossPoses) },
+    ocellus: { id: boss.npcId.value, animations: { ...sequences(presentation.bossPoses), ...sequences(OCELLUS_P3.bossPoses) } },
     voidRift: { id: rifts.npcId.value, animations: sequences(rifts.poses) },
   },
   models: {

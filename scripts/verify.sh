@@ -235,6 +235,9 @@ RIFT_TIMER_MIN_FULL_SHARE=85
 RIFT_ONE_HIT='[[72,"rift-67-1","ranged",44]]'
 RIFT_RALOS_HITS='[[72,"rift-67-1","ranged",18],[72,"rift-67-1","ranged",18]]'
 RIFT_RALOS_LAST_TICK=74
+RIFT_MELEE_HITS='[[71,"rift-67-1","melee",35],[76,"rift-67-1","melee",9]]'
+RIFT_MELEE_SPLAT_TICK=71
+RIFT_MELEE_LAST_TICK=77
 CHAT_POLL_WAIT_MS=600
 MENU_CONTROLS='["setup","focus","seed","keybinds","sound","area_sound","invincible","whats_new"]'
 MENU_QUERY="?seed=1"
@@ -1366,6 +1369,16 @@ drive_overheads_rifts() {
   ab console >"$VERIFY_DIR/rift-ralos-console.log" 2>&1 || { log "console capture failed"; return 1; }
   ab --json errors | json data.errors >"$VERIFY_DIR/rift-ralos-page-errors.json" || { log "page error capture failed"; return 1; }
 
+  ab open "${URL}${RIFT_QUERY}&setup=melee" >/dev/null || return 1
+  fight_tick_at_least 0 120000 || { log "the melee rifts drill never loaded"; return 1; }
+  canvas_centre || { log "canvas box unreadable"; return 1; }
+  click_after_tick "$RIFT_CLICK_TICK" "-$NORTH_EAST_RIFT_CLICK_LEFT_PX" "-$NORTH_EAST_RIFT_CLICK_UP_PX" || { log "the north-east rift was not clicked with the scythe"; return 1; }
+  shot_after_tick "$RIFT_MELEE_SPLAT_TICK" 0 rift-melee-hit.png || { log "melee rift hit screenshot failed"; return 1; }
+  fight_tick_at_least "$RIFT_MELEE_LAST_TICK" 30000 || { log "the melee rifts drill never stepped to P4 tick ${RIFT_MELEE_LAST_TICK}"; return 1; }
+  probe "log()" >"$VERIFY_DIR/rift-melee.json"
+  ab console >"$VERIFY_DIR/rift-melee-console.log" 2>&1 || { log "console capture failed"; return 1; }
+  ab --json errors | json data.errors >"$VERIFY_DIR/rift-melee-page-errors.json" || { log "page error capture failed"; return 1; }
+
   ab open "${URL}${DEFLECT_QUERY}" >/dev/null || return 1
   canvas_centre || { log "canvas box unreadable"; return 1; }
   click_after_tick "$DEFLECT_CLICK_TICK" "$RISEN_BOSS_CLICK_RIGHT_PX" "$RISEN_BOSS_CLICK_DOWN_PX" || { log "the risen boss was not clicked"; return 1; }
@@ -1881,7 +1894,7 @@ drive() {
     defence-floor-start.json defence-floor-first.json defence-floor.json defence-floor-log.json defence-floor.png defence-floor-console.log defence-floor-page-errors.json \
     supplies-inventory.json item-menu.json item-menu.png item-menu-closed.json brew-click.json brew-hp.json brew-heal.png supplies-console.log supplies-page-errors.json \
     keybinds-open.json keybinds.png keybinds-bound.json keybinds-saved.json keybinds-old-key.json keybinds-reloaded.json keybinds-reloaded.png keybinds-restored.json keybinds-console.log keybinds-page-errors.json special-heal.png \
-    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json rift-ralos.json rift-ralos-console.log rift-ralos-page-errors.json \
+    $(printf 'overhead-%s.png ' $OVERHEAD_SHOT_TICKS) overhead-draws.json rift-spawned.png rift-destroyed.png rift-chat.json rift-burst.png rifts.json rift-audio.json rift-console.log rift-page-errors.json rift-ralos.json rift-ralos-console.log rift-ralos-page-errors.json rift-melee-hit.png rift-melee.json rift-melee-console.log rift-melee-page-errors.json \
     hover-out-of-reach.png deflect-blocked.png deflect.json deflect-console.log deflect-page-errors.json \
     rift-charged.png reflect-none.png reflect-hit.png reflect.json reflect-console.log reflect-page-errors.json \
     seed-fresh.png seed.json seed.png seed-console.log seed-page-errors.json \
@@ -1910,7 +1923,7 @@ drive() {
       walkwayOrder, walkwayStop, walkwayPixel, walkwayMinShare, walkwayRunEnd, walkwayRunTiles, controlWalkTiles, cornerHole, cornerNub,
       holeLayout, holePixels, holeFreePixels, holeBoxHalf, holeMinDark, holeMaxDark, holeTile, holeHits, holeDamage,
       cueSoundSamples, cueSounds, cueSoundWindow, cueChat, floorSteps, invincibleLastTick, invincibleExpected, invincibleOrbExpected,
-      riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
+      riftTimerBox, riftTimerMaxEarly, riftTimerMinFull, riftOneHit, riftRalosHits, riftMeleeHits, reflectExpected, reflectSplatBox, reflectMinSplat, reflectMaxClear,
       dodgeLastTick, dodgeAttacks, explosionGlowBox, explosionGlowMinShare, focusEntryTicks, bossPoseSamples, pathingWest, pathingEast, pathingBack, pathingExpected, pathingRerouteExpected, pathingOutExpected, pathingControlExpected, orbHolesExpected, orbHolesLayout,
       orbInnerClear, orbInnerExpiry, orbEntryTile, orbOppositeExpected, projectedTileClicks, bossBarAtEntry, explosionReduction, backWallStart, backWallEnd, backWallToward, backWallBack,
       explosion2dGlowBox, explosion2dExpected, explosionRunEndExpected, explosionGlowMaxShare, explosionRunEndFrames] = process.argv.slice(1);
@@ -1947,6 +1960,7 @@ drive() {
     const [riftLog, riftChat, riftAudio, riftErrors, deflectLog, deflectErrors, overheadDraws] = ["rifts.json", "rift-chat.json", "rift-audio.json", "rift-page-errors.json", "deflect.json", "deflect-page-errors.json", "overhead-draws.json"].map(read);
     const [reflectLog, reflectErrors] = ["reflect.json", "reflect-page-errors.json"].map(read);
     const [ralosLog, ralosErrors] = ["rift-ralos.json", "rift-ralos-page-errors.json"].map(read);
+    const [meleeRiftLog, meleeRiftErrors] = ["rift-melee.json", "rift-melee-page-errors.json"].map(read);
     const [cueLog, cueToggleAudio, cueAudio, cueToggleErrors, cueErrors, cueSaved, cueChatBefore, cueChatAfter] =
       ["cues.json", "cue-toggle-audio.json", "cue-audio.json", "cue-toggle-page-errors.json", "cue-page-errors.json", "cue-sound-saved.json", "cue-chat-before.json", "cue-chat.json"].map(read);
     const [recordingFrom, toggledAt, freshClickedAt, freshAudio, freshErrors, savedOff] =
@@ -2307,6 +2321,7 @@ drive() {
         bursts: kindOf(riftLog.rows, "rift-burst").map((e) => [e.at, e.rift, e.receipt]),
         hits: kindOf(riftLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
         ralosHits: kindOf(ralosLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
+        meleeHits: kindOf(meleeRiftLog.rows, "rift-hit").map((e) => [e.at, e.rift, e.style, e.damage]),
         timerShares: { beforeSpawn: timerShare("overhead-45.png"), spawned: timerShare("rift-spawned.png"), charged: timerShare("rift-charged.png") },
         chat: riftChat.data?.text ?? null,
         sounds: {
@@ -2469,6 +2484,7 @@ drive() {
       killChatShown: rifts.chat === killChat,
       standingRiftBursts: sameJson(rifts.bursts, JSON.stringify(expectedRifts.bursts)),
       riftsTakeStandardRangedMaxHits: sameJson(rifts.hits, riftOneHit) && sameJson(rifts.ralosHits, riftRalosHits),
+      riftsTakeStandardMeleeMaxHits: sameJson(rifts.meleeHits, riftMeleeHits),
       riftTimerBarFills: rifts.timerShares.beforeSpawn === 0 && rifts.timerShares.spawned > 0 && rifts.timerShares.spawned <= Number(riftTimerMaxEarly) && rifts.timerShares.charged >= Number(riftTimerMinFull),
       deflectReflectsATenth: sameJson({ judged: observed.reflect.judged, reflected: observed.reflect.reflected, hpAfter: observed.reflect.hpAfter }, reflectExpected) &&
         observed.reflect.judged.every(([at, style, outcome, requested]) => observed.reflect.reflected.filter((r) => r[0] === at).length === (outcome === "blocked" && Math.floor(requested / 10) > 0 ? 1 : 0)),
@@ -2532,7 +2548,7 @@ drive() {
         sameJson(invincible.orb.hp.find(([t]) => t === expectedRevival.hp[0]), JSON.stringify(expectedRevival.hp)) &&
         invincible.orb.hp.every(([, hp]) => hp <= expectedRevival.maxHp),
       projectedClicksOrderTheirTiles: tileClicks.length === Number(projectedTileClicks) && tileClicks.every(({ tile, ordered }) => same(ordered, tile)),
-      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, explosion2dErrors, runEndPages["2d"].errors, runEndPages["3d"].errors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
+      noPageErrors: [errors, focusErrors, voidErrors, shotErrors, orbErrors, orbSkipErrors, explosionErrors, underErrors, dodgeErrors, explosion2dErrors, runEndPages["2d"].errors, runEndPages["3d"].errors, specialErrors, lateErrors, loadoutErrors, selectorErrors, floorErrors, suppliesErrors, keybindsErrors, riftErrors, ralosErrors, meleeRiftErrors, deflectErrors, reflectErrors, seedErrors, holesErrors, orbHolesErrors, orbLateErrors, orbEntryErrors, walkwayErrors, walkwayRunEndErrors, controlWalkErrors, backWallErrors, cornerErrors, cornerViewErrors, pathingErrors, rerouteErrors, controlRerouteErrors, outErrors, invincibleErrors, invincibleOrbErrors, freshErrors, cueToggleErrors, cueErrors].every((list) => list.length === 0),
     };
     if (!checks.clickTargetedExpectedTile) {
       console.error(`verify: the click resolved to ${JSON.stringify(after.destination)}, not ${JSON.stringify(targetTile)}; the click-to-tile mapping for this viewport and camera changed`);
@@ -2552,7 +2568,7 @@ drive() {
     "$WALKWAY_ORDER_TILE" "$WALKWAY_STOP_TILE" "$WALKWAY_PIXEL" "$WALKWAY_MIN_SHARE" "$WALKWAY_RUN_END_TILE" "$WALKWAY_RUN_TILES" "$CONTROL_WALK_TILES" "$CORNER_HOLE_TILE" "$CORNER_NUB_TILE" \
     "$HOLE_LAYOUT" "$HOLE_PIXELS" "$HOLE_FREE_PIXELS" "$HOLE_BOX_HALF_PX" "$HOLE_MIN_DARK_SHARE" "$HOLE_MAX_DARK_SHARE" "$HOLE_TILE" "$HOLE_HITS" "$HOLE_DAMAGE" \
     "$CUE_SOUND_SAMPLES" "$CUE_SOUNDS" "$CUE_SOUND_WINDOW" "$CUE_CHAT" "$DEFENCE_FLOOR_STEPS" "$INVINCIBLE_LAST_TICK" "$INVINCIBLE_EXPECTED" "$INVINCIBLE_ORB_EXPECTED" \
-    "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
+    "$RIFT_TIMER_BOX" "$RIFT_TIMER_MAX_EARLY_SHARE" "$RIFT_TIMER_MIN_FULL_SHARE" "$RIFT_ONE_HIT" "$RIFT_RALOS_HITS" "$RIFT_MELEE_HITS" "$REFLECT_EXPECTED" "$REFLECT_SPLAT_BOX" "$REFLECT_MIN_SPLAT_SHARE" "$REFLECT_MAX_CLEAR_SHARE" \
     "$DODGE_SPEEDUP_LAST_TICK" "$DODGE_SPEEDUP_ATTACKS" "$EXPLOSION_GLOW_BOX" "$EXPLOSION_GLOW_MIN_SHARE" "$FOCUS_ENTRY_TICKS" "$BOSS_POSE_SOUND_SAMPLES" \
     "$PATHING_WEST_TILE" "$PATHING_EAST_TILE" "$PATHING_BACK_TILE" "$PATHING_EXPECTED" "$PATHING_REROUTE_EXPECTED" "$PATHING_OUT_EXPECTED" "$PATHING_CONTROL_EXPECTED" "$ORB_HOLES_EXPECTED" "$ORB_HOLES_LAYOUT" \
     "$ORB_INNER_CLEAR_TICK" "$ORB_INNER_EXPIRY_TICK" "$ORB_ENTRY_TILE" "$ORB_OPPOSITE_EXPECTED" "$PROJECTED_TILE_CLICKS" "$BOSS_BAR_AT_ENTRY" "$EXPLOSION_DAMAGE_REDUCTION_PERCENT" \

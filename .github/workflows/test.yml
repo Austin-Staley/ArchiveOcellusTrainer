@@ -35,3 +35,37 @@ jobs:
         run: node review-ratchet/checks/replay-controls.mjs --base "$BASE"
       - run: scripts/netlify-build.test.sh
       - run: npm run build
+
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/netlify-cache
+          key: osrs-cache-${{ hashFiles('scripts/netlify-build.sh') }}
+      - name: Extract the assets and build, as the deploy does
+        env:
+          NETLIFY_CACHE_DIR: ${{ runner.temp }}/netlify-cache
+        run: bash scripts/netlify-build.sh
+      - run: npm install --global agent-browser@0.34.0 && agent-browser install --with-deps
+      - name: Measure the head against the base
+        env:
+          VERIFY_PERF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          VERIFY_DIR: ${{ runner.temp }}/verify
+          AGENT_BROWSER_ARGS: --enable-unsafe-swiftshader
+        run: scripts/verify.sh perf
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-evidence
+          path: |
+            ${{ runner.temp }}/verify/perf-checks.json
+            ${{ runner.temp }}/verify/perf/captures/

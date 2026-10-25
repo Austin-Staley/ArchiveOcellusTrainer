@@ -7,7 +7,7 @@ import type { AttackDelayCut, HitRequest, Logged } from "../../../../sim/sdk/Enc
 import type { Beat, FightEvent, PlayerHit, VoidKind } from "../P4Types";
 import { reach } from "../../../../sim/tiles";
 import { FOOTPRINT } from "./floor";
-import { rollInt } from "./roll";
+import { rollInt } from "../roll";
 
 type Mark = Readonly<{ void: VoidKind; pulse: number; tile: Tile }>;
 type Impact = Extract<PlayerHit, { kind: "explosion-resolved" }>;

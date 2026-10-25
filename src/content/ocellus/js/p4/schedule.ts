@@ -7,7 +7,7 @@ import { Schedule } from "../../../../sim/schedule";
 import type { Beat, BossOverhead, Mechanic, Phase, Special, TransitionKind, VoidKind } from "../P4Types";
 import { ordinal } from "../P4Types";
 import { floorRule } from "./floor";
-import { roll } from "./roll";
+import { roll } from "../roll";
 
 const VARIANTS: readonly Special[] = ["vortex", "spike-disk", "black-disk"];
 

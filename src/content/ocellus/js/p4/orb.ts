@@ -8,7 +8,7 @@ import type { FightEvent, PlayerHit, VoidKind } from "../P4Types";
 import type { TileSet } from "../../../../sim/tiles";
 import { reach } from "../../../../sim/tiles";
 import { FOOTPRINT, NEAR_SQUARE, PLATFORM, VOID_MASKS } from "./floor";
-import { roll } from "./roll";
+import { roll } from "../roll";
 
 const { orbDistance, drainDivisor, returnAfterStep } = OCELLUS_P4.lifeforceOrb;
 const RIM = NEAR_SQUARE.minus(FOOTPRINT);

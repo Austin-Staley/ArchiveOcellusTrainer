@@ -1,5 +1,5 @@
-import type { DamageRange } from "../OcellusTimings";
-import type { Seed, Tick } from "../../../../sim/brands";
+import type { DamageRange } from "./OcellusTimings";
+import type { Seed, Tick } from "../../../sim/brands";
 
 type RollStream = "orbTile" | "floorDamage" | "explosionDamage" | "specialDamage" | "specialVariant" | "riftBurst" | "holeLayout" | "holeDamage";
 

@@ -36,7 +36,7 @@ import { damageReduction, explode, explosionHit, NO_MARKS } from "../p4/explosio
 import { floorRule, FOOTPRINT, VOID_MASKS } from "../p4/floor";
 import type { Orbs, OrbStep } from "../p4/orb";
 import { drain, expireOrb, forgiveOrbDebt, formOrb, matureOrb, moveOver, NO_ORBS, releaseUnclaimedOuterOrb, returnDueOrbs } from "../p4/orb";
-import { rollInt } from "../p4/roll";
+import { rollInt } from "../roll";
 import { compileSchedule } from "../p4/schedule";
 import { VoidRift } from "./VoidRift";
 

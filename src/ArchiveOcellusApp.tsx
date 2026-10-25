@@ -18,6 +18,11 @@ window.addEventListener("pointerdown", () => void SoundCache.context?.resume(), 
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
+const MAKER = "Julian Dasilva / Moarhots";
+const MAKER_LINKS: readonly Readonly<{ label: string; href: string }>[] = [
+  { label: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer" },
+  { label: "@ShadowJdas", href: "https://x.com/ShadowJdas" },
+];
 
 declare global {
   interface Window {
@@ -336,6 +341,19 @@ export function ArchiveOcellusApp() {
         <DrillControls config={config} region={region} />
         <RunResultPanel config={config} region={region} />
         <footer id="credits">
+          <p id="maker_credit">
+            Made by {MAKER}{" "}
+            <span id="maker_links">
+              {MAKER_LINKS.map((link, i) => (
+                <React.Fragment key={link.href}>
+                  {i > 0 && " · "}
+                  <a href={link.href} target="_blank" rel="noopener noreferrer">
+                    {link.label}
+                  </a>
+                </React.Fragment>
+              ))}
+            </span>
+          </p>
           <p id="credit_line">{CREDIT_LINE}</p>
           <p id="app_version">v{LATEST_RELEASE.version}</p>
         </footer>

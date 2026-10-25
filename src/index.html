@@ -24,15 +24,31 @@
         bottom: 4px;
         left: 4px;
         display: flex;
+        flex-wrap: wrap;
         align-items: flex-end;
-        gap: 8px;
+        gap: 0 8px;
         max-width: calc(100% - 8px);
         font-size: 11px;
         text-shadow: 1px 1px 0 black;
         pointer-events: none;
       }
 
+      #maker_credit {
+        flex-basis: 100%;
+        margin: 0;
+      }
+
+      #maker_links {
+        display: block;
+      }
+
+      #maker_links a {
+        color: #ff981f;
+        pointer-events: auto;
+      }
+
       #credit_line {
+        flex: 1 1 0;
         max-width: 60ch;
         margin: 0;
       }
@@ -45,7 +61,7 @@
 
       #drill_controls {
         position: absolute;
-        bottom: 48px;
+        bottom: 74px;
         left: 4px;
         display: flex;
         gap: 4px;

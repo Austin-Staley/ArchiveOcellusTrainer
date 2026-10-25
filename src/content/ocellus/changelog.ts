@@ -6,8 +6,8 @@ export const CHANGELOG: Changelog = [
     notes: [
       "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",
       "A click made right before the tick registers on that tick, instead of a tick late.",
-      "To help find the cause of lag, some runs now send an anonymous performance summary when they end: frame and tick timings, 2D or 3D, screen scale, game size, CPU cores, graphics card maker, browser, run length and how it ended.",
-      "It has no ID, no cookies and nothing that names you. Page views are counted with Cloudflare Web Analytics, which also uses no cookies.",
+      "To help find the cause of lag, a random sample of runs now sends an anonymous performance summary when it ends: frame and tick timings, 2D or 3D, screen scale, game size, CPU cores, graphics card maker, browser, run length and how it ended.",
+      "The summary has no ID, no cookies and nothing that names you. Page views are counted with Cloudflare Web Analytics, which also uses no cookies. Web Analytics loads on every page view unless you opt out. Only the performance summary is sampled.",
       "To turn both off, open Settings and untick Send anonymous performance data. Page view counting stops from the next page load.",
     ],
   },

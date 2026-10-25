@@ -1,8 +1,9 @@
 import { Projectile, Random } from "osrs-sdk";
 import type { Player, Unit } from "osrs-sdk";
-import type { Seed, Tick, Tile, WorldTick } from "../brands";
+import type { Seed, Tick, TickSpan, Tile, WorldTick } from "../brands";
 import { tick, tile, worldTick } from "../brands";
 import type { Damage, HitReceipt, IncomingStyle, Style } from "../combat";
+import { cutAttackDelay } from "../combat";
 
 export type Encounter = Readonly<{ input: unknown; event: unknown; cause: unknown; snapshot: unknown; row: unknown; end: unknown }>;
 
@@ -15,11 +16,12 @@ export type Logged<E> = Readonly<{ kind: "event"; event: E }>;
 export type HitRequest<C> = Readonly<{ kind: "hit"; damage: Damage; cause: C }>;
 export type Judgement = Readonly<{ kind: "judge-incoming"; hit: IncomingHit; damage: number }>;
 export type Heal = Readonly<{ kind: "heal"; amount: number; limit: "max-hp" | "allow-overheal" }>;
+export type AttackDelayCut = Readonly<{ kind: "cut-attack-delay"; by: TickSpan }>;
 
 type FrameData<T extends Encounter> = {
   "tick-opened": Readonly<Record<never, never>>;
   "before-npc-hits": Readonly<{ incoming: readonly IncomingHit[] }>;
-  "npc-turn": Readonly<{ snapshot: T["snapshot"] }>;
+  "npc-turn": Readonly<{ snapshot: T["snapshot"]; player: Readonly<{ attackDelay: number }> }>;
   "hit-applied": Readonly<{ hit: Landed<T["cause"]> }>;
   "player-hits-settled": Readonly<{ landed: readonly Landed<T["cause"]>[]; player: Readonly<{ hp: number; maxHp: number }> }>;
   "player-moved": Readonly<{ steps: readonly Tile[]; at: Tile }>;
@@ -33,7 +35,7 @@ export type Frame<T extends Encounter> = { [K in FrameKind]: FrameOf<T, K> }[Fra
 type Replies<T extends Encounter> = {
   "tick-opened": void;
   "before-npc-hits": Readonly<{ snapshot: T["snapshot"]; outputs: readonly (Logged<T["event"]> | Judgement | HitRequest<T["cause"]>)[] }>;
-  "npc-turn": Readonly<{ outputs: readonly (Logged<T["event"]> | HitRequest<T["cause"]>)[]; ending: T["end"] | null }>;
+  "npc-turn": Readonly<{ outputs: readonly (Logged<T["event"]> | HitRequest<T["cause"]> | AttackDelayCut)[]; ending: T["end"] | null }>;
   "hit-applied": readonly T["event"][];
   "player-hits-settled": readonly (Logged<T["event"]> | Heal)[];
   "player-moved": void;
@@ -237,7 +239,7 @@ export class EncounterBinding<T extends Encounter> {
     const judged = this.hooks["before-npc-hits"]({ kind: "before-npc-hits", time, incoming: landing.map(([hit]) => hit) });
     const before = this.apply(actor, judged.outputs, new Map(landing));
     resolve();
-    const turned = this.hooks["npc-turn"]({ kind: "npc-turn", time, snapshot: judged.snapshot });
+    const turned = this.hooks["npc-turn"]({ kind: "npc-turn", time, snapshot: judged.snapshot, player: { attackDelay: this.player.attackDelay } });
     const after = this.apply(actor, turned.outputs, new Map());
     this.run = { kind: "turned", time, inputs: run.inputs, snapshot: judged.snapshot, events: [...before, ...after], landed: [], drawsAtTurn, ending: turned.ending };
   }
@@ -355,7 +357,7 @@ export class EncounterBinding<T extends Encounter> {
     }
   }
 
-  private apply(actor: Unit, outputs: readonly (Logged<T["event"]> | Judgement | HitRequest<T["cause"]>)[], incoming: ReadonlyMap<IncomingHit, Projectile>): readonly T["event"][] {
+  private apply(actor: Unit, outputs: readonly (Logged<T["event"]> | Judgement | HitRequest<T["cause"]> | AttackDelayCut)[], incoming: ReadonlyMap<IncomingHit, Projectile>): readonly T["event"][] {
     return outputs.flatMap((output) => {
       switch (output.kind) {
         case "event":
@@ -368,6 +370,9 @@ export class EncounterBinding<T extends Encounter> {
           if (projectile) projectile.damage = output.damage;
           return [];
         }
+        case "cut-attack-delay":
+          this.player.attackDelay = cutAttackDelay(this.player.attackDelay, output.by);
+          return [];
         default: {
           const unhandled: never = output;
           return unhandled;

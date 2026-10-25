@@ -1,3 +1,5 @@
+import type { TickSpan } from "./brands";
+
 export type Style = "melee" | "ranged" | "magic";
 export type IncomingStyle = Style | "typeless";
 
@@ -8,3 +10,7 @@ export type Damage =
   | Readonly<{ kind: "fixed"; amount: number }>
   | Readonly<{ kind: "fraction-current-hp"; divisor: number }>
   | Readonly<{ kind: "by-prayer"; style: Style; protectedAmount: number; unprotectedAmount: number }>;
+
+export function cutAttackDelay(delay: number, by: TickSpan): number {
+  return Math.max(Math.min(delay, 0), delay - by);
+}

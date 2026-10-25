@@ -28,12 +28,12 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
-  test("a one-tile step during each mark tick leaves every mark behind and counts as a dodge", () => {
+  test("guard: a one-tile step during each mark tick leaves every mark behind and counts as a dodge", async () => {
     const drill = startDrill({ selection: EXPLOSIONS });
     const steps: readonly (readonly [number, At])[] = [[16, BESIDE_SPAWN], [18, SPAWN_ON_FLOOD], [20, BESIDE_SPAWN], [22, SPAWN_ON_FLOOD], [24, BESIDE_SPAWN], [26, SPAWN_ON_FLOOD]];
     for (const [after, to] of steps) {
       drill.tickTo(after);
-      drill.walkTo(to);
+      await drill.click(to);
     }
     drill.tickTo(29);
     expect(drill.events("explosion-marked").map((e) => [e.at, e.tile])).toEqual([
@@ -46,10 +46,10 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
-  test("a step first taken on the impact tick is late: the hit lands on the marked tile", () => {
+  test("guard: a step first taken on the impact tick is late: the hit lands on the marked tile", async () => {
     const drill = startDrill({ selection: EXPLOSIONS });
     drill.tickTo(17);
-    drill.walkTo(BESIDE_SPAWN);
+    await drill.click(BESIDE_SPAWN);
     drill.tickTo(18);
     expect(drill.events("explosion-resolved").map((e) => [e.at, e.outcome.kind, e.tile])).toEqual([[18, "hit", { x: 5, y: 1 }]]);
     expect(drill.row(18).playerAtPostTick.tile).toEqual({ x: 6, y: 1 });
@@ -64,9 +64,21 @@ describe("U4 personal explosions", () => {
     drill.dispose();
   });
 
-  test("standing under the boss gives no cover: stepping under on a mark tick leaves that mark behind, and the next mark under the boss hits", () => {
+  test("a kill on an impact tick ends the run with the pending mark no longer drawn", async () => {
+    const drill = startDrill({ seed: BOW_ROLLS_24_9_13_53, bossHp: 1, selection: EXPLOSIONS });
+    await drill.click(RING_NORTH);
+    drill.tickTo(15);
+    await drill.click(UNDER_BOSS);
+    drill.tickTo(17);
+    const marked = drill.drawnShardReach(RING_NORTH, 0.25).length;
+    drill.tickTo(18);
+    expect([marked, drill.events("run-ended").map((e) => [e.at, e.reason]), drill.drawnShardReach(RING_NORTH, 0.25)]).toEqual([7, [[18, "kill"]], []]);
+    drill.dispose();
+  });
+
+  test("guard: standing under the boss gives no cover: stepping under on a mark tick leaves that mark behind, and the next mark under the boss hits", async () => {
     const drill = startDrill({ selection: EXPLOSIONS });
-    drill.walkTo(FLOOD_NORTH_OF_RING);
+    await drill.click(FLOOD_NORTH_OF_RING);
     drill.tickTo(16);
     drill.walkTo(UNDER_BOSS);
     drill.tickTo(20);

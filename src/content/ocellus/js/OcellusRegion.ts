@@ -6,7 +6,8 @@ import { dress } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { SoundId, Tile } from "../../../sim/brands";
 import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, VoidKind } from "./P4Types";
-import { BossLook, ExplosionViews, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
+import { ExplosionViews } from "./entities/ExplosionViews";
+import { BossLook, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
 import { BossFootprint, Ocellus } from "./mobs/Ocellus";
 import { BRAZIERS, CURB, PLATFORM, voidUnder } from "./p4/floor";
@@ -104,6 +105,9 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "death-prevented":
       views.chat.push(`Invincible: ${LETHAL_HIT[event.source]} would have killed you on tick ${event.at}.`);
       return;
+    case "run-ended":
+      views.explosions.retire();
+      return;
     case "overhead-switched":
     case "boss-state-changed":
     case "player-hit-judged":
@@ -115,7 +119,6 @@ function present(event: FightEvent, views: Views, player: Tile): void {
     case "special-hit":
     case "rift-spawned":
     case "rift-hit":
-    case "run-ended":
       return;
     default: {
       const unhandled: never = event;

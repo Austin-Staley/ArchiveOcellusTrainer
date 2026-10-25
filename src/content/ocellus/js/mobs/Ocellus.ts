@@ -3,7 +3,7 @@ import type { Model, Projectile, Region, UnitBonuses } from "osrs-sdk";
 import type { DamageRange, DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
-import { withDefenceFloor } from "../bossStats";
+import { bossBonuses, withDefenceFloor } from "../bossStats";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { IncomingStyle, Style } from "../../../../sim/combat";
@@ -57,15 +57,6 @@ type Rift = Readonly<{ id: RiftId; tile: Tile; forCycle: Cycle; mob: VoidRift; h
 
 /** The SDK keeps a delay-1 hitsplat drawn for the tick it lands and the next. */
 const HEAL_SPLAT_TICKS = span(1);
-
-function sdkRangedDefence(): number {
-  const ranged = OCELLUS_P4.boss.rangedDefence.value;
-  const [first, ...rest] = Object.values(OCELLUS_P4.gear.ammunition.value).map((ammunition) => ranged[ammunition]);
-  if (rest.some((value) => value !== first)) throw new Error("the trainer's ammunition classes roll against different ranged defences, and the SDK holds one");
-  return first;
-}
-
-const DEFENCE_BONUSES = { ...OCELLUS_P4.boss.defenceBonuses.value, range: sdkRangedDefence() };
 
 function logs(...events: readonly (FightEvent | null)[]): readonly Logged<FightEvent>[] {
   return events.flatMap((event) => (event === null ? [] : [{ kind: "event", event }]));
@@ -173,11 +164,7 @@ export class Ocellus extends Mob {
   }
 
   override get bonuses(): UnitBonuses {
-    return {
-      attack: { stab: 0, slash: 0, crush: 0, magic: 0, range: 0 },
-      defence: DEFENCE_BONUSES,
-      other: { meleeStrength: 0, rangedStrength: 0, magicDamage: 0, prayer: 0 },
-    };
+    return bossBonuses();
   }
 
   override create3dModel(): Model {

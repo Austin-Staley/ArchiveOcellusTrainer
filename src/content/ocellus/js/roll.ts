@@ -1,7 +1,7 @@
 import type { DamageRange } from "./OcellusTimings";
 import type { Seed, Tick } from "../../../sim/brands";
 
-type RollStream = "orbTile" | "floorDamage" | "explosionDamage" | "specialDamage" | "specialVariant" | "riftBurst" | "holeLayout" | "holeDamage";
+type RollStream = "orbTile" | "floorDamage" | "explosionDamage" | "specialDamage" | "specialVariant" | "riftBurst" | "holeLayout" | "holeDamage" | "swingDamage";
 
 const STREAM_ID: Readonly<Record<RollStream, number>> = {
   orbTile: 1,
@@ -12,6 +12,7 @@ const STREAM_ID: Readonly<Record<RollStream, number>> = {
   riftBurst: 6,
   holeLayout: 7,
   holeDamage: 8,
+  swingDamage: 9,
 };
 
 export function roll(seed: Seed, stream: RollStream, at: Tick, draw: number): number {

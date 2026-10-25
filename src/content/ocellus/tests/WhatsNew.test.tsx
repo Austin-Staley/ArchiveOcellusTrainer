@@ -13,6 +13,15 @@ const FIRST_RELEASE = {
   ],
 };
 
+const INPUT_CORRECTION_RELEASE = {
+  version: "2026.10.25.2",
+  date: "2026-10-25",
+  notes: [
+    "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",
+    "A click made right before the tick registers on that tick, instead of a tick late.",
+  ],
+};
+
 function whatsNew(page: ReturnType<typeof loadPage>) {
   const panel = page.element("whats_new_panel");
   return {
@@ -66,12 +75,15 @@ describe("What's new", () => {
     expect(opened.releases.at(-1)).toEqual(FIRST_RELEASE);
   });
 
-  test("a player who last saw an older release sees the dot again", () => {
-    localStorage.setItem(SEEN_RELEASE_KEY, "2026.10.01");
+  test("a player who saw the last shipped release sees the dot again, and What's new lists the input correction release", () => {
+    localStorage.setItem(SEEN_RELEASE_KEY, "2026.10.25.1");
     const page = loadPage("/?seed=1");
     const { settingsDot, menuDot } = whatsNew(page);
+    page.click("settings");
+    page.click("whats_new");
+    const { releases } = whatsNew(page);
     page.close();
-    expect({ settingsDot, menuDot }).toEqual({ settingsDot: true, menuDot: true });
+    expect({ settingsDot, menuDot, releases }).toEqual({ settingsDot: true, menuDot: true, releases: expect.arrayContaining([INPUT_CORRECTION_RELEASE]) });
   });
 
   test("opening What's new from the keyboard moves focus to the panel's title", () => {

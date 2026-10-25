@@ -2,12 +2,14 @@ import type { ResolvedChoices, SpecialSelection, TransitionRecipe, VoidRecipe } 
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { Cycle, Seed, Tick } from "../../../../sim/brands";
 import { cycle, tick } from "../../../../sim/brands";
-import type { BeatAt, Moment, Slot } from "../../../../sim/schedule";
-import { Schedule } from "../../../../sim/schedule";
+import type { BeatAt, Script, Slot } from "../../../../sim/schedule";
+import { Schedule, slotTable } from "../../../../sim/schedule";
 import type { Beat, BossOverhead, Mechanic, Phase, Special, TransitionKind, VoidKind } from "../P4Types";
 import { ordinal } from "../P4Types";
 import { floorRule } from "./floor";
 import { roll } from "../roll";
+
+export type P4Schedule = Schedule<"lead-in" | "cycle", Phase, Beat, Mechanic>;
 
 const VARIANTS: readonly Special[] = ["vortex", "spike-disk", "black-disk"];
 
@@ -60,17 +62,17 @@ function mechanicOf(beat: Beat): Mechanic | null {
   }
 }
 
-export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<Phase, Beat, Mechanic> {
+export function compileSchedule(seed: Seed, choices: ResolvedChoices): P4Schedule {
   const { leadIn, cycle: stages, overheads, lifeforce, special, bossHeals, rifts, explosion: explosionCues, presentation } = OCELLUS_P4;
   const hidden = leadIn.hiddenFor.value;
   const leadInLength = hidden + leadIn.presentFor.value;
   const shout = leadIn.shout.value;
   if (shout.at >= leadInLength) throw new RangeError(`lead-in shout at ${shout.at} is outside the ${leadInLength}-tick lead-in`);
-  const leadInTable = Array.from({ length: leadInLength }, (_, t): Moment<Phase, Beat> => ({
-    tick: tick(t),
-    phase: { stage: "lead-in", boss: t < hidden ? "hidden" : "present-invulnerable", overhead: null },
-    beats: t === shout.at ? [{ kind: "boss-shouts", text: shout.text, lasts: shout.lasts }] : [],
-  }));
+  const shoutBeat: Beat = { kind: "boss-shouts", text: shout.text, lasts: shout.lasts };
+  const leadInSlots = Array.from({ length: leadInLength }, (_, t): Slot<Phase, Beat> => {
+    const phase: Phase = { stage: "lead-in", boss: t < hidden ? "hidden" : "present-invulnerable", overhead: null };
+    return { phase: () => phase, beats: t === shout.at ? [() => shoutBeat] : [] };
+  });
 
   const [inner, afterInner, outer, afterOuter] = stages;
   const afterInnerStart = inner.duration.value;
@@ -168,7 +170,15 @@ export function compileSchedule(seed: Seed, choices: ResolvedChoices): Schedule<
     return { stage: "after-outer", cycle: c, boss: "present-damageable", overhead: overheadAfter(afterOuter, offset - afterOuterStart, overheads["outer-void"].value) };
   };
 
-  const slots = beats.map((slotBeats, offset): Slot<Phase, Beat> => ({ phase: phaseAt(offset), beats: slotBeats }));
+  const cycleSlots = beats.map((slotBeats, offset): Slot<Phase, Beat> => ({ phase: phaseAt(offset), beats: slotBeats }));
+  const script: Script<"lead-in" | "cycle", Phase, Beat> = {
+    first: "lead-in",
+    stages: {
+      "lead-in": { slots: slotTable(leadInSlots, "lead-in"), breakable: false, then: () => "cycle" },
+      cycle: { slots: slotTable(cycleSlots, "cycle"), breakable: false, then: () => "cycle" },
+    },
+    breakpoints: [],
+  };
   const firstRiftCycleEnds = tick(leadInLength + length * firstRiftCycle);
-  return new Schedule(leadInTable, slots, mechanicOf, choices.focus.option.value, choices.drillStart.option.value, firstRiftCycleEnds);
+  return new Schedule(script, mechanicOf, choices.focus.option.value, choices.drillStart.option.value, firstRiftCycleEnds);
 }

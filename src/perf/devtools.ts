@@ -81,3 +81,5 @@ main(process.argv.slice(2)).catch((error: unknown) => {
   console.error(`devtools: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });
+
+export {};

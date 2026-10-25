@@ -1,10 +1,10 @@
 # Where a phase 4 fight spends its time
 
-A phase 4 fight on this machine spends the frame in one SDK call. `Viewport.draw` copies the WebGL canvas onto the page canvas, and that copy waits on the software GPU. The median frame is 33.3 ms. One busy tick of the fight, with rendering removed, takes 0.80 ms. A faster tick loop leaves the canvas copy in place, so it does not change the frame a player sees on this machine.
+Every number in this report comes from a cloud VM with no GPU, where Chrome renders in software. On that VM a phase 4 fight spends the frame in one SDK call. `Viewport.draw` copies the WebGL canvas onto the page canvas, and that copy waits on the software GPU. The median frame is 33.3 ms. One busy tick of the fight, with rendering removed, takes 0.80 ms. A faster tick loop leaves the canvas copy in place, so it does not change the frame a player sees on this machine.
 
 This VM renders with SwiftShader, a software GPU (`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`). Chrome 156.0.8078.47, Node 22.23.4, 4 cores. There is no discrete graphics card in these numbers. A desktop GPU will spend less time inside the same copy, and these timings do not say how much less.
 
-The SDK is the pin `f390629452ecfe5e1cb0a7d24ec4bb7ccdca5aa4` of [Julian-Dasilva/osrs-sdk](https://github.com/Julian-Dasilva/osrs-sdk). The fight is seed 1 with invincible on, at 1280 by 800. The harness is `scripts/perf-profile.mts`.
+The trainer is commit `15f6462` of this repository. The SDK is the pin `f390629452ecfe5e1cb0a7d24ec4bb7ccdca5aa4` of [Julian-Dasilva/osrs-sdk](https://github.com/Julian-Dasilva/osrs-sdk). The fight is seed 1 with invincible on, at 1280 by 800.
 
 ## Frame time on the production build
 
@@ -84,7 +84,7 @@ Same 151.2 s production profile. Self time. The owner is SDK, three.js, or the b
 
 ## Tick rate with rendering turned off
 
-Five fresh processes per workload, 2,000 ticks each, jsdom, `force2d`, no `start()`, so nothing renders. They ran as two alternating batches (three idle and two busy, then three busy and two idle). The harness now treats `--runs 5 --workload alternate` as five of each in one go. Warmup of 30 ticks is outside the timer. Idle calls `tickWorld` only. Busy also calls `moveTo` on a rotating tile every tick, which paths more often than the scripted fight. Zero errors. Every run wrote 2,030 log rows. Boss hit points went from 1,312 to 4,956 idle and 4,957 busy, so the boss script ran. Busy moved the player on 1,916 of 2,000 ticks. Idle moved the player on 0.
+Five fresh processes per workload, 2,000 ticks each, jsdom, `force2d`, no `start()`, so nothing renders. They ran as two alternating batches (three idle and two busy, then three busy and two idle). Warmup of 30 ticks is outside the timer. Idle calls `tickWorld` only. Busy also calls `moveTo` on a rotating tile every tick, which paths more often than the scripted fight. Zero errors. Every run wrote 2,030 log rows. Boss hit points went from 1,312 to 4,956 idle and 4,957 busy, so the boss script ran. Busy moved the player on 1,916 of 2,000 ticks. Idle moved the player on 0.
 
 | Workload | Median | Range | One tick |
 | --- | ---: | --- | ---: |
@@ -118,3 +118,4 @@ A WASM port of the tick loop is the change these numbers argue against doing fir
 - The player mostly walks. Combat draws on the development fight were 11 in 150 s. Boss mechanics still ran.
 - The frame observer adds one animation callback and a counter around the WebGL draw calls. It is present in every reported frame time. There is no paired fight with the observer removed, so those milliseconds include it.
 - Headless ticks do not start the render loop. They answer how fast the tick is when drawing is gone. They do not answer how fast the page is.
+- The raw frame captures, the CPU profile, and the trace are not in this repository, and neither is the script that recorded them.

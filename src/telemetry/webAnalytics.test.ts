@@ -1,7 +1,6 @@
 const TOKEN = "0123456789abcdef0123456789abcdef";
 
-// The token is fixed at build time, so each case imports the module afresh under its own environment.
-async function loadWith(token: string | undefined) {
+async function scriptsOfAFreshBuildWith(token: string | undefined) {
   vi.resetModules();
   vi.stubEnv("CF_WEB_ANALYTICS_TOKEN", token ?? "");
   const { loadWebAnalytics } = await vi.importActual<typeof import("./perfTelemetry")>("./perfTelemetry");
@@ -23,6 +22,6 @@ describe("Cloudflare Web Analytics", () => {
     { name: "built without a token", token: undefined, optedOut: false, scripts: [] },
   ])("a page $name loads $scripts.length analytics scripts", async ({ token, optedOut, scripts }) => {
     if (optedOut) localStorage.setItem("archive-ocellus:perf-data", "off");
-    expect(await loadWith(token)).toEqual(scripts);
+    expect(await scriptsOfAFreshBuildWith(token)).toEqual(scripts);
   });
 });

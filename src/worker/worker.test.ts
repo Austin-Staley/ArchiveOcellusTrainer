@@ -37,6 +37,8 @@ function bindings() {
 }
 
 const SUMMARY_WITHOUT_CORES = Object.fromEntries(Object.entries(SUMMARY).filter(([key]) => key !== "cores"));
+const versionOfBytes = (bytes: number) => `2026.10.25.${"1".repeat(bytes - "2026.10.25.".length)}`;
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
 
 async function send(env: Env, path: string, init?: RequestInit) {
   const { default: worker } = await loadWorkerInEachTest();
@@ -68,6 +70,7 @@ describe("Performance beacon Worker", () => {
     { name: "a sample rate of 0", init: { method: "POST", body: JSON.stringify({ ...SUMMARY, sampleRate: 0 }) }, status: 400 },
     { name: "cores replaced by constructor", init: { method: "POST", body: JSON.stringify({ ...SUMMARY_WITHOUT_CORES, constructor: "unexpected" }) }, status: 400 },
     { name: "cores replaced by __proto__", init: { method: "POST", body: JSON.stringify({ ...SUMMARY_WITHOUT_CORES, ["__proto__"]: "unexpected" }) }, status: 400 },
+    { name: "a version that makes a 111-byte index", init: { method: "POST", body: JSON.stringify({ ...SUMMARY, version: versionOfBytes(111) }) }, status: 400 },
     { name: "a body over 2 KB", init: { method: "POST", body: JSON.stringify({ ...SUMMARY, pad: "x".repeat(2048) }) }, status: 413 },
     { name: "a Content-Length over 2 KB", init: { method: "POST", body: JSON.stringify(SUMMARY), headers: { "content-length": "4096" } }, status: 413 },
     { name: "a GET", init: { method: "GET" }, status: 405 },
@@ -75,6 +78,27 @@ describe("Performance beacon Worker", () => {
     const { env, written } = bindings();
     const response = await send(env, "/t", init);
     expect({ status: response.status, written }).toEqual({ status, written: [] });
+  });
+
+  test.each([
+    { name: "guard: a 96-byte version", body: JSON.stringify({ ...SUMMARY, version: versionOfBytes(96) }), status: 204, point: { finiteDoubles: true, indexBytes: 96, blobBytes: 125 } },
+    { name: "a 97-byte version", body: JSON.stringify({ ...SUMMARY, version: versionOfBytes(97) }), status: 400, point: null },
+    { name: "guard: every double at its maximum", body: JSON.stringify({ ...SUMMARY, sampleRate: 1, runTicks: 1e7, frames: 1e7, frameMedianMs: 6e4, frameP95Ms: 6e4, frameP99Ms: 6e4, framesOver50Ms: 1e7, tickMedianMs: 6e4, tickP95Ms: 6e4, tickMaxMs: 6e4, lateTicks: 1e7, devicePixelRatio: 16, canvasWidth: 1e5, canvasHeight: 1e5, cores: 64 }), status: 204, point: { finiteDoubles: true, indexBytes: 12, blobBytes: 41 } },
+    { name: "guard: every double at its minimum", body: JSON.stringify({ ...SUMMARY, sampleRate: Number.MIN_VALUE, runTicks: 0, frames: 0, frameMedianMs: 0, frameP95Ms: 0, frameP99Ms: 0, framesOver50Ms: 0, tickMedianMs: 0, tickP95Ms: 0, tickMaxMs: 0, lateTicks: 0, devicePixelRatio: 0, canvasWidth: 0, canvasHeight: 0, cores: 0 }), status: 204, point: { finiteDoubles: true, indexBytes: 12, blobBytes: 41 } },
+    { name: "guard: cores of 1e309, which JSON reads as Infinity", body: JSON.stringify(SUMMARY).replace('"cores":8', '"cores":1e309'), status: 400, point: null },
+    { name: "cores replaced by toString", body: JSON.stringify({ ...SUMMARY_WITHOUT_CORES, toString: 8 }), status: 400, point: null },
+    { name: "cores replaced by hasOwnProperty", body: JSON.stringify({ ...SUMMARY_WITHOUT_CORES, hasOwnProperty: 8 }), status: 400, point: null },
+  ])("$name answers $status, and any point it writes has finite doubles, an index of at most 96 bytes and blobs within 16 KB", async ({ body, status, point }) => {
+    const { env, written } = bindings();
+    const response = await send(env, "/t", { method: "POST", body });
+    expect({
+      status: response.status,
+      points: written.map(({ blobs, doubles, indexes }) => ({
+        finiteDoubles: doubles.every(Number.isFinite),
+        indexBytes: utf8Bytes(indexes[0]),
+        blobBytes: blobs.reduce((total, blob) => total + utf8Bytes(blob), 0),
+      })),
+    }).toEqual({ status, points: point ? [point] : [] });
   });
 
   test("every other path, including a POST, is served from the static assets", async () => {

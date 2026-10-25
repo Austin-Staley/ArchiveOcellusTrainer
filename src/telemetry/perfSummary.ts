@@ -48,13 +48,14 @@ export type PerfSummary = Readonly<{ [K in keyof Fields]: FieldValue<Fields[K]> 
 export type DataPoint = Readonly<{ blobs: string[]; doubles: number[]; indexes: [string] }>;
 
 const VERSION = /^\d{4}\.\d{2}\.\d{2}(\.[1-9]\d*)?$/;
+const MAX_INDEX_BYTES = 96;
 const isKey = (key: string): key is keyof Fields => Object.prototype.hasOwnProperty.call(SUMMARY_FIELDS, key);
 const KEYS = Object.keys(SUMMARY_FIELDS).filter(isKey);
 
 function validField(field: BlobField | DoubleField, value: unknown): boolean {
   switch (field.kind) {
     case "version":
-      return typeof value === "string" && VERSION.test(value);
+      return typeof value === "string" && VERSION.test(value) && new TextEncoder().encode(value).length <= MAX_INDEX_BYTES;
     case "blob":
       return typeof value === "string" && field.values.includes(value);
     case "double":

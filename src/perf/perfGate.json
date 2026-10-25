@@ -1,0 +1,15 @@
+{
+  "workload": {
+    "query": "?seed=1&invincible=on",
+    "window": { "from": 8, "to": 80 },
+    "resources": { "from": 220, "to": 400 }
+  },
+  "budgets": {
+    "drawCallsMedian3d": 548,
+    "drawCallsMax3d": 1234,
+    "canvasToViewport2d": 97.65625,
+    "geometriesPerRetiredRift3d": 2.67,
+    "texturesPerRetiredRift3d": 1
+  },
+  "timing": { "pairs": 5, "medianRatioLimit": 1.25 }
+}

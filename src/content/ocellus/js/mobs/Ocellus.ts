@@ -1,8 +1,9 @@
 import { CacheRenderModel, CacheRenderReferences, CollisionType, InvisibleMovementBlocker, Mob } from "osrs-sdk";
-import type { Model, Projectile, Region, UnitBonuses, UnitStats } from "osrs-sdk";
+import type { Model, Projectile, Region, UnitBonuses } from "osrs-sdk";
 import type { DamageRange, DrillConfig } from "../OcellusTimings";
 import { OCELLUS_P4 } from "../OcellusTimings";
 import type { OcellusPlayer } from "../OcellusPlayer";
+import { withDefenceFloor } from "../bossStats";
 import type { Cycle, Tick, Tile } from "../../../../sim/brands";
 import { after, span, tick, tile } from "../../../../sim/brands";
 import type { IncomingStyle, Style } from "../../../../sim/combat";
@@ -66,19 +67,6 @@ function sdkRangedDefence(): number {
 }
 
 const DEFENCE_BONUSES = { ...OCELLUS_P4.boss.defenceBonuses.value, range: sdkRangedDefence() };
-
-function withDefenceFloor(stats: UnitStats, lowest: number): UnitStats {
-  let defence = stats.defence;
-  return {
-    ...stats,
-    get defence() {
-      return defence;
-    },
-    set defence(value: number) {
-      defence = Math.max(lowest, value);
-    },
-  };
-}
 
 function logs(...events: readonly (FightEvent | null)[]): readonly Logged<FightEvent>[] {
   return events.flatMap((event) => (event === null ? [] : [{ kind: "event", event }]));

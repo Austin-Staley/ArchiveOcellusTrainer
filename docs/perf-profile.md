@@ -84,7 +84,7 @@ Same 151.2 s production profile. Self time. The owner is SDK, three.js, or the b
 
 ## Tick rate with rendering turned off
 
-Five fresh processes per workload, 2,000 ticks each, jsdom, `force2d`, no `start()`, so nothing renders. Idle and busy alternate. Warmup of 30 ticks is outside the timer. Idle calls `tickWorld` only. Busy also calls `moveTo` on a rotating tile every tick, which paths more often than the scripted fight. Zero errors. Every run wrote 2,030 log rows. Boss hit points went from 1,312 to 4,956 idle and 4,957 busy, so the boss script ran. Busy moved the player on 1,916 of 2,000 ticks. Idle moved the player on 0.
+Five fresh processes per workload, 2,000 ticks each, jsdom, `force2d`, no `start()`, so nothing renders. They ran as two alternating batches (three idle and two busy, then three busy and two idle). The harness now treats `--runs 5 --workload alternate` as five of each in one go. Warmup of 30 ticks is outside the timer. Idle calls `tickWorld` only. Busy also calls `moveTo` on a rotating tile every tick, which paths more often than the scripted fight. Zero errors. Every run wrote 2,030 log rows. Boss hit points went from 1,312 to 4,956 idle and 4,957 busy, so the boss script ran. Busy moved the player on 1,916 of 2,000 ticks. Idle moved the player on 0.
 
 | Workload | Median | Range | One tick |
 | --- | ---: | --- | ---: |
@@ -116,5 +116,5 @@ A WASM port of the tick loop is the change these numbers argue against doing fir
 - The development fight is one run. It matches production at p50. Its tail (p99 67 ms, one frame at 600 ms) is not a five-run result.
 - Production clicks are offsets from the canvas centre. Development clicks use the probe's tile projection. Draw calls per frame match, and so does p50.
 - The player mostly walks. Combat draws on the development fight were 11 in 150 s. Boss mechanics still ran.
-- The frame observer adds one animation callback and a counter around the WebGL draw calls. It is small beside a 24 ms copy, and it is present in the reported frame times.
+- The frame observer adds one animation callback and a counter around the WebGL draw calls. It is present in every reported frame time. There is no paired fight with the observer removed, so those milliseconds include it.
 - Headless ticks do not start the render loop. They answer how fast the tick is when drawing is gone. They do not answer how fast the page is.

@@ -28,3 +28,5 @@ global.ResizeObserver = class {
   unobserve() {}
   disconnect() {}
 };
+
+export {};

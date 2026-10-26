@@ -6,6 +6,9 @@ import { protectionOf } from "../../sim/sdk/EncounterBinding";
 import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
+import { blastCuesOn, crackCues } from "./cracks";
+import { FloorGraphic, idlePortals, paintPortals, raisePortals } from "./floorView";
+import type { PortalGraphic } from "./floorView";
 import { BATTERY_TILES, CENSERS, HOODED_TILE, ROOMS } from "./layout";
 import { dress } from "./loadout";
 import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
@@ -73,6 +76,13 @@ class PracticeMob extends Mob {
   }
 
   override attackIfPossible(): void {}
+
+  /** The clock places every practice mob. The SDK chase would walk The Blade onto the player. */
+  override canMove(): boolean {
+    return false;
+  }
+
+  override movementStep(): void {}
 
   override setStats(): void {
     const blank = { attack: 1, strength: 1, defence: 1, range: 1, magic: 1, hitpoint: 1 };
@@ -387,6 +397,8 @@ export class RaidRegion extends Region {
   private spent = new Set<PracticeMob>();
   private marks: Mark[] = [];
   private shots: Shot[] = [];
+  private floor: FloorGraphic[] = [];
+  private portals: readonly PortalGraphic[] = [];
   private run: RaidRunState = { kind: "running" };
   /** Damage The Blade is holding. The bar drops only when a release pays half of it. */
   private held = 0;
@@ -497,12 +509,20 @@ export class RaidRegion extends Region {
     if (player.currentStats.hitpoint <= 0) this.finish(this.invincible);
   }
 
-  snapshot(): Readonly<{ run: RaidRunView; boss: { npcId: number; hp: number; maxHp: number; visible: boolean; defence: number }; player: { hp: number } }> | null {
+  snapshot(): Readonly<{ run: RaidRunView; boss: { npcId: number; hp: number; maxHp: number; visible: boolean; defence: number; x: number; y: number }; player: { hp: number } }> | null {
     if (!this.mounted) return null;
     const { boss, player } = this.mounted;
     return {
       run: this.runView(),
-      boss: { npcId: barFor(this.launch).npcId, hp: boss.currentStats.hitpoint, maxHp: boss.stats.hitpoint, visible: true, defence: boss.currentStats.defence },
+      boss: {
+        npcId: barFor(this.launch).npcId,
+        hp: boss.currentStats.hitpoint,
+        maxHp: boss.stats.hitpoint,
+        visible: true,
+        defence: boss.currentStats.defence,
+        x: boss.location.x,
+        y: boss.location.y,
+      },
       player: { hp: player.currentStats.hitpoint },
     };
   }
@@ -558,6 +578,10 @@ export class RaidRegion extends Region {
     this.held = 0;
     this.released = 0;
     this.spent = new Set();
+    this.marks = [];
+    this.shots = [];
+    this.floor = [];
+    this.portals = [];
     this.previous = ROOMS[this.launch.id].player;
     if (this.launch.id === "ocellus-p1" || this.launch.id === "ocellus-p2" || this.launch.id === "ocellus-p3") {
       this.say(`Demonbane weapons deal ${Math.round(DEMONBANE_RESISTANCE * 100)}% less against Ocellus.`);
@@ -640,7 +664,14 @@ export class RaidRegion extends Region {
         this.escape = { tile: event.tile, next: event.next, until: (this.clockTick ?? 0) + 8 };
         this.say("An orange portal is open. Step on it.");
         return;
+      case "portals":
+        this.showPortals(event);
+        return;
       case "mark":
+        if (event.text === "tendril" || event.text === "vine") {
+          this.showFloor(event.text, event.tiles, event.ticks);
+          return;
+        }
         (event.text === "cauldron" ? event.tiles.filter((at) => cauldronMayStand(at)) : event.tiles).forEach((at) => {
           const mark = new Mark(this, { x: at.x, y: at.y });
           mark.paint = event.colour;
@@ -791,6 +822,61 @@ export class RaidRegion extends Region {
     this.marks = this.marks.filter((mark) => mark.life > 0);
     this.shots.forEach((shot) => shot.advance());
     this.shots = this.shots.filter((shot) => shot.life > 0);
+    this.floor.forEach((graphic) => {
+      if (graphic.age()) this.removeEntity(graphic);
+    });
+    this.floor = this.floor.filter((graphic) => graphic.dying !== 0);
+  }
+
+  /** Phase 1 cracks and the slam's floor blast, on the walk floor. */
+  private showFloor(text: "tendril" | "vine", tiles: readonly Tile[], ticks: number): void {
+    const life = ticks + 1;
+    if (text === "tendril") {
+      crackCues(tiles).forEach((cue) => {
+        const graphic = new FloorGraphic(this, { x: cue.at.x, y: cue.at.y });
+        graphic.kind = "crack";
+        graphic.spotAnim = cue.open;
+        graphic.delay = cue.openDelay;
+        graphic.loops = true;
+        graphic.closeAnim = cue.close;
+        graphic.closeDelay = cue.closeDelay;
+        graphic.life = life;
+        this.addEntity(graphic);
+        this.floor.push(graphic);
+      });
+      return;
+    }
+    blastCuesOn(tiles).forEach((cue) => {
+      const graphic = new FloorGraphic(this, { x: cue.at.x, y: cue.at.y });
+      graphic.kind = "blast";
+      graphic.spotAnim = cue.spotAnim;
+      graphic.delay = cue.delay;
+      graphic.loops = false;
+      graphic.life = life;
+      this.addEntity(graphic);
+      this.floor.push(graphic);
+    });
+  }
+
+  /** The 24 portals rise orange. A round paints its two arms purple except the orange gaps. */
+  private showPortals(event: Extract<RaidEvent, { kind: "portals" }>): void {
+    if (this.portals.length === 0) {
+      this.portals = raisePortals(this);
+      this.portals.forEach((portal) => this.addEntity(portal));
+      this.say("Orange portals are the gap. Purple portals fire, and prayer does not block them.");
+    }
+    switch (event.look) {
+      case "idle":
+        idlePortals(this.portals);
+        return;
+      case "lit":
+        paintPortals(this.portals, event.quadrant, event.nsGap, event.ewGap);
+        return;
+      default: {
+        const unhandled: never = event;
+        return unhandled;
+      }
+    }
   }
 
   private launchShots(events: readonly Stamp[]): void {

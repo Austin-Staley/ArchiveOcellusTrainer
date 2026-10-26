@@ -11,8 +11,8 @@ const sequences = (poses: Readonly<Record<string, Readonly<{ value: number }>>>)
 const { looks: portalLooks } = OCELLUS_P2.portals;
 const p2Key = (name: string) => `p2${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 /**
- * Phase 2's models, poses and spotanims are extracted only when ARCHIVE_P2 is on, so a build with the drill hidden asks the
- * cache for nothing it doesn't play. Cache 2746 also lacks three of its poses' frame sounds (12814, 12825, 12832).
+ * The encounter room always draws the two portal models. The rest of phase 2's poses and spotanims stay behind ARCHIVE_P2,
+ * so a build with the drill hidden does not ask the cache for the drill. Cache 2746 also lacks three of its poses' frame sounds (12814, 12825, 12832).
  */
 const { p2 } = readBuildFlags();
 
@@ -61,12 +61,8 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     brazier: { id: geometry.brazier.value.model, animations: { burning: geometry.brazier.value.burning } },
     voidHole: { id: floorHoles.look.model.value, animations: { idle: floorHoles.look.idle.value } },
     theBlade: { id: BLADE_MODEL, animations: { stand: BLADE_STAND } },
-    ...(p2
-      ? {
-          p2PortalInactive: { id: portalLooks.value.inactive.model, animations: { idle: portalLooks.value.inactive.idle } },
-          p2PortalLit: { id: portalLooks.value.lit.model, animations: { idle: portalLooks.value.lit.idle } },
-        }
-      : {}),
+    p2PortalInactive: { id: portalLooks.value.inactive.model, animations: { idle: portalLooks.value.inactive.idle } },
+    p2PortalLit: { id: portalLooks.value.lit.model, animations: { idle: portalLooks.value.lit.idle } },
   },
   items: Object.fromEntries(Object.entries(gear.items).map(([key, item]) => [key, { id: item.itemId.value }])),
   spotAnims: Object.fromEntries([

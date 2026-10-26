@@ -17,12 +17,11 @@ import {
   WAVE_SKIP,
   beamHits,
   centreTendril,
-  cornerTendril,
   gapTo,
   quadrantOf,
   sameTile,
-  vinesAround,
 } from "./layout";
+import { blastRing, cornerCrack } from "./cracks";
 import type { Quadrant } from "./layout";
 import { SEQUENCES } from "./poses";
 import { ARCHIVE } from "./timings";
@@ -51,7 +50,9 @@ export type RaidEvent =
   | Readonly<{ kind: "bank-halve" }>
   | Readonly<{ kind: "respawn-adds"; count: number }>
   | Readonly<{ kind: "chat"; text: string }>
-  | Readonly<{ kind: "pad"; tile: Tile; next: Tile }>;
+  | Readonly<{ kind: "pad"; tile: Tile; next: Tile }>
+  | Readonly<{ kind: "portals"; look: "idle" }>
+  | Readonly<{ kind: "portals"; look: "lit"; quadrant: Quadrant; nsGap: number; ewGap: number }>;
 
 export type Stamp = Readonly<{ at: Tick; event: RaidEvent }>;
 
@@ -509,17 +510,18 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
     if (elapsed % rules.tendrilGap === 0 && elapsed / rules.tendrilGap < rules.tendrilCount) {
       const index = elapsed / rules.tendrilGap;
       events.push(attack("tendril", `${index + 1}`));
-      events.push({ kind: "mark", tiles: [cornerTendril(next.corner, index)], colour: "#67d36a", text: "tendril", ticks: rules.tendrilGreen });
+      events.push({ kind: "mark", tiles: cornerCrack(next.corner, index), colour: "#67d36a", text: "tendril", ticks: rules.tendrilGreen });
     }
     if (elapsed >= rules.tendrilGreen && (elapsed - rules.tendrilGreen) % rules.tendrilGap === 0) {
       const index = (elapsed - rules.tendrilGreen) / rules.tendrilGap;
       if (index < rules.tendrilCount) {
-        const spot = cornerTendril(next.corner, index);
+        const tiles = cornerCrack(next.corner, index);
+        const stood = tiles.find((spot) => sameTile(input.player, spot));
         events.push(attack("green", `${index + 1}`));
-        if (sameTile(input.player, spot)) {
+        if (stood !== undefined) {
           const chip = spanRoll(options.seed, at, rules.blockMin, rules.blockMax);
           events.push(damage("tendril-chip", "typeless", chip, chip));
-          next = { ...next, owed: next.owed + chip, crack: spot };
+          next = { ...next, owed: next.owed + chip, crack: stood };
         } else {
           next = { ...next, meter: next.meter + rules.meterStep };
           events.push({ kind: "heal-boss", amount: rules.tendrilBossHeal });
@@ -529,7 +531,7 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
     if (elapsed === (rules.tendrilCount - 1) * rules.tendrilGap + rules.tendrilGreen) {
       const boss = P1_CORNERS[next.corner] ?? P1_CORNERS[0];
       events.push(attack("slam", "14811"));
-      events.push({ kind: "mark", tiles: vinesAround(boss), colour: "#3d8f4a", text: "vine", ticks: 6 });
+      events.push({ kind: "mark", tiles: blastRing(boss), colour: "#3d8f4a", text: "vine", ticks: 6 });
     }
     if (elapsed === (rules.tendrilCount - 1) * rules.tendrilGap + rules.tendrilGreen + rules.slamDelay) {
       const boss = P1_CORNERS[next.corner] ?? P1_CORNERS[0];
@@ -571,7 +573,7 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
     }
     if (local === rules.centreGap + rules.tendrilGreen) {
       events.push(attack("slam", "14811"));
-      events.push({ kind: "mark", tiles: vinesAround(P1_CENTRE), colour: "#3d8f4a", text: "vine", ticks: 6 });
+      events.push({ kind: "mark", tiles: blastRing(P1_CENTRE), colour: "#3d8f4a", text: "vine", ticks: 6 });
     }
     if (local === rules.centreGap + rules.tendrilGreen + rules.slamDelay) {
       if (gapTo(input.player, P1_CENTRE, 3) <= rules.slamReach) events.push(damage("slam", "typeless", rules.slamDamage, rules.slamDamage));
@@ -618,7 +620,10 @@ function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: nu
   const tiles = [...memory.tiles, input.player].slice(-6);
   const events: RaidEvent[] = [];
   const order = patternOrder(options.seed);
-  if (at === rules.portalsRise) events.push(phase("portals"));
+  if (at === rules.portalsRise) {
+    events.push(phase("portals"));
+    events.push({ kind: "portals", look: "idle" });
+  }
   if (at === rules.bladeOpens) events.push(phase("blade-open"));
   if (at >= rules.repairFirst && at < rules.end - rules.enoughBeforeEnd && (at - rules.repairFirst) % rules.repairEvery === 0) events.push(attack("repair", "4304"));
   if (at === rules.end - rules.enoughBeforeEnd) events.push(chat("This... is enough..."));
@@ -636,8 +641,10 @@ function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: nu
       const pair = pairs[i] ?? pairs[0];
       if (at === volley) {
         events.push(attack("volley", `${letter} ${pair[0]},${pair[1]}`));
+        events.push({ kind: "portals", look: "lit", quadrant, nsGap: pair[0], ewGap: pair[1] });
       }
       if (at === volley + rules.hitDelay) {
+        events.push({ kind: "portals", look: "idle" });
         const ago4 = tiles[tiles.length - 1 - 4];
         const ago3 = tiles[tiles.length - 1 - 3];
         const skip = WAVE_SKIP[quadrant];

@@ -6,6 +6,7 @@ import { defaultOptions } from "../catalog";
 import type { RaidId } from "../catalog";
 import { patternOrder, project } from "../clock";
 import type { RaidInput } from "../clock";
+import { cornerCrack } from "../cracks";
 import { DAGON_TRAIL, ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
 import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
 
@@ -135,6 +136,11 @@ describe("raid clocks", () => {
     const landed = walked.find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "volley");
     expect(volley?.at).toBe(21);
     expect(landed?.at).toBe(23);
+    const opened = walked.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
+    if (!opened || opened.event.kind !== "mark") throw new Error("the first crack did not open");
+    expect(opened.at).toBe(0);
+    expect(opened.event.tiles).toEqual(cornerCrack(0, 0));
+    expect(opened.event.tiles).toHaveLength(8);
   });
 
   it("lights phase 2 at the logged round ticks and releases at 46, 88 and 124", () => {
@@ -143,6 +149,11 @@ describe("raid clocks", () => {
     expect(volleys.slice(0, 3)).toEqual([11, 16, 21]);
     expect(volleys.filter((at) => at === 53 || at === 95)).toEqual([53, 95]);
     expect(rows.filter((stamp) => stamp.event.kind === "phase" && stamp.event.name === "portals").map((stamp) => stamp.at)).toEqual([2]);
+    const risen = rows.find((stamp) => stamp.event.kind === "portals" && stamp.at === 2);
+    const lit = rows.find((stamp) => stamp.event.kind === "portals" && stamp.at === 11);
+    if (!risen || risen.event.kind !== "portals" || !lit || lit.event.kind !== "portals" || lit.event.look !== "lit") throw new Error("the portal grid did not light");
+    expect(risen.event).toEqual({ kind: "portals", look: "idle" });
+    expect(lit.event).toEqual({ kind: "portals", look: "lit", quadrant: "NW", nsGap: 2, ewGap: 2 });
     expect(rows.filter((stamp) => stamp.event.kind === "phase" && stamp.event.name === "blade-open").map((stamp) => stamp.at)).toEqual([7]);
     expect(rows.filter((stamp) => stamp.event.kind === "bank-halve").map((stamp) => stamp.at)).toEqual([46, 88, 124]);
     expect(rows.some((stamp) => stamp.event.kind === "chat" && stamp.at === 123)).toBe(true);

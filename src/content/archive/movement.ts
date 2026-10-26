@@ -112,7 +112,7 @@ export const BOSS_WALK: Readonly<Record<RaidId, BossWalk>> = {
     status: "captured",
     exact: [tile(11, 13)],
     bound: { minX: 11, minY: 13, maxX: 11, maxY: 13 },
-    note: "31 fights, 31 samples, one tile. He does not move. The phase 2 drill's anchor is the same monster in that drill's grid.",
+    note: "31 fights, 31 samples, one tile. He is stationary for the whole of phase 2. The only anchor is (11, 13), and the 3x3 is the footprint of that anchor. He has no walkable tile beyond it, and he does not path toward the player. The phase 2 drill's anchor is the same monster in that drill's grid.",
   },
   "ocellus-p3": {
     actor: "Ocellus",

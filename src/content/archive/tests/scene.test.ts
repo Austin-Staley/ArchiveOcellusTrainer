@@ -3,7 +3,8 @@ import type { Mob, Player } from "osrs-sdk";
 import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
-import { seed, tick } from "../../../sim/brands";
+import { seed, tick, tile } from "../../../sim/brands";
+import { cornerCrack } from "../cracks";
 import { BATTERY_TILES, HOODED_TILE, ROOMS } from "../layout";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
@@ -231,6 +232,44 @@ describe("raid rooms in 3D", () => {
     expect(region.players).toContain(player);
     fight(world, 6);
     expect(region.players).toContain(player);
+  });
+
+  it("draws the phase 1 cracks on the floor and the phase 2 portal grid", () => {
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    fight(phase1.world, 1);
+    const cracks = phase1.region.entities.filter((entity) => {
+      const name = entity.entityName();
+      return name !== null && name.startsWith("Crack ");
+    });
+    expect(cracks.map((entity) => ({ x: entity.location.x, y: entity.location.y }))).toEqual(cornerCrack(0, 0).map((at) => ({ x: at.x, y: at.y })));
+    expect(cracks[7]?.entityName()).toBe("Crack 4238");
+
+    const phase2 = open("ocellus-p2", "?encounter=ocellus-p2&seed=1&invincible=on");
+    fight(phase2.world, 3);
+    const risen = phase2.region.entities.filter((entity) => {
+      const name = entity.entityName();
+      return name !== null && name.startsWith("Portal ");
+    });
+    expect(risen).toHaveLength(24);
+    expect(risen.every((entity) => entity.entityName()?.startsWith("Portal orange"))).toBe(true);
+    fight(phase2.world, 9);
+    const purple = phase2.region.entities.filter((entity) => entity.entityName() === "Portal purple north 0");
+    const gap = phase2.region.entities.filter((entity) => entity.entityName() === "Portal orange north 1");
+    expect(purple).toHaveLength(1);
+    expect(gap).toHaveLength(1);
+  });
+
+  it("holds The Blade on its scenery tile while the player moves", () => {
+    const { region, world, player } = open("ocellus-p2", "?encounter=ocellus-p2&seed=1&invincible=on");
+    const blade = [...region.mobs, ...region.newMobs].find((mob) => mob.mobName() === "The Blade");
+    if (!blade) throw new Error("the Blade was not in the room");
+    blade.aggro = player;
+    [tile(4, 4), tile(20, 20), tile(12, 4), tile(4, 20), tile(18, 8)].forEach((at) => {
+      player.setLocation({ x: at.x, y: at.y });
+      fight(world, 4);
+      expect({ x: blade.location.x, y: blade.location.y }).toEqual({ x: 11, y: 13 });
+      expect(region.snapshot()?.boss).toMatchObject({ x: 11, y: 13 });
+    });
   });
 
   it("an invincible lethal hit stays in the fight and says so", () => {

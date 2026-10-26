@@ -234,13 +234,13 @@ The phase 1 drill uses the fight-log path. The encounter room uses the digest's 
 | Hooded Figure 16672 | encounter room | (5, 20) only | 32 of 32 | captured |
 | Ocellus 16674 | encounter room | box (−1, 11) to (11, 23), clipped to the room. Mode (5, 17) | 32 fights, 2,167 samples. (5, 17) has 129. Corner clusters (−1, 23), (−1, 11), (11, 23), (11, 11) | disputed |
 | Ocellus 16674 | phase 1 drill | every straight-then-diagonal step between the start (14, 17), the middle (14, 14) and the corners (20, 8), (20, 20), (8, 20), (8, 8) | logs L3 to L5 for the path. The 32 captures' corner clusters are those corners in the other grid | captured |
-| The Blade 16676 | encounter room | (11, 13) only | 31 of 31 | captured |
+| The Blade 16676 | encounter room | (11, 13) only. The 3×3 is that anchor's footprint, and nothing beyond it is walkable | 31 of 31 | captured |
 | The Blade 16676 | phase 2 drill | (14, 14) only, the same stand in that grid | logs L2 and the phase 2 raids, and the 31 captures | captured |
 | Ocellus 16677 | encounter room | box (−12, 2) to (9, 22), clipped to the room. Mode (5, 18) | 31 fights, 850 samples. (5, 18) is tied at 45 | stand-in |
 | Ocellus 16677 | phase 3 drill | (21, 7) only | no clip pins the phase-start tile | stand-in |
 | Ocellus 16677 | phase 4 drill | (4, 6) only, the 3×3 inside the 5×5 | footage of the platform. The 8 phase 4 segments have no template tile | stand-in |
 
-Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smorks, The Blade, the Hooded Figure and the batteries block every tile except the one they were captured on. Moia blocks every anchor except her five. A 3×3 or larger boss is placed by the south-west tile, so the footprint hangs east and north of that anchor.
+Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smorks, The Blade, the Hooded Figure and the batteries block every tile except the one they were captured on. The Blade's only anchor is (11, 13). His body is the 3×3 on that anchor, and he has no walkable tile beyond it. He stays there for the whole of phase 2: the room does not path him toward the player. Moia blocks every anchor except her five. A 3×3 or larger boss is placed by the south-west tile, so the footprint hangs east and north of that anchor.
 
 ### Tick windows
 
@@ -269,10 +269,16 @@ Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smor
 | Ocellus, phase 1 drill | a corner | stationary | the corner stop | logs: he charges there. 34 corners in L1 to L8 |
 | Ocellus, phase 1 drill | the middle, except the teleport-in beat | stationary | the middle (14, 14) once he has arrived | logs: beats and the strike, 15 of 15 middles |
 | Ocellus, phase 1 drill | the teleport-in beat, M + 4, and the same beat if an end starts off the middle | mobile | the middle (14, 14) | 15 of 15 teleports in at M + 4 |
-| The Blade, both rooms | the whole fight | stationary | the one captured tile | 31 of 31, and the logs |
+| The Blade, both rooms | the whole fight | stationary | the one captured tile. No walkable tile beyond his 3×3, and he does not follow the player | 31 of 31, and the logs |
 | Ocellus, encounter phase 3 | autos, spins, untether, the whole fight | stationary | holds (5, 18) | no tick path in 31 fights |
 | Ocellus, phase 3 drill | arrive, autos, destroy | stationary | holds (21, 7). He does not chase | the anchor is an assumption. The captures show the box above, in the other grid |
 | Ocellus, phase 4 | lead-in, inner void, after inner, outer void, after outer | stationary | holds (4, 6). During the outer void his 3×3 blocks the player, who paths around the edge | footage. 8 segments, no template tile |
+
+## Floor cracks and the portal grid
+
+Phase 1's floor vines are the corner cracks from the fight logs (upstream #87), drawn on plane 1. Seven cracks open on the charge tick and every 2 ticks after. Each is 8 tiles and closes 5 ticks later. The far tile waits 60 client cycles and each tile closer waits one cycle more. The spotanim family is the direction back toward him: straight 4236–4247 and diagonal 4248–4259, start piece on the far tile, the middle piece along the line, the end piece as it closes. An x or y crack runs straight. The corner crack runs on the diagonal. The slam paints floor spotanims 4262–4265 on the tiles within 2 of his 3×3.
+
+Phase 2's portals are the 24 locs from upstream #79. They rise at tick 2, six 2×1 portals on each arm. Orange is model 62758 (loc 62684). Purple is model 62757 (loc 62685). Both loop animation 14830. North, east, south and west use loc rotations 3, 0, 1 and 2. A round lights at 11, then 53, then 95, and the lit pair of arms turns with the quadrant. Ten of the twelve portals on those arms go purple. The other one on each arm stays orange: that gap is the colour to stand in, and the orange-by-orange pocket does not take the hit. Purple fires. The damage is the existing typeless 18–27, and prayer does not block it. The 2D floor paints the same orange and purple tiles.
 
 ## Visual event sync
 

@@ -227,7 +227,7 @@ export const ARCHIVE = {
     formNpcId: 16675,
     defence: 250,
     defenceFloor: 0,
-    /** Fight logs: the 24 portals stand 2 ticks in. The room marks the tick; the flagged drill draws the portals. */
+    /** Fight logs: the 24 portals stand 2 ticks in. The room draws them on that tick. */
     portalsRise: 2,
     firstVolley: 11,
     volleys: 6,

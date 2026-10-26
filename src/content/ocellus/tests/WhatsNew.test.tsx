@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.10",
+  version: "2026.10.26.11",
   date: "2026-10-26",
   notes: [
-    "Shots leave from the centre of the attacker, on the captured client cycle, and they stay on that room's plane.",
-    "Ocellus is on plane 1. Projectile height and slope were not in the capture, so those stay a flat line.",
-    "A boss who actually steps plays his walk animation for that tick. The frame lengths are the cache sequences.",
+    "Phase 1 draws the floor cracks on plane 1: the captured spotanims, eight tiles, opening every 2 ticks and closing after 5.",
+    "Phase 2 raises the orange and purple portal grid at tick 2. Stand in the orange gap. Purple fires for 18 to 27.",
+    "The Blade stays on his tile for the whole of phase 2. His 3×3 is the footprint, and he has no walk beyond it.",
   ],
 };
 

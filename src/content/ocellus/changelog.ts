@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.11",
+    notes: [
+      "Phase 1 draws the floor cracks on plane 1: the captured spotanims, eight tiles, opening every 2 ticks and closing after 5.",
+      "Phase 2 raises the orange and purple portal grid at tick 2. Stand in the orange gap. Purple fires for 18 to 27.",
+      "The Blade stays on his tile for the whole of phase 2. His 3×3 is the footprint, and he has no walk beyond it.",
+    ],
+  },
+  {
     version: "2026.10.26.10",
     notes: [
       "Shots leave from the centre of the attacker, on the captured client cycle, and they stay on that room's plane.",

@@ -44,9 +44,13 @@ describe("phase 2 labels and the chat window", () => {
 
   test("the fork build leaves the three phase flags on", () => {
     const config = readFileSync("webpack.config.js", "utf8");
+    const scripts = readFileSync("package.json", "utf8");
     expect(config).toContain('ARCHIVE_P1: "on"');
     expect(config).toContain('ARCHIVE_P2: "on"');
     expect(config).toContain('ARCHIVE_P3: "on"');
+    expect(scripts).toContain("ARCHIVE_P1=${ARCHIVE_P1:-on}");
+    expect(scripts).toContain("ARCHIVE_P2=${ARCHIVE_P2:-on}");
+    expect(scripts).toContain("ARCHIVE_P3=${ARCHIVE_P3:-on}");
   });
 
   test("after eight lines the panel shows the newest volley, and the colour label shows the quadrant", async () => {

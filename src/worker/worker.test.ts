@@ -62,6 +62,21 @@ describe("Performance beacon Worker", () => {
     });
   });
 
+  test("guard: a 2D summary from a page loaded before the trainer dropped 2D answers 204 and keeps its 2d label", async () => {
+    const { env, written } = bindings();
+    const response = await send(env, "/t", { method: "POST", body: JSON.stringify({ ...SUMMARY, view: "2d" }) });
+    expect({ status: response.status, written }).toEqual({
+      status: 204,
+      written: [
+        {
+          blobs: ["2026.10.25.2", "2d", "nvidia", "chrome", "after-inner", "kill"],
+          doubles: [0.4, 31, 1100, 16, 33, 50, 4, 600, 640, 812.5, 1, 1.25, 1600, 1000, 8],
+          indexes: ["2026.10.25.2"],
+        },
+      ],
+    });
+  });
+
   test.each([
     { name: "a body that is not JSON", init: { method: "POST", body: "{not json" }, status: 400 },
     { name: "a summary with an extra field", init: { method: "POST", body: JSON.stringify({ ...SUMMARY, userAgent: "Mozilla/5.0" }) }, status: 400 },

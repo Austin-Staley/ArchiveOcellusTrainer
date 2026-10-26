@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { OCELLUS_P1, OCELLUS_P2, OCELLUS_P3, OCELLUS_P4 } from "../js/OcellusTimings";
+import { OCELLUS_P4 } from "../js/OcellusTimings";
+import { OCELLUS_P1 } from "../js/OcellusTimingsP1";
+import { OCELLUS_P2 } from "../js/OcellusTimingsP2";
+import { OCELLUS_P3 } from "../js/OcellusTimingsP3";
 import { startP1Drill } from "./p1drill";
 import { startP3Drill } from "./p3drill";
 

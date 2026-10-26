@@ -1,7 +1,7 @@
 import type { Tile } from "../../sim/brands";
 import { tile } from "../../sim/brands";
-import { OCELLUS_P1 } from "../ocellus/js/OcellusTimings";
 import { P1_CENTRE, P1_CORNERS } from "./layout";
+import { P1_ROOM } from "./roomFacts";
 
 /**
  * Phase 1 floor cracks, from the fight logs behind upstream #87.
@@ -13,11 +13,11 @@ import { P1_CENTRE, P1_CORNERS } from "./layout";
 
 const BOSS_SIZE = 3;
 const ROOM = 25;
-const { crackPieces, crackTiming, floorExplosions } = OCELLUS_P1.presentation;
-const CRACK_LENGTH = OCELLUS_P1.corner.cracks.value.length;
-const OPEN_DELAY = crackTiming.value.openDelay;
-const PER_TILE = crackTiming.value.perTile;
-const BLAST_RADIUS = OCELLUS_P1.blast.radius.value;
+const { crackPieces, crackTiming, floorExplosions } = P1_ROOM;
+const CRACK_LENGTH = P1_ROOM.crackLength;
+const OPEN_DELAY = crackTiming.openDelay;
+const PER_TILE = crackTiming.perTile;
+const BLAST_RADIUS = P1_ROOM.blastRadius;
 
 type Step = -1 | 0 | 1;
 type Tendril = "x" | "y" | "corner";
@@ -44,21 +44,21 @@ function named(dx: Step, dy: Step): Growth {
 function piecesFor(growth: Growth): Pieces {
   switch (growth) {
     case "north":
-      return crackPieces.straight.north.value;
+      return crackPieces.straight.north;
     case "east":
-      return crackPieces.straight.east.value;
+      return crackPieces.straight.east;
     case "south":
-      return crackPieces.straight.south.value;
+      return crackPieces.straight.south;
     case "west":
-      return crackPieces.straight.west.value;
+      return crackPieces.straight.west;
     case "north-east":
-      return crackPieces.diagonal["north-east"].value;
+      return crackPieces.diagonal["north-east"];
     case "south-east":
-      return crackPieces.diagonal["south-east"].value;
+      return crackPieces.diagonal["south-east"];
     case "south-west":
-      return crackPieces.diagonal["south-west"].value;
+      return crackPieces.diagonal["south-west"];
     case "north-west":
-      return crackPieces.diagonal["north-west"].value;
+      return crackPieces.diagonal["north-west"];
     default: {
       const unhandled: never = growth;
       return unhandled;
@@ -161,7 +161,7 @@ function listedDelay(ringDelays: readonly number[], ring: number): number {
 
 /** Spotanims for a blast ring. The nearer ring is the tiles two out from its centre. */
 export function blastCuesOn(tiles: readonly Tile[]): readonly BlastCue[] {
-  const { pieces, ringDelays } = floorExplosions.value;
+  const { pieces, ringDelays } = floorExplosions;
   const count = tiles.length;
   const cx = count === 0 ? 0 : Math.round(tiles.reduce((sum, at) => sum + at.x, 0) / count);
   const cy = count === 0 ? 0 : Math.round(tiles.reduce((sum, at) => sum + at.y, 0) / count);

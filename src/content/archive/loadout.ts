@@ -23,7 +23,7 @@ import {
   ZaryteVambraces,
 } from "osrs-sdk";
 import type { Player, UnitBonuses } from "osrs-sdk";
-import { itemIconFile } from "../../assets";
+import { itemIconFile } from "../../servedAssets";
 import { OCELLUS_P4 } from "../ocellus/js/OcellusTimings";
 import type { GearPlan } from "./catalog";
 

@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.13",
+    notes: [
+      "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits. Boss movement stays in those controls.",
+      "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+    ],
+  },
+  {
     version: "2026.10.26.12",
     notes: [
       "The 3D view draws in its own canvas under the HUD. Clicks stay on the same canvas.",

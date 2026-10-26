@@ -1,7 +1,7 @@
 import type { Tile } from "../../sim/brands";
 import { tile } from "../../sim/brands";
-import { OCELLUS_P2 } from "../ocellus/js/OcellusTimings";
 import { CENTRE, band, quadrantArms } from "./layout";
+import { P2_ROOM } from "./roomFacts";
 import type { EwArm, NsArm, Quadrant } from "./layout";
 
 /**
@@ -14,9 +14,9 @@ import type { EwArm, NsArm, Quadrant } from "./layout";
 export type PortalArm = NsArm | EwArm;
 export type PortalLook = "orange" | "purple";
 
-const PER_ARM = OCELLUS_P2.portals.perArm.value;
-const ROTATION = OCELLUS_P2.portals.rotation.value;
-const LOOKS = OCELLUS_P2.portals.looks.value;
+const PER_ARM = P2_ROOM.perArm;
+const ROTATION = P2_ROOM.rotation;
+const LOOKS = P2_ROOM.looks;
 
 export const PORTAL_ARMS: readonly PortalArm[] = ["north", "east", "south", "west"];
 export const PORTAL_COUNT = PER_ARM;

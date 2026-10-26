@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
@@ -25,7 +25,8 @@ import type { ReleaseVersion } from "./releases";
 import { releaseDate } from "./releases";
 import { keepHoverTextOnCanvas } from "./hoverText";
 import { loadWebAnalytics, perfDataAllowed, setPerfDataAllowed, startPerfTelemetry } from "./telemetry/perfTelemetry";
-import { reportUnservedAssets } from "./assets";
+import { reportUnservedAssets } from "./servedAssets";
+import { CONTRIBUTOR, MAKER, MAKER_LINKS } from "./menu/credits";
 
 keepHoverTextOnCanvas();
 // Desktop browsers start the SDK's AudioContext suspended until a user gesture, and the SDK never resumes it.
@@ -37,12 +38,6 @@ window.addEventListener("unhandledrejection", (event) => {
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
-const MAKER = "Julian Dasilva / Moarhots";
-const MAKER_LINKS: readonly Readonly<{ label: string; href: string }>[] = [
-  { label: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer" },
-  { label: "@ShadowJdas", href: "https://x.com/ShadowJdas" },
-];
-const CONTRIBUTOR: Readonly<{ name: string; href: string }> = { name: "Alessandro Rodi", href: "https://github.com/alessandrorodi" };
 
 declare global {
   interface Window {
@@ -738,10 +733,10 @@ function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunc
   );
 }
 
-function Credits() {
+function Credits({ makerInFooter }: Readonly<{ makerInFooter: boolean }>) {
   return (
     <footer id="credits">
-      <p id="maker_credit">
+      {makerInFooter && <p id="maker_credit">
         Made by {MAKER}{" "}
         <span id="maker_links">
           {MAKER_LINKS.map((link, i) => (
@@ -756,10 +751,10 @@ function Credits() {
         <span id="contributor_credit">
           With help from{" "}
           <a href={CONTRIBUTOR.href} target="_blank" rel="noopener noreferrer">
-            {CONTRIBUTOR.name}
+            {CONTRIBUTOR.label}
           </a>
         </span>
-      </p>
+      </p>}
       <p id="credit_line">{CREDIT_LINE}</p>
       <p id="app_version">v{LATEST_RELEASE.version}</p>
     </footer>
@@ -796,14 +791,21 @@ function MovementBadge({ region, shown }: Readonly<{ region: object; shown: bool
   return <p id="movement_badge">{text}</p>;
 }
 
+/** The sidebar loads behind a test of the raw build variable, which webpack folds, so a build with ARCHIVE_FULL off contains none of it. */
+const loadSidebar = () => (process.env.ARCHIVE_FULL === "on" ? lazy(() => import("./menu/Sidebar")) : null);
+
 function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
   const [showMovement, setShowMovement] = useState(false);
+  const [Sidebar] = useState(loadSidebar);
   const region = session.kind === "drill" ? session.drill.region : session.region;
   const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
   useEffect(() => {
     movementDebug(region)?.showBossMovement(showMovement);
   }, [region, showMovement]);
+  const controls = session.kind === "drill"
+    ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} />
+    : <RaidControls launch={session.launch} region={session.region} movement={movement} />;
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
@@ -812,11 +814,16 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
         <div id="hud_corner">
           <MovementBadge region={region} shown={showMovement} />
           <GameChat region={region} />
-          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} movement={movement} />}
-          <Credits />
+          {Sidebar === null && controls}
+          <Credits makerInFooter={Sidebar === null} />
         </div>
         {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}
       </GameOverlay>
+      {Sidebar !== null && (
+        <Suspense fallback={null}>
+          <Sidebar>{controls}</Sidebar>
+        </Suspense>
+      )}
     </TrainerApp>
   );
 }

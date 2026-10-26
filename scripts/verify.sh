@@ -11,6 +11,7 @@ VERIFY_PORT="${VERIFY_PORT:-8002}"
 VERIFY_DIR="${VERIFY_DIR:-$ROOT/.verify/$(date -u +%Y%m%dT%H%M%SZ)}"
 STATE_FILE="$ROOT/.verify/current-server"
 MANIFEST="$ROOT/public/osrs-assets/manifest.json"
+PARITY_EXPECTED="scripts/verify-parity-expected.json"
 URL="http://127.0.0.1:${VERIFY_PORT}/"
 DRILL_QUERY="?seed=1&specialSelection=replay-v2"
 BOSS_NPC=16677
@@ -366,14 +367,18 @@ ensure_deps() {
 manifest_ready() {
   [[ -f "$MANIFEST" ]] && node --input-type=module -e '
     import { loadConfig } from "osrs-sdk-assets";
-    import { existsSync, readFileSync } from "node:fs";
+    import { existsSync, readFileSync, statSync } from "node:fs";
     import { dirname, join } from "node:path";
     const { assets } = await loadConfig();
     const m = JSON.parse(readFileSync(process.argv[1], "utf8"));
-    const npcs = Object.values(assets.npcs).every(({ id }) => m.assets?.[`npc-${id}`]);
-    const items = Object.values(assets.items).every(({ id }) => m.playerItems?.[`item:${id}`]);
-    const spotAnims = Object.values(assets.spotAnims).every(({ id }) => m.spotAnims?.[id]);
-    const models = Object.values(assets.models).every(({ id }) => m.assets?.[`model-${id}`]);
+    const payload = (key) => {
+      const stat = typeof m.assets?.[key]?.file === "string" && statSync(join(dirname(process.argv[1]), m.assets[key].file), { throwIfNoEntry: false });
+      return !!stat && stat.isFile() && stat.size > 0;
+    };
+    const npcs = Object.values(assets.npcs).every(({ id }) => payload(`npc-${id}`));
+    const items = Object.values(assets.items).every(({ id }) => payload(m.playerItems?.[`item:${id}`]));
+    const spotAnims = Object.values(assets.spotAnims).every(({ id }) => payload(m.spotAnims?.[id]));
+    const models = Object.values(assets.models).every(({ id }) => payload(`model-${id}`));
     const pack = m.soundEffects && join(dirname(process.argv[1]), m.soundEffects.file);
     const bytes = pack && existsSync(pack) ? readFileSync(pack) : Buffer.alloc(6);
     const packed = new Set();
@@ -407,6 +412,38 @@ stage_assets() {
     return
   fi
   npm run assets -- "${flags[@]}" >"$VERIFY_DIR/assets.log" 2>&1 && manifest_ready
+}
+
+stage_bundle() {
+  manifest_ready >"$VERIFY_DIR/bundle.log" 2>&1 || { log "bundle: public/osrs-assets is stale or incomplete; scripts/verify.sh assets rebuilds it"; return 1; }
+}
+
+parity_fights() {
+  PARITY_OUT="$1" node node_modules/.bin/vitest run --config test/parity/vitest.config.mts
+}
+
+stage_parity() {
+  local base cache head="$VERIFY_DIR/parity/head.json" src="$VERIFY_DIR/parity/base-src"
+  base="$(git rev-parse --verify "${VERIFY_PARITY_BASE:-$(git merge-base origin/main HEAD)}^{commit}")" || { log "parity: no base revision; set VERIFY_PARITY_BASE"; return 1; }
+  cache="$ROOT/.verify/parity/${base}-$(cat test/parity/* | shasum -a 256 | cut -c1-12).json"
+  mkdir -p "$VERIFY_DIR/parity" "$ROOT/.verify/parity"
+  if [[ -f "$cache" ]]; then
+    log "parity: base ${base} recorded in ${cache}"
+  else
+    log "parity: recording the seeded fights at base ${base}"
+    mkdir -p "$src" && git archive "$base" | tar -x -C "$src" && cp -R test/parity "$src/test/" || { log "parity: the base tree could not be exported"; return 1; }
+    if git diff --quiet "$base" -- package.json package-lock.json scripts/install-beta-sdk.sh; then
+      ln -s "$ROOT/node_modules" "$src/node_modules"
+    else
+      log "parity: the base pins other dependencies; installing them"
+      (cd "$src" && npm ci --no-audit --no-fund && scripts/install-beta-sdk.sh) >"$VERIFY_DIR/parity/base-install.log" 2>&1 || { log "parity: the base install failed"; return 1; }
+    fi
+    (cd "$src" && parity_fights "$cache.tmp") >"$VERIFY_DIR/parity/base.log" 2>&1 && mv "$cache.tmp" "$cache" || { log "parity: the base fights did not run; see ${VERIFY_DIR}/parity/base.log"; return 1; }
+    rm -rf "$src"
+  fi
+  parity_fights "$head" >"$VERIFY_DIR/parity/head.log" 2>&1 || { log "parity: the head fights did not run; see ${VERIFY_DIR}/parity/head.log"; return 1; }
+  node scripts/verify/parity.mjs "$cache" "$head" "$PARITY_EXPECTED" 2>&1 | tee "$VERIFY_DIR/parity/verdict.txt"
+  return "${PIPESTATUS[0]}"
 }
 
 port_listener() {
@@ -2308,12 +2345,13 @@ stages=() BROWSER_UNITS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --unit) [[ -n "${2:-}" ]] || { log "--unit needs a unit name"; exit 2; }; BROWSER_UNITS+=("$2"); shift 2 ;;
+    t0) stages+=(bundle build types test parity); shift ;;
     *) stages+=("$1"); shift ;;
   esac
 done
 [[ ${#stages[@]} -gt 0 ]] || stages=(build types test assets browser production)
 for stage in "${stages[@]}"; do
-  case "$stage" in build | types | test | assets | browser | production | perf) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
+  case "$stage" in bundle | build | types | test | parity | assets | browser | production | perf) ;; *) log "unknown stage: ${stage}"; exit 2 ;; esac
 done
 if [[ " ${stages[*]} " == *" browser "* ]]; then
   [[ ${#BROWSER_UNITS[@]} -gt 0 ]] || mapfile -t BROWSER_UNITS < <(all_units)

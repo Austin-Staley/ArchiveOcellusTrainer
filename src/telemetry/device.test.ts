@@ -38,3 +38,5 @@ describe("Device families", () => {
     expect(browserFamily(userAgent)).toBe(family);
   });
 });
+
+export {};

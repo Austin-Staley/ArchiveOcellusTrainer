@@ -13,13 +13,13 @@ const FIRST_RELEASE = {
   ],
 };
 
-const INPUT_CORRECTION_RELEASE = {
-  version: "2026.10.25.2",
-  date: "2026-10-25",
-  notes: expect.arrayContaining([
-    "Change your mind before the tick, like in game. Whatever you click last before the tick is what you do.",
-    "A click made right before the tick registers on that tick, instead of a tick late.",
-  ]),
+const NEXT_RELEASE = {
+  version: "2026.10.26.13",
+  date: "2026-10-26",
+  notes: [
+    "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits. Boss movement stays in those controls.",
+    "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+  ],
 };
 
 function whatsNew(page: ReturnType<typeof loadPage>) {
@@ -39,7 +39,6 @@ function whatsNew(page: ReturnType<typeof loadPage>) {
 describe("What's new", () => {
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } }));
   });
 
   test("a first visit shows the dot until What's new is opened from Settings, the panel lists the releases newest first, and a reload keeps the dot cleared", () => {
@@ -56,8 +55,24 @@ describe("What's new", () => {
     const afterReload = whatsNew(reloaded);
     reloaded.close();
     const versions = opened.releases.map((release) => release.version ?? "");
+    const rank = (value: string): readonly number[] => value.split(".").map((part) => Number(part));
+    const newer = (left: string, right: string): boolean => {
+      const a = rank(left);
+      const b = rank(right);
+      const length = Math.max(a.length, b.length);
+      for (let index = 0; index < length; index += 1) {
+        const partA = a[index] ?? 0;
+        const partB = b[index] ?? 0;
+        if (partA !== partB) return partA > partB;
+      }
+      return false;
+    };
+    const newestFirst = versions.every((value, index) => {
+      const next = versions[index + 1];
+      return next === undefined || newer(value, next);
+    });
 
-    expect({ firstVisit, opened, closed, afterReload, version, newestFirst: versions.join() === [...versions].sort().reverse().join() }).toEqual({
+    expect({ firstVisit, opened, closed, afterReload, version, newestFirst }).toEqual({
       firstVisit: { settingsDot: true, menuDot: true, panelShown: false, releases: expect.any(Array) },
       opened: {
         settingsDot: false,
@@ -75,7 +90,7 @@ describe("What's new", () => {
     expect(opened.releases.at(-1)).toEqual(FIRST_RELEASE);
   });
 
-  test("a player who saw the last shipped release sees the dot again, and What's new lists the input correction release", () => {
+  test("a player who saw the last shipped release sees the dot again, and What's new opens on the next release", () => {
     localStorage.setItem(SEEN_RELEASE_KEY, "2026.10.25.1");
     const page = loadPage("/?seed=1");
     const { settingsDot, menuDot } = whatsNew(page);
@@ -83,7 +98,7 @@ describe("What's new", () => {
     page.click("whats_new");
     const { releases } = whatsNew(page);
     page.close();
-    expect({ settingsDot, menuDot, releases }).toEqual({ settingsDot: true, menuDot: true, releases: expect.arrayContaining([INPUT_CORRECTION_RELEASE]) });
+    expect({ settingsDot, menuDot, newest: releases[0] }).toEqual({ settingsDot: true, menuDot: true, newest: NEXT_RELEASE });
   });
 
   test("opening What's new from the keyboard moves focus to the panel's title", () => {

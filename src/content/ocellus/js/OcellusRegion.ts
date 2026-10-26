@@ -1,11 +1,13 @@
 import { InvisibleMovementBlocker, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
+import type { BossMovement } from "../../movementDebug";
+import { WalkTint } from "../../movementDebug";
 import type { Player } from "osrs-sdk";
 import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
 import { dress, loadoutSnapshot } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { SoundId, Tile } from "../../../sim/brands";
-import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, RenderView, VoidKind } from "./P4Types";
+import type { FightEvent, FightLog, FightSnapshot, PlayerHitSource, VoidKind } from "./P4Types";
 import { ExplosionViews } from "./entities/ExplosionViews";
 import { BossLook, FloorHole, FragmentFlash, OrbView, PlayerLook, VoidField } from "./entities/P4Views";
 import { Brazier, Walkway } from "./entities/Scenery";
@@ -124,9 +126,10 @@ function present(event: FightEvent, views: Views, player: Tile): void {
 
 export class OcellusRegion extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  private readonly tint = new WalkTint(this, () => [OCELLUS_P4.geometry.bossAnchor.value]);
   invincible = false;
 
-  constructor(private readonly config: DrillConfig, private readonly view: RenderView) {
+  constructor(private readonly config: DrillConfig) {
     super();
   }
 
@@ -175,6 +178,7 @@ export class OcellusRegion extends Region {
         }
       }
     }
+    this.tint.paint(context, scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -192,7 +196,7 @@ export class OcellusRegion extends Region {
       holes: ocellus.holes.tiles().map((at) => new FloorHole(this, at)),
       orbs: { "inner-void": new OrbView(this), "outer-void": new OrbView(this) },
       fragment: new FragmentFlash(this),
-      explosions: new ExplosionViews(this, this.view),
+      explosions: new ExplosionViews(this),
       boss: new BossLook(ocellus),
       player: new PlayerLook(player),
       chat: [],
@@ -210,10 +214,23 @@ export class OcellusRegion extends Region {
 
   /** Unit constructors and Region.reset's setStats pass write SDK default stats, so P4 entry is applied after both. */
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     if (this.mounted.kind === "mounted") this.mounted.ocellus.enterP4();
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (this.mounted.kind !== "mounted") return null;
+    const run = this.mounted.ocellus.runState();
+    const at = run.kind === "waiting" ? 0 : run.kind === "running" ? run.tick : run.at;
+    return { mobility: "stationary", tick: at, actor: "Ocellus" };
   }
 
   override beforeNpcTurns(): void {

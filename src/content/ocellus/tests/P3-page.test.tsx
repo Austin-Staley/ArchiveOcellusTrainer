@@ -14,6 +14,7 @@ async function loadP3Page(url: string) {
   const { P3Region } = await vi.importActual<typeof import("../js/P3Region")>("../js/P3Region");
   const built = vi.spyOn(P3Region.prototype, "initialiseRegion");
   const page = loadPage(url);
+  await act(() => new Promise((resolve) => setTimeout(resolve)));
   const region = built.mock.contexts.at(-1);
   built.mockRestore();
   if (!(region instanceof P3Region)) throw new Error("the page built no P3 region");
@@ -49,18 +50,18 @@ async function openP3Fight(url: string) {
 }
 
 describe("P3 behind the ARCHIVE_P3 build flag", () => {
-  beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
+  beforeEach(() => localStorage.removeItem("osrs-sdk:settings"));
   afterEach(() => vi.unstubAllEnvs());
 
-  test("guard: with the flag off, ?phase=p3 opens P4 at its entry HP, lists phase=p3 as rejected and draws no Phase box", () => {
-    const page = loadPage("/?phase=p3&seed=1");
+  test.each(["p1", "p3"])("guard: with the flag off, ?phase=%s opens P4 at its entry HP, lists it as rejected and draws no Phase box", (phase) => {
+    const page = loadPage(`/?phase=${phase}&seed=1`);
     const { fight, rejected } = probe().snapshot();
     const phaseBox = document.querySelector("#phase");
     page.close();
-    expect({ bossHp: fight?.boss.hp, rejected, phaseBox }).toEqual({ bossHp: 1312, rejected: ["phase=p3"], phaseBox: null });
+    expect({ bossHp: fight?.boss.hp, rejected, phaseBox }).toEqual({ bossHp: 1312, rejected: [`phase=${phase}`], phaseBox: null });
   });
 
-  test("with the flag on, the 75% break shows the interim panel with the P3 time, and Repeat P3, Retry seed and Start P4 carry the setup", async () => {
+  test("with the flag on, the quadrant falling at 75% shows the interim panel with the P3 time, and Repeat P3, Retry seed and Start P4 carry the setup", async () => {
     vi.stubEnv("ARCHIVE_P3", "on");
     const navigation = captureNavigation();
     const fight = await openP3Fight("/?phase=p3&seed=100&bosshp=3991");
@@ -75,7 +76,7 @@ describe("P3 behind the ARCHIVE_P3 build flag", () => {
 
     expect({ whileRunning, shown, navigation: navigation.assigned }).toEqual({
       whileRunning: null,
-      shown: { lines: ["Quadrant 1 cleared (interim end)", "P3 time: 3 ticks (0:01.8)"], buttons: ["Repeat P3", "Retry seed", "Start P4"] },
+      shown: { lines: ["Quadrant 1 cleared (interim end)", "P3 time: 4 ticks (0:02.4)"], buttons: ["Repeat P3", "Retry seed", "Start P4"] },
       navigation: [
         "http://localhost/?phase=p3&bosshp=3991&setup=ranged",
         "http://localhost/?phase=p3&seed=100&bosshp=3991&setup=ranged",

@@ -19,12 +19,12 @@ export async function startP3Drill(options: P3DrillOptions = {}) {
   if (options.reach !== undefined) link.searchParams.set("reach", options.reach);
   const request = parseRequest(link, () => {
     throw new Error(`the drill link has no usable seed: ${link.search}`);
-  }, { p3: true });
+  }, { p3: true, p2: false, p1: false, full: false });
   if (request.phase !== "p3") throw new Error(`the drill link opened ${request.phase}: ${link.search}`);
   if (request.rejected.length > 0) throw new Error(`the drill link has options the trainer rejects: ${request.rejected.join(", ")}`);
   const region = new P3Region(request.config);
   region.invincible = options.invincible ?? false;
-  const trainer = new TrainerInstance(region, { force2d: true });
+  const trainer = new TrainerInstance(region);
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   region.world.tickWorld(region.world.getReadyTimer - 1);
   Viewport.viewport.resize(800, 800);
@@ -62,7 +62,20 @@ export async function startP3Drill(options: P3DrillOptions = {}) {
         .flatMap((row) => row.events)
         .filter((event): event is Extract<P3Event, { kind: K }> => event.kind === kind);
     },
+    /** Each boss move and its P3 tick, in order. */
+    moves() {
+      return rows().flatMap((row) => row.events.flatMap((event) => (event.kind === "boss-moved" ? [[event.at, event.move] as const] : [])));
+    },
     click: (on: At) => clickTile(region.world, on),
+    /** Puts the player on a tile at once, as the end of a tick would, and stops any walk so they stay there. */
+    place: (on: At) => {
+      player().setLocation({ x: on.x, y: on.y });
+      player().destinationLocation = { x: on.x, y: on.y };
+    },
+    /** Sets the boss's HP between ticks, as hits landing on him would. */
+    bossHp: (hp: number) => {
+      boss().currentStats.hitpoint = hp;
+    },
     pray: (name: ProtectionPrayer) => player().prayerController.findPrayerByName(name).toggle(player()),
     dispose() {
       trainer.dispose();

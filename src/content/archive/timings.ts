@@ -7,6 +7,7 @@ import type { RaidId } from "./catalog";
  *
  * Wiki: https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies (25 Oct 2026)
  * and https://oldschool.runescape.wiki/w/Ocellus (25 Oct 2026).
+ * The 25 Oct 2026 render digest supplies the flight ticks and animation ids the rooms play.
  */
 
 /** Ocellus reduces demonbane weapon damage by this share. Unverified. Wiki strategies, 25 Oct 2026. */
@@ -25,6 +26,8 @@ export const ARCHIVE = {
     tempo: { full: 7, threeQuarter: 6, half: 5, low: 4 },
     /** Unverified. Practice stand-in for the measured 33–88 tick bomb range. */
     bombInterval: 33,
+    /** Unverified. The old whole-tick stand-in. The drawn graphic waits 1 tick and flies 4.5. No hitsplat used this number. */
+    bombFlight: 5,
     prayed: 10,
     unprayed: 33,
     angryHit: 51,
@@ -43,6 +46,10 @@ export const ARCHIVE = {
     lightning: { first: 3, second: 5, damage: 34 },
     meleeAfterSpecial: [7, 12, 26, 31],
     stunAt: 14,
+    /** Unverified. Render digest 25 Oct 2026: the stun animation ends 8 ticks after it starts. */
+    stunRecover: 8,
+    /** Unverified. The enrage NPC animation. Spotanim 4175 and tile graphics 4196–4198 are not this animation. */
+    waveAnim: 14694,
     healAt: 16,
     healAmount: 91,
     waveInterval: 11,
@@ -52,14 +59,19 @@ export const ARCHIVE = {
   guardian: {
     flyingNpcId: 16659,
     groundedNpcId: 16660,
+    /** The live battery. The inert handler 16661 and the destroyed form 16663 share its corners and are not spawned. */
+    batteryNpcId: 16662,
+    batterySize: 2,
     shield: 550,
     hp: 1100,
     defence: 260,
     defenceFloor: 156,
     autoInterval: 5,
+    /** Unverified. The ranged graphic starts 2 ticks into the attack and flies about 2.3, landing with this 4-tick hit. */
     autoFlight: 4,
     landDelay: 3,
-    grounded: 35,
+    /** Unverified. Render digest cross-check 25 Oct 2026: the first grounding is 35, then 41, then 47, and later stays hold 47. */
+    groundedStays: [35, 41, 47],
     takeoff: 3,
     autoAfterTakeoff: 4,
     vineFirst: 5,
@@ -88,8 +100,10 @@ export const ARCHIVE = {
     autoInterval: 5,
     relocateFirst: 20,
     relocateInterval: 25,
-    rangedFlight: 4,
-    magicFlight: 5,
+    /** Unverified. Three fights in the 25 Oct 2026 digest: the ranged hit is the same tick as the attack. Low confidence. */
+    rangedFlight: 0,
+    /** Unverified. Those same three fights: the relocate hit is 4 ticks after the teleport. Low confidence. */
+    magicFlight: 4,
     ranged: { prayed: 1, unprayed: 32 },
     magic: { prayed: 0, unprayed: 39 },
     binderNpcId: 16670,
@@ -98,6 +112,8 @@ export const ARCHIVE = {
     bindersPerChant: 6,
     binderHop: 15,
     binderReach: 2,
+    /** Unverified. Render digest 25 Oct 2026: binders attack every 5 ticks. */
+    binderAttack: 5,
     binderDamage: 20,
     enragePercent: 33,
     /** Unverified. Practice stand-in inside the 10–14 tick vanish. */
@@ -114,7 +130,8 @@ export const ARCHIVE = {
     defence: 170,
     defenceFloor: 102,
     autoInterval: 4,
-    autoFlight: 4,
+    /** Unverified. Render digest 25 Oct 2026: magic and ranged land 2 ticks after the attack. */
+    autoFlight: 2,
     autosBeforeBlast: 5,
     tellAfterAuto: 4,
     blastAfterTell: 3,
@@ -131,6 +148,7 @@ export const ARCHIVE = {
     defence: 100,
     defenceFloor: 0,
     autoInterval: 5,
+    /** Unverified. One fight measured flights of 3 and 1. The room keeps 5 so the graphic and the hit land together. Low confidence. */
     autoFlight: 5,
     chip: { prayed: 14, unprayed: 35 },
     channelFirst: 19,
@@ -150,20 +168,42 @@ export const ARCHIVE = {
   },
   p1: {
     npcId: 16674,
+    /** Present on one tile in every phase 1 capture. No attack animation was recorded. */
+    hoodedNpcId: 16672,
+    hoodedSize: 3,
     hp: 2500,
     defence: 215,
     defenceFloor: 129,
     volleyInterval: 5,
-    /** Unverified. Flight was measured at 4–5 ticks; the room uses 4. */
-    volleyFlight: 4,
-    prayed: 12,
-    unprayed: 42,
+    /**
+     * Unverified. Render digest 25 Oct 2026, 32 phase 1 files.
+     * Animation 14809 repeats most often every 8 ticks (174 gaps). 14811 does too (168 gaps).
+     * Other gaps are common, so 8 is the mode, not every sample.
+     * Disputed with the crack interval below: the animation beat stays 8.
+     */
+    chargeVisual: 8,
+    /** Unverified. Render digest 25 Oct 2026: the volley lands about 2 ticks after the attack. The room uses 2. */
+    volleyFlight: 2,
+    /**
+     * Disputed. The room used to deal 12 through the matching prayer and 42 without.
+     * Fight logs L1, L2 and L6 to L8: 246 of 246 matching prayers dealt 0, and 18 misses were 0 to 27.
+     * The room prays to 0 and rolls the rest from volleyMin to volleyMax.
+     */
+    volleyMin: 0,
+    volleyMax: 27,
     tendrilCount: 7,
-    tendrilGap: 6,
+    /**
+     * Disputed. The digest's charge animation repeats every 8 ticks (see chargeVisual).
+     * Fight logs L6 to L8: 85 of 85 corner cracks open on the charge tick and every 2 ticks after.
+     * The cracks use 2. The animation keeps the 8-tick mode.
+     */
+    tendrilGap: 2,
+    /** The centre pair's second crack. The corner cracks use tendrilGap. The logs' middle beats are every 8, which this pair script does not play. */
+    centreGap: 6,
     tendrilGreen: 5,
-    tendrilChip: 4,
-    /** Unverified. The heal after the last tendril has no measured amount. */
-    tendrilHeal: 10,
+    /** Disputed. A flat chip of 4 was the stand-in. Logs L6 to L8: 330 blocks of 3 to 5, refunded on stepping off. */
+    blockMin: 3,
+    blockMax: 5,
     /** Unverified. One missed tendril's meter step, so the annihilation formula can run. */
     meterStep: 16,
     /** Unverified. About 5% of the solo hitpoints, from the tendril heal-the-boss note. */
@@ -183,26 +223,50 @@ export const ARCHIVE = {
   },
   p2: {
     npcId: 16676,
+    /** The sword form. Fight logs place it in the middle; the digest recorded no template tile, so the room does not spawn it. */
+    formNpcId: 16675,
     defence: 250,
     defenceFloor: 0,
+    /** Fight logs: the 24 portals stand 2 ticks in. The room draws them on that tick. */
+    portalsRise: 2,
     firstVolley: 11,
     volleys: 6,
     spacing: 5,
+    /** Unverified. A lit bolt is over a near tile on the firing tick. The room's shot lasts this many ticks. */
     hitDelay: 4,
     padAfterSixth: 2,
     voidAfterSixth: 3,
-    nextAfterPad: 9,
+    /**
+     * Disputed. 9 made the later rounds start at 47 and 83.
+     * Fight logs: rounds light at 11, 53 and 95, so the gap after a pad is 15.
+     */
+    nextAfterPad: 15,
     /** Unverified. The low end of a missed-pad hit described as heavy. */
     padMiss: 50,
-    /** Unverified. Measured lengths were 79, 130 and 131. */
-    end: 130,
+    /**
+     * Disputed. One note listed 79, 130 and 131.
+     * Fight logs: phase 3 starts 131 ticks after phase 2 in all five logged phase 2s.
+     */
+    end: 131,
     enoughBeforeEnd: 8,
     bladeOpens: 7,
+    /** Fight logs: spotanim 4304 on the middle every 3 ticks from early in the phase until "This... is enough...". */
+    repairFirst: 1,
+    repairEvery: 3,
+    /** Fight logs L1 to L8: typeless 18 to 27, under prayer or not. The beam-cap setting can raise the top. */
+    volleyMin: 18,
+    volleyMax: 27,
     banks: [46, 88, 124],
     quadrants: ["NW", "NE", "SE", "SW"],
   },
   p3: {
     npcId: 16677,
+    /** Same monster as the phase 4 void rift. https://oldschool.runescape.wiki/w/Void_rift (25 Oct 2026). */
+    riftNpcId: 16678,
+    /** https://oldschool.runescape.wiki/w/Void_Siphon (25 Oct 2026). */
+    siphonNpcId: 16679,
+    /** https://oldschool.runescape.wiki/w/Void_Augmenter (25 Oct 2026). */
+    augmenterNpcId: 16680,
     hp: 5250,
     defence: 250,
     defenceFloor: 150,
@@ -212,7 +276,27 @@ export const ARCHIVE = {
     collapseDamage: 99,
     thresholds: [75, 50, 25],
     order: ["NW", "SW", "SE", "NE"],
+    /**
+     * The encounter room's previous 20-tick pattern: swing, swing, wave, twice.
+     * Disputed. The phase 3 drill follows the logged chain (swings at 4 and 7, shadow slash at 10). Upstream #88.
+     */
+    autos: [
+      { attack: "melee", next: 3 },
+      { attack: "melee", next: 4 },
+      { attack: "wave", next: 3 },
+      { attack: "melee", next: 3 },
+      { attack: "melee", next: 4 },
+      { attack: "wave", next: 3 },
+    ] as const,
+    /**
+     * Typeless 20, dealt on the swing tick when he cannot reach.
+     * Disputed. Animation 14851 is the drill's panic shot: magic, landing 2 ticks after the cast.
+     * The dossier's range is 12–33. The drill uses the wiki's 20–26. The 182 segments timed graphic 4297 at flight 0.5 with the splat on the cast tick.
+     */
+    voidShot: 20,
     spinAt: 20,
+    /** Unverified. Render digest 25 Oct 2026, 31 phase 3 files: animation 14869 lasts 5 ticks and carries graphic 4325 on all 192 spins. */
+    spinGraphicTicks: 5,
     spinWave: [4, 7, 10],
     spinPrayed: 8,
     spinUnprayed: 42,
@@ -269,7 +353,7 @@ export function standInNotice(id: RaidId): string {
     case "dagonhai":
       return `The book every ${ARCHIVE.dagonhai.bookInterval} ticks is one fight's gap, kept as an unsourced practice stand-in.`;
     case "ocellus-p1":
-      return `Corner walks are ${ARCHIVE.p1.walk} ticks, the meter step is ${ARCHIVE.p1.meterStep}, a blocked tendril heals ${ARCHIVE.p1.tendrilHeal}, and a miss heals him ${ARCHIVE.p1.tendrilBossHeal}. Those four counts are unsourced practice stand-ins. The slam deals ${ARCHIVE.p1.slamDamage}, the published cap; captures saw 25–40.`;
+      return `Corner walks are ${ARCHIVE.p1.walk} ticks, the meter step is ${ARCHIVE.p1.meterStep}, and a missed crack heals him ${ARCHIVE.p1.tendrilBossHeal}. Those three counts are unsourced practice stand-ins. A blocked crack costs 3 to 5 and returns it when you step off. The slam deals ${ARCHIVE.p1.slamDamage}, the published cap; the fight logs saw 26 to 34 and the captures 25 to 40.`;
     case "ocellus-p2":
       return `Missing the orange pad deals ${ARCHIVE.p2.padMiss}, an unsourced practice stand-in for a heavy hit.`;
     case "ocellus-p3":

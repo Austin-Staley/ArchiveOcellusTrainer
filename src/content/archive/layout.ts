@@ -154,18 +154,32 @@ export const DAGON_PADS = {
   air: tile(5, 10),
 } as const;
 
-export const DAGON_TRAIL = [tile(8, 9), tile(9, 9), tile(10, 9), tile(11, 9), tile(11, 8), tile(11, 7)] as const;
+/**
+ * The six tiles the cauldron occupied in the one captured fight.
+ * Region 16215, plane 0. That fight did not record an order. This visit runs west to east. Unverified order.
+ */
+export const DAGON_TRAIL = [tile(5, 12), tile(6, 12), tile(6, 13), tile(7, 12), tile(8, 12), tile(8, 13)] as const;
+
+/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. */
+export const HOODED_TILE = tile(5, 20);
+
+/** Guardian batteries, region 16471 plane 0. The same four corners in every flying-room capture. */
+export const BATTERY_TILES = [tile(25, 3), tile(25, 16), tile(0, 3), tile(0, 16)] as const;
 
 export const CENSERS = [tile(1, 22), tile(22, 22), tile(1, 1), tile(22, 1)] as const;
 
 export const ROOMS = {
-  bork: { width: 15, height: 17, player: tile(9, 13), boss: tile(10, 12), bossSize: 4, smork: tile(6, 7) },
+  // The Smorks are local (30, 30), the only tile in 107 captures. The scene offset puts that tile at (14, 14).
+  // Their 3x3 reaches x 16, so the walk grid is 17 wide.
+  bork: { width: 17, height: 17, player: tile(9, 13), boss: tile(10, 12), bossSize: 4, smork: tile(14, 14) },
   ezekiel: { width: 15, height: 15, player: tile(7, 9), boss: tile(8, 8), bossSize: 3 },
   guardian: { width: 28, height: 28, player: tile(13, 9), boss: tile(11, 11), bossSize: 5 },
   moia: { width: 17, height: 17, player: tile(1, 1), boss: tile(0, 7), bossSize: 3 },
   xarth: { width: 17, height: 17, player: tile(11, 2), boss: tile(7, 7), bossSize: 3 },
   dagonhai: { width: 20, height: 19, player: tile(6, 10), boss: tile(2, 9), bossSize: 2 },
   "ocellus-p1": { width: 25, height: 25, player: tile(8, 18), boss: tile(5, 17), bossSize: 3 },
-  "ocellus-p2": { width: 25, height: 25, player: tile(8, 16), boss: tile(11, 11), bossSize: 3 },
+  // The drawn 3x3 runs toward lower Y, so (11, 13) centres it on tile (12, 12): cache local (31, 41), The Blade.
+  // The opening tile is on that same column, so the default camera frames the sword.
+  "ocellus-p2": { width: 25, height: 25, player: tile(12, 16), boss: tile(11, 13), bossSize: 3 },
   "ocellus-p3": { width: 25, height: 25, player: tile(8, 19), boss: tile(5, 18), bossSize: 3 },
 } as const;

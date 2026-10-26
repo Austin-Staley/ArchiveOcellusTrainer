@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { DataPoint } from "../telemetry/perfSummary";
 import type { Env } from "./worker";
 
@@ -36,6 +38,15 @@ function bindings() {
   return { env, written };
 }
 
+function bindingsDeclaredBy(configFile: string) {
+  const config: unknown = JSON.parse(readFileSync(resolve(__dirname, "../..", configFile), "utf8"));
+  const datasets: readonly unknown[] = typeof config === "object" && config !== null && "analytics_engine_datasets" in config && Array.isArray(config.analytics_engine_datasets) ? config.analytics_engine_datasets : [];
+  const datasetBindings = datasets.map((dataset) => (typeof dataset === "object" && dataset !== null && "binding" in dataset ? String(dataset.binding) : "unnamed"));
+  const { env, written } = bindings();
+  const { PERF: _undeclared, ...assetsOnly } = env;
+  return { env: datasetBindings.includes("PERF") ? env : assetsOnly, written, datasetBindings };
+}
+
 const SUMMARY_WITHOUT_CORES = Object.fromEntries(Object.entries(SUMMARY).filter(([key]) => key !== "cores"));
 const versionOfBytes = (bytes: number) => `2026.10.25.${"1".repeat(bytes - "2026.10.25.".length)}`;
 const utf8Bytes = (text: string) => new TextEncoder().encode(text).length;
@@ -55,6 +66,21 @@ describe("Performance beacon Worker", () => {
       written: [
         {
           blobs: ["2026.10.25.2", "3d", "nvidia", "chrome", "after-inner", "kill"],
+          doubles: [0.4, 31, 1100, 16, 33, 50, 4, 600, 640, 812.5, 1, 1.25, 1600, 1000, 8],
+          indexes: ["2026.10.25.2"],
+        },
+      ],
+    });
+  });
+
+  test("guard: a 2D summary from a page loaded before the trainer dropped 2D answers 204 and keeps its 2d label", async () => {
+    const { env, written } = bindings();
+    const response = await send(env, "/t", { method: "POST", body: JSON.stringify({ ...SUMMARY, view: "2d" }) });
+    expect({ status: response.status, written }).toEqual({
+      status: 204,
+      written: [
+        {
+          blobs: ["2026.10.25.2", "2d", "nvidia", "chrome", "after-inner", "kill"],
           doubles: [0.4, 31, 1100, 16, 33, 50, 4, 600, 640, 812.5, 1, 1.25, 1600, 1000, 8],
           indexes: ["2026.10.25.2"],
         },
@@ -99,6 +125,22 @@ describe("Performance beacon Worker", () => {
         blobBytes: blobs.reduce((total, blob) => total + utf8Bytes(blob), 0),
       })),
     }).toEqual({ status, points: point ? [point] : [] });
+  });
+
+  test.each([
+    { name: "guard: wrangler.jsonc declares the PERF dataset, and under its bindings", config: "wrangler.jsonc", datasets: ["PERF"], stored: 1 },
+    { name: "wrangler.release.jsonc declares no Analytics Engine dataset, and under its bindings", config: "wrangler.release.jsonc", datasets: [], stored: 0 },
+  ])("$name a valid summary at /t answers 204 and stores $stored data points, and / still serves", async ({ config, datasets, stored }) => {
+    const { env, written, datasetBindings } = bindingsDeclaredBy(config);
+    const responses = await Promise.all([send(env, "/t", { method: "POST", body: JSON.stringify(SUMMARY) }), send(env, "/")]);
+    expect({ datasets: datasetBindings, responses, stored: written.length }).toEqual({
+      datasets,
+      responses: [
+        { status: 204, body: "" },
+        { status: 200, body: "asset /" },
+      ],
+      stored,
+    });
   });
 
   test("every other path, including a POST, is served from the static assets", async () => {

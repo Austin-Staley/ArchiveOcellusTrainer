@@ -1,17 +1,22 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
-import { ENCOUNTERS, isRaidId, parseRaid } from "./content/archive/catalog";
+import { movementDebug } from "./content/movementDebug";
+import { ENCOUNTERS, defaultGear, encounterName, isRaidId, parseRaid } from "./content/archive/catalog";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
-import { P3Region } from "./content/ocellus/js/P3Region";
-import type { DrillConfig, DrillRequest, P3Config } from "./content/ocellus/js/OcellusTimings";
+import type { P3Region } from "./content/ocellus/js/P3Region";
+import type { P1Region } from "./content/ocellus/js/P1Region";
+import type { P2Region } from "./content/ocellus/js/P2Region";
+import type { DrillConfig, P1Config, P2Config, P3Config } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P4, parseRequest } from "./content/ocellus/js/OcellusTimings";
 import type { P3End, P3Log, P3Snapshot } from "./content/ocellus/js/P3Types";
-import type { FightLog, FightSnapshot, RenderView, RunEnd } from "./content/ocellus/js/P4Types";
+import type { P2End, P2Log, P2Snapshot } from "./content/ocellus/js/P2Types";
+import type { P1End, P1Log, P1Snapshot } from "./content/ocellus/js/P1Types";
+import type { FightLog, FightSnapshot, RunEnd } from "./content/ocellus/js/P4Types";
 import type { Seed, Tick } from "./sim/brands";
 import type { BuildFlags } from "./flags";
 import { readBuildFlags } from "./flags";
@@ -20,24 +25,25 @@ import type { ReleaseVersion } from "./releases";
 import { releaseDate } from "./releases";
 import { keepHoverTextOnCanvas } from "./hoverText";
 import { loadWebAnalytics, perfDataAllowed, setPerfDataAllowed, startPerfTelemetry } from "./telemetry/perfTelemetry";
+import { reportUnservedAssets } from "./servedAssets";
+import { CONTRIBUTOR, MAKER, MAKER_LINKS } from "./menu/credits";
 
 keepHoverTextOnCanvas();
 // Desktop browsers start the SDK's AudioContext suspended until a user gesture, and the SDK never resumes it.
 window.addEventListener("pointerdown", () => void SoundCache.context?.resume(), { capture: true });
+// Cache 2746 has no synth for three of phase 2's animation frame sounds (12814, 12825, 12832), and the SDK rejects a promise when a frame reaches one.
+window.addEventListener("unhandledrejection", (event) => {
+  if (event.reason instanceof Error && /^Sound effect \d+ is not present in the runtime pack$/.test(event.reason.message)) event.preventDefault();
+});
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
-const MAKER = "Julian Dasilva / Moarhots";
-const MAKER_LINKS: readonly Readonly<{ label: string; href: string }>[] = [
-  { label: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer" },
-  { label: "@ShadowJdas", href: "https://x.com/ShadowJdas" },
-];
 
 declare global {
   interface Window {
     __archiveOcellusProbe?: Readonly<{
       snapshot(): VerificationProbeSnapshot;
-      log(): FightLog | P3Log | Readonly<{ header: Readonly<{ seed: Seed }> }>;
+      log(): FightLog | P3Log | P2Log | P1Log | ReturnType<RaidRegion["fightLog"]>;
       tileCentre(at: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> | null;
     }>;
   }
@@ -48,7 +54,7 @@ type VerificationProbeSnapshot = Readonly<{
   tick: number;
   player: Readonly<{ x: number; y: number }> | null;
   destination: Readonly<{ x: number; y: number }> | null;
-  fight: FightSnapshot | P3Snapshot | NonNullable<ReturnType<RaidRegion["snapshot"]>> | null;
+  fight: FightSnapshot | P3Snapshot | P2Snapshot | P1Snapshot | NonNullable<ReturnType<RaidRegion["snapshot"]>> | null;
   rejected: readonly string[];
   panel: Readonly<{ tab: string | null; keys: Readonly<Record<"inventory" | "spellbook" | "prayer" | "equipment" | "combat", string>> }>;
   menu: readonly string[] | null;
@@ -65,22 +71,14 @@ function drawnIcons(items: readonly (Item | null | undefined)[]): VerificationPr
   );
 }
 
-type Drill = Readonly<{ phase: "p4"; region: OcellusRegion; config: DrillConfig }> | Readonly<{ phase: "p3"; region: P3Region; config: P3Config }>;
+type Drill =
+  | Readonly<{ phase: "p4"; region: OcellusRegion; config: DrillConfig }>
+  | Readonly<{ phase: "p3"; region: P3Region; config: P3Config }>
+  | Readonly<{ phase: "p2"; region: P2Region; config: P2Config }>
+  | Readonly<{ phase: "p1"; region: P1Region; config: P1Config }>;
 
-function mount(request: DrillRequest, view: RenderView): Drill {
-  switch (request.phase) {
-    case "p4":
-      return { phase: "p4", region: new OcellusRegion(request.config, view), config: request.config };
-    case "p3":
-      return { phase: "p3", region: new P3Region(request.config), config: request.config };
-    default: {
-      const unhandled: never = request;
-      return unhandled;
-    }
-  }
-}
 
-function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion | P3Region | RaidRegion, rejected: readonly string[]) {
+function exposeVerificationProbe(trainer: TrainerInstance, region: Drill["region"] | RaidRegion, rejected: readonly string[]) {
   window.__archiveOcellusProbe = Object.freeze({
     snapshot(): VerificationProbeSnapshot {
       const { player, world } = trainer.getSnapshot();
@@ -106,6 +104,7 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: OcellusRegion
 }
 
 const SOUNDS_START_ON = true;
+const THREE_D_VIEW = { use3dView: true, rotated: "north" } as const;
 
 type SoundChoice = Partial<Pick<SettingsState, "playsAudio" | "playsAreaAudio">>;
 
@@ -128,55 +127,98 @@ function readSettings() {
   // The SDK saves its own off defaults on a first load and turns sound off on every mobile load, so the player's choice is read before it loads.
   const saved = savedSoundChoice();
   Settings.readFromStorage();
-  Settings.set({ playsAudio: saved.playsAudio ?? SOUNDS_START_ON, playsAreaAudio: saved.playsAreaAudio ?? SOUNDS_START_ON });
+  Settings.set({ ...THREE_D_VIEW, playsAudio: saved.playsAudio ?? SOUNDS_START_ON, playsAreaAudio: saved.playsAreaAudio ?? SOUNDS_START_ON });
 }
 
 type Session =
   | Readonly<{ kind: "drill"; trainer: TrainerInstance; drill: Drill; flags: BuildFlags }>
   | Readonly<{ kind: "raid"; trainer: TrainerInstance; region: RaidRegion; launch: RaidLaunch; flags: BuildFlags }>;
 
-function createSession(): Session {
+type Opening = Readonly<{ kind: "open"; opened: Session }> | Readonly<{ kind: "loading"; opened: Promise<Session> }>;
+
+/** The flagged drills load behind a test of the raw build variable, which webpack folds, so a build with a phase off contains none of that drill. The encounter rooms stay in every build. */
+function openTrainer(): Opening {
   CacheRender.configure(new URL("osrs-assets/manifest.json", window.location.href).href);
+  void CacheRender.bundle().then(({ manifest }) => reportUnservedAssets(manifest), (error: unknown) => console.error("assets: osrs-assets/manifest.json did not load", error));
   readSettings();
   const flags = readBuildFlags();
   const url = new URL(window.location.href);
-  const view: RenderView = Settings.use3dView ? "3d" : "2d";
-  const encounter = url.searchParams.get("encounter");
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  const encounter = url.searchParams.get("encounter");
   if (encounter !== null && isRaidId(encounter)) {
     const launch = parseRaid(url, encounter, freshSeed);
     const region = new RaidRegion(launch);
-    const trainer = new TrainerInstance(region, { force2d: view === "2d" });
+    const trainer = new TrainerInstance(region);
     if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, region, launch.rejected);
     loadWebAnalytics();
-    return { kind: "raid", trainer, region, launch, flags };
+    return { kind: "open", opened: { kind: "raid", trainer, region, launch, flags } };
   }
   const request = parseRequest(url, freshSeed, flags);
-  const drill = mount(request, view);
-  drill.region.invincible = request.invincible;
-  const trainer = new TrainerInstance(drill.region, { force2d: view === "2d" });
-  if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, drill.region, request.rejected);
-  loadWebAnalytics();
-  if (drill.phase === "p4") void startPerfTelemetry(drill.region);
-  return { kind: "drill", trainer, drill, flags };
+  const start = (drill: Drill): Session => {
+    drill.region.invincible = request.invincible;
+    const trainer = new TrainerInstance(drill.region);
+    if (process.env.NODE_ENV !== "production") exposeVerificationProbe(trainer, drill.region, request.rejected);
+    loadWebAnalytics();
+    if (drill.phase === "p4") void startPerfTelemetry(drill.region);
+    return { kind: "drill", trainer, drill, flags };
+  };
+  switch (request.phase) {
+    case "p4":
+      return { kind: "open", opened: start({ phase: "p4", region: new OcellusRegion(request.config), config: request.config }) };
+    case "p3":
+      return {
+        kind: "loading",
+        opened:
+          process.env.ARCHIVE_P3 === "on"
+            ? import("./content/ocellus/js/P3Region").then(({ P3Region }) => start({ phase: "p3", region: new P3Region(request.config), config: request.config }))
+            : Promise.reject(new Error("this build has ARCHIVE_P3 off")),
+      };
+    case "p2":
+      return {
+        kind: "loading",
+        opened:
+          process.env.ARCHIVE_P2 === "on"
+            ? import("./content/ocellus/js/P2Region").then(({ P2Region }) => start({ phase: "p2", region: new P2Region(request.config), config: request.config }))
+            : Promise.reject(new Error("this build has ARCHIVE_P2 off")),
+      };
+    case "p1":
+      return {
+        kind: "loading",
+        opened:
+          process.env.ARCHIVE_P1 === "on"
+            ? import("./content/ocellus/js/P1Region").then(({ P1Region }) => start({ phase: "p1", region: new P1Region(request.config), config: request.config }))
+            : Promise.reject(new Error("this build has ARCHIVE_P1 off")),
+      };
+    default: {
+      const unhandled: never = request;
+      return unhandled;
+    }
+  }
 }
 
 const SETUP_KEYS = Object.keys(OCELLUS_P4.choices.setup.options);
 const FOCUS_KEYS = Object.keys(OCELLUS_P4.choices.focus.options);
 const label = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, " ");
 
-const PHASES: readonly Readonly<{ phase: Drill["phase"]; label: string }>[] = [
-  { phase: "p4", label: "Phase 4" },
-  { phase: "p3", label: "Phase 3" },
+const PHASES: readonly Readonly<{ phase: Drill["phase"]; label: string; shown: (flags: BuildFlags) => boolean }>[] = [
+  { phase: "p4", label: "Phase 4", shown: () => true },
+  { phase: "p3", label: "Phase 3", shown: (flags) => flags.p3 },
+  { phase: "p2", label: "Phase 2", shown: (flags) => flags.p2 },
+  { phase: "p1", label: "Phase 1", shown: (flags) => flags.p1 },
 ];
 
-type RunRequest = Readonly<{ setup: string; seed: string | null; invincible: boolean }> & (Readonly<{ phase: "p4"; focus: string }> | Readonly<{ phase: "p3" }>);
+const phaseOf = (value: string): Drill["phase"] => PHASES.find(({ phase }) => phase === value)?.phase ?? "p4";
+
+type RunRequest = Readonly<{ setup: string; seed: string | null; invincible: boolean }> &
+  (Readonly<{ phase: "p4"; focus: string }> | Readonly<{ phase: "p3" }> | Readonly<{ phase: "p2"; skipTiles: boolean }> | Readonly<{ phase: "p1" }>);
 
 function startRun(request: RunRequest) {
   const { setup, seed, invincible } = request;
   const url = new URL(window.location.href);
   url.searchParams.set("setup", setup);
   if (request.phase === "p4") url.searchParams.set("focus", request.focus);
+  if (request.phase === "p2" && request.skipTiles) url.searchParams.set("markers", "skip-tiles");
+  else if (request.phase === "p2") url.searchParams.delete("markers");
   if (seed !== null) url.searchParams.set("seed", seed);
   else url.searchParams.delete("seed");
   if (invincible) url.searchParams.set("invincible", "on");
@@ -197,6 +239,25 @@ function startEncounter(id: string) {
   url.search = "";
   if (id !== "ocellus-p4") url.searchParams.set("encounter", id);
   window.location.assign(url.href);
+}
+
+/** The same phase again, keeping the setup, Invincible and the phase's own options; `focus` replaces P4's. */
+function rerun(drill: Drill, setup: string, seed: string | null, focus: string | null = null): RunRequest {
+  const { invincible } = drill.region;
+  switch (drill.phase) {
+    case "p4":
+      return { phase: "p4", setup, focus: focus ?? drill.config.choices.focus.key, seed, invincible };
+    case "p3":
+      return { phase: "p3", setup, seed, invincible };
+    case "p2":
+      return { phase: "p2", setup, seed, invincible, skipTiles: drill.region.skipTilesShown() };
+    case "p1":
+      return { phase: "p1", setup, seed, invincible };
+    default: {
+      const unhandled: never = drill;
+      return unhandled;
+    }
+  }
 }
 
 function startPhase(phase: Drill["phase"], setup: string, invincible: boolean) {
@@ -229,7 +290,7 @@ const UnseenDot = () => <span className="unseen_dot" role="img" aria-label="new"
 
 type MenuView = "closed" | "settings" | "whats-new";
 
-function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFlags }>) {
+function DrillControls({ drill, flags, movement }: Readonly<{ drill: Drill; flags: BuildFlags; movement: MovementToggle }>) {
   const { config, region } = drill;
   const [setup, setSetup] = useState<string>(config.choices.setup.key);
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
@@ -240,10 +301,8 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
   const settingsButton = useRef<HTMLButtonElement>(null);
   const whatsNewTitle = useRef<HTMLHeadingElement>(null);
   const { playsAudio, playsAreaAudio } = useSettingsSnapshot();
-  const restart = (focus: string | null) => {
-    const seed = typedSeed?.trim() || null;
-    startRun(focus === null ? { phase: "p3", setup, seed, invincible: region.invincible } : { phase: "p4", setup, focus, seed, invincible: region.invincible });
-  };
+  const restart = (focus: string | null) => startRun(rerun(drill, setup, typedSeed?.trim() || null, focus));
+  const phases = PHASES.filter(({ shown }) => shown(flags));
   const currentFocus = drill.phase === "p4" ? drill.config.choices.focus.key : null;
 
   const openWhatsNew = () => {
@@ -288,11 +347,11 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
             {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
-        {flags.p3 && (
+        {phases.length > 1 && (
           <label>
             Phase{" "}
-            <select id="phase" value={drill.phase} onChange={(event) => startPhase(event.target.value === "p3" ? "p3" : "p4", setup, region.invincible)}>
-              {PHASES.map(({ phase, label: name }) => <option key={phase} value={phase}>{name}</option>)}
+            <select id="phase" value={drill.phase} onChange={(event) => startPhase(phaseOf(event.target.value), setup, region.invincible)}>
+              {phases.map(({ phase, label: name }) => <option key={phase} value={phase}>{name}</option>)}
             </select>
           </label>
         )}
@@ -319,6 +378,11 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
             </select>
           </label>
         )}
+        {drill.phase === "p2" && (
+          <label>
+            Skip tiles <input id="skip_tiles" type="checkbox" defaultChecked={drill.config.choices.markers.key === "skip-tiles"} onChange={(event) => drill.region.showSkipTiles(event.target.checked)} />
+          </label>
+        )}
         <label>
           Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(config.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
         </label>
@@ -331,6 +395,9 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
         </label>
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+        <label>
+          Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
         <label>
           Send anonymous performance data <input id="perf_data" type="checkbox" checked={sendsPerfData} onChange={(event) => { setPerfDataAllowed(event.target.checked); setSendsPerfData(event.target.checked); }} />
@@ -364,7 +431,11 @@ function gameTime(ticks: number): string {
   return `${minutes}:${seconds}`;
 }
 
-type DrillOutcome = Readonly<{ phase: "p4"; at: Tick; reason: RunEnd; invincible: boolean }> | Readonly<{ phase: "p3"; at: Tick; reason: P3End; invincible: boolean }>;
+type DrillOutcome =
+  | Readonly<{ phase: "p4"; at: Tick; reason: RunEnd; invincible: boolean }>
+  | Readonly<{ phase: "p3"; at: Tick; reason: P3End; invincible: boolean }>
+  | Readonly<{ phase: "p2"; at: Tick; reason: P2End; invincible: boolean; bossMaxHp: number }>
+  | Readonly<{ phase: "p1"; at: Tick; reason: P1End; invincible: boolean }>;
 
 type InvincibleRegion = Readonly<{ invincible: boolean; fightLog(): Readonly<{ rows: readonly Readonly<{ events: readonly Readonly<{ kind: string }>[] }>[] }> }>;
 
@@ -382,6 +453,16 @@ function outcome(drill: Drill): DrillOutcome | null {
       if (run?.kind !== "ended") return null;
       return { phase: "p3", at: run.at, reason: run.reason, invincible: invincibleWasOn(drill.region) };
     }
+    case "p2": {
+      const run = drill.region.snapshot()?.run;
+      if (run?.kind !== "ended") return null;
+      return { phase: "p2", at: run.at, reason: run.reason, invincible: invincibleWasOn(drill.region), bossMaxHp: drill.config.choices.bossMaxHp.option.value };
+    }
+    case "p1": {
+      const run = drill.region.snapshot()?.run;
+      if (run?.kind !== "ended") return null;
+      return { phase: "p1", at: run.at, reason: run.reason, invincible: invincibleWasOn(drill.region) };
+    }
     default: {
       const unhandled: never = drill;
       return unhandled;
@@ -389,7 +470,7 @@ function outcome(drill: Drill): DrillOutcome | null {
   }
 }
 
-function RunTime({ phase, at, invincible }: Readonly<{ phase: "P3" | "P4"; at: Tick; invincible: boolean }>) {
+function RunTime({ phase, at, invincible }: Readonly<{ phase: "P1" | "P2" | "P3" | "P4"; at: Tick; invincible: boolean }>) {
   return (
     <>
       <p id="run_result_time">{phase} time: {at} ticks ({gameTime(at)})</p>
@@ -399,6 +480,51 @@ function RunTime({ phase, at, invincible }: Readonly<{ phase: "P3" | "P4"; at: T
 }
 
 function RunResultText({ result }: Readonly<{ result: DrillOutcome }>) {
+  if (result.phase === "p2") {
+    switch (result.reason.kind) {
+      case "phase-cleared":
+        return (
+          <>
+            <h2 id="run_result_title">Phase 2 cleared (interim end)</h2>
+            <RunTime phase="P2" at={result.at} invincible={result.invincible} />
+            <p id="run_result_boss">Ocellus goes into phase 3 at {result.reason.bossHp} / {result.bossMaxHp}.</p>
+          </>
+        );
+      case "death":
+        return (
+          <>
+            <h2 id="run_result_title">You died</h2>
+            <p id="run_result_time">on P2 tick {result.at}</p>
+          </>
+        );
+      default: {
+        const unhandled: never = result.reason;
+        return unhandled;
+      }
+    }
+  }
+  if (result.phase === "p1") {
+    switch (result.reason.kind) {
+      case "phase-cleared":
+        return (
+          <>
+            <h2 id="run_result_title">Phase 1 cleared (interim end)</h2>
+            <RunTime phase="P1" at={result.at} invincible={result.invincible} />
+          </>
+        );
+      case "death":
+        return (
+          <>
+            <h2 id="run_result_title">You died</h2>
+            <p id="run_result_time">on P1 tick {result.at}</p>
+          </>
+        );
+      default: {
+        const unhandled: never = result.reason;
+        return unhandled;
+      }
+    }
+  }
   if (result.phase === "p3") {
     switch (result.reason.kind) {
       case "quadrant-cleared":
@@ -446,7 +572,27 @@ function RunResultText({ result }: Readonly<{ result: DrillOutcome }>) {
 
 const RESULT_POLL_MS = 300;
 
-function RunResultPanel({ drill }: Readonly<{ drill: Drill }>) {
+type InterimEnd = Readonly<{ repeat: string; next: Readonly<{ phase: Drill["phase"]; label: string }> | null }>;
+
+/** A hidden drill that reaches its end offers the drill again and, when the build has it, the phase after. */
+function interimEnd(result: DrillOutcome, flags: BuildFlags): InterimEnd | null {
+  switch (result.phase) {
+    case "p4":
+      return null;
+    case "p3":
+      return result.reason.kind === "quadrant-cleared" ? { repeat: "Repeat P3", next: { phase: "p4", label: "Start P4" } } : null;
+    case "p2":
+      return result.reason.kind === "phase-cleared" ? { repeat: "Repeat P2", next: flags.p3 ? { phase: "p3", label: "Start P3" } : null } : null;
+    case "p1":
+      return result.reason.kind === "phase-cleared" ? { repeat: "Repeat P1", next: flags.p2 ? { phase: "p2", label: "Start P2" } : null } : null;
+    default: {
+      const unhandled: never = result;
+      return unhandled;
+    }
+  }
+}
+
+function RunResultPanel({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFlags }>) {
   const [result, setResult] = useState<DrillOutcome | null>(null);
   useEffect(() => {
     if (result) return;
@@ -460,15 +606,15 @@ function RunResultPanel({ drill }: Readonly<{ drill: Drill }>) {
   if (!result) return null;
   const { config, region } = drill;
   const setup = config.choices.setup.key;
-  const again = (seed: string | null) =>
-    startRun(drill.phase === "p4" ? { phase: "p4", setup, focus: drill.config.choices.focus.key, seed, invincible: region.invincible } : { phase: "p3", setup, seed, invincible: region.invincible });
-  const cleared = result.phase === "p3" && result.reason.kind === "quadrant-cleared";
+  const again = (seed: string | null) => startRun(rerun(drill, setup, seed));
+  const interim = interimEnd(result, flags);
+  const next = interim?.next ?? null;
   return (
     <section id="run_result" role="dialog" aria-labelledby="run_result_title">
       <RunResultText result={result} />
-      <button id="result_restart" type="button" onClick={() => again(null)}>{cleared ? "Repeat P3" : "Restart"}</button>
+      <button id="result_restart" type="button" onClick={() => again(null)}>{interim?.repeat ?? "Restart"}</button>
       <button id="result_retry" type="button" onClick={() => again(String(config.seed))}>Retry seed</button>
-      {cleared && <button id="result_start_p4" type="button" onClick={() => startPhase("p4", setup, region.invincible)}>Start P4</button>}
+      {next !== null && <button id={`result_start_${next.phase}`} type="button" onClick={() => startPhase(next.phase, setup, region.invincible)}>{next.label}</button>}
     </section>
   );
 }
@@ -493,6 +639,15 @@ function GameChat({ region }: Readonly<{ region: Readonly<{ chat(): readonly str
   );
 }
 
+function restartRaid(nextSeed: string | null, invincible: boolean) {
+  const url = new URL(window.location.href);
+  if (nextSeed === null) url.searchParams.delete("seed");
+  else url.searchParams.set("seed", nextSeed);
+  if (invincible) url.searchParams.set("invincible", "on");
+  else url.searchParams.delete("invincible");
+  window.location.assign(url.href);
+}
+
 function setRaidParam(key: string, value: string, absent: string) {
   const url = new URL(window.location.href);
   if (value === absent) url.searchParams.delete(key);
@@ -500,7 +655,32 @@ function setRaidParam(key: string, value: string, absent: string) {
   window.location.assign(url.href);
 }
 
-function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
+function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
+  const [death, setDeath] = useState<Readonly<{ at: Tick; seed: Seed }> | null>(null);
+  useEffect(() => {
+    if (death) return;
+    const poll = window.setInterval(() => {
+      const run = region.snapshot()?.run;
+      if (run?.kind === "ended" && run.reason === "death") setDeath({ at: run.at, seed: run.seed });
+    }, RESULT_POLL_MS);
+    return () => window.clearInterval(poll);
+  }, [region, death]);
+
+  if (!death) return null;
+  const again = (nextSeed: string | null) => restartRaid(nextSeed, region.invincible);
+  return (
+    <section id="run_result" role="dialog" aria-labelledby="run_result_title">
+      <h2 id="run_result_title">You died</h2>
+      <p id="run_result_time">on {encounterName(launch.id)} tick {death.at}</p>
+      <button id="result_restart" type="button" onClick={() => again(null)}>Restart</button>
+      <button id="result_retry" type="button" onClick={() => again(String(death.seed))}>Retry seed</button>
+    </section>
+  );
+}
+
+type MovementToggle = Readonly<{ shown: boolean; setShown: (on: boolean) => void }>;
+
+function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; movement: MovementToggle }>) {
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   return (
@@ -531,10 +711,20 @@ function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region:
           </label>
         )}
         <label>
+          Gear{" "}
+          <select id="gear" value={launch.gear} onChange={(event) => setRaidParam("gear", event.target.value, defaultGear(launch.id))}>
+            <option value="ranged">Ranged</option>
+            <option value="melee">Crush</option>
+          </select>
+        </label>
+        <label>
           Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(launch.options.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
         </label>
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+        <label>
+          Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
       </div>
       <button id="settings" type="button" aria-expanded={view !== "closed"} onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>⚙ Settings</button>
@@ -543,42 +733,97 @@ function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region:
   );
 }
 
+function Credits({ makerInFooter }: Readonly<{ makerInFooter: boolean }>) {
+  return (
+    <footer id="credits">
+      {makerInFooter && <p id="maker_credit">
+        Made by {MAKER}{" "}
+        <span id="maker_links">
+          {MAKER_LINKS.map((link, i) => (
+            <React.Fragment key={link.href}>
+              {i > 0 && " · "}
+              <a href={link.href} target="_blank" rel="noopener noreferrer">
+                {link.label}
+              </a>
+            </React.Fragment>
+          ))}
+        </span>
+        <span id="contributor_credit">
+          With help from{" "}
+          <a href={CONTRIBUTOR.href} target="_blank" rel="noopener noreferrer">
+            {CONTRIBUTOR.label}
+          </a>
+        </span>
+      </p>}
+      <p id="credit_line">{CREDIT_LINE}</p>
+      <p id="app_version">v{LATEST_RELEASE.version}</p>
+    </footer>
+  );
+}
+
 export function ArchiveOcellusApp() {
-  const [session] = useState(createSession);
+  const [opening, setOpening] = useState(openTrainer);
+  useEffect(() => {
+    if (opening.kind === "loading") void opening.opened.then((opened) => setOpening({ kind: "open", opened }));
+  }, [opening]);
+  return opening.kind === "open" ? <TrainerPage session={opening.opened} /> : null;
+}
+
+function MovementBadge({ region, shown }: Readonly<{ region: object; shown: boolean }>) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    if (!shown) return;
+    let frame = 0;
+    let last = "";
+    const read = () => {
+      const view = movementDebug(region)?.bossMovement() ?? null;
+      const next = view === null ? "" : `${view.mobility === "stationary" ? "STATIONARY" : "MOBILE"} · tick ${view.tick} · ${view.actor}`;
+      if (next !== last) {
+        last = next;
+        setText(next === "" ? null : next);
+      }
+      frame = requestAnimationFrame(read);
+    };
+    frame = requestAnimationFrame(read);
+    return () => cancelAnimationFrame(frame);
+  }, [region, shown]);
+  if (!shown || text === null) return null;
+  return <p id="movement_badge">{text}</p>;
+}
+
+/** The sidebar loads behind a test of the raw build variable, which webpack folds, so a build with ARCHIVE_FULL off contains none of it. */
+const loadSidebar = () => (process.env.ARCHIVE_FULL === "on" ? lazy(() => import("./menu/Sidebar")) : null);
+
+function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
+  const [showMovement, setShowMovement] = useState(false);
+  const [Sidebar] = useState(loadSidebar);
   const region = session.kind === "drill" ? session.drill.region : session.region;
+  const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
+  useEffect(() => {
+    movementDebug(region)?.showBossMovement(showMovement);
+  }, [region, showMovement]);
+  const controls = session.kind === "drill"
+    ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} />
+    : <RaidControls launch={session.launch} region={session.region} movement={movement} />;
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
       <GameOverlay>
         <TrainerLoadingSplash state={loading} />
-        <GameChat region={region} />
-        {session.kind === "drill" ? (
-          <>
-            <DrillControls drill={session.drill} flags={session.flags} />
-            <RunResultPanel drill={session.drill} />
-          </>
-        ) : (
-          <RaidControls launch={session.launch} region={session.region} />
-        )}
-        <footer id="credits">
-          <p id="maker_credit">
-            Made by {MAKER}{" "}
-            <span id="maker_links">
-              {MAKER_LINKS.map((link, i) => (
-                <React.Fragment key={link.href}>
-                  {i > 0 && " · "}
-                  <a href={link.href} target="_blank" rel="noopener noreferrer">
-                    {link.label}
-                  </a>
-                </React.Fragment>
-              ))}
-            </span>
-          </p>
-          <p id="credit_line">{CREDIT_LINE}</p>
-          <p id="app_version">v{LATEST_RELEASE.version}</p>
-        </footer>
+        <div id="hud_corner">
+          <MovementBadge region={region} shown={showMovement} />
+          <GameChat region={region} />
+          {Sidebar === null && controls}
+          <Credits makerInFooter={Sidebar === null} />
+        </div>
+        {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}
       </GameOverlay>
+      {Sidebar !== null && (
+        <Suspense fallback={null}>
+          <Sidebar>{controls}</Sidebar>
+        </Suspense>
+      )}
     </TrainerApp>
   );
 }

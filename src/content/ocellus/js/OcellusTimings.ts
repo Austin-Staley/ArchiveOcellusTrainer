@@ -1,16 +1,16 @@
 import type { TwistedBow } from "osrs-sdk";
 import type { BuildFlags } from "../../../flags";
-import type { Cycle, HpFraction, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
-import { cycle, hpFraction, seed, soundId, span, tick, tile } from "../../../sim/brands";
+import type { Cycle, Seed, SoundId, TickSpan, Tile } from "../../../sim/brands";
+import { cycle, seed, soundId, span, tick, tile } from "../../../sim/brands";
 import type { Style } from "../../../sim/combat";
 import type { Basis, Citations, Evidence, WikiRef } from "../../../sim/provenance";
 import { noWiki, wiki } from "../../../sim/provenance";
 import type { DrillStart, Focus } from "../../../sim/schedule";
 import type { BossOverhead, HoveringBoss, Mechanic, Special, Stage, TransitionKind, VoidKind } from "./P4Types";
-import type { AutoAttack, Quadrant, ReachRule } from "./P3Types";
+import type { ReachRule } from "./P3Types";
 import { roll } from "./roll";
 
-type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5" | "solo";
+type Scale = "unscaled" | "team-4" | "team-5" | "team-4-and-5" | "team-7" | "team-8" | "team-7-and-8" | "solo";
 
 const VODS = {
   V1: { streamer: "Molgoatkirby", url: "https://www.twitch.tv/videos/2906214879", tickPrefix: "G", clipTickAtP4Zero: 25 },
@@ -18,18 +18,38 @@ const VODS = {
 } as const;
 type Vod = keyof typeof VODS;
 
+/**
+ * RuneLite fight logs recorded on 2026-10-23, in recording order: the game's animations, spotanims, projectiles, hitsplats
+ * and NPC spawns by tick, as seen by one client. A cite's `at` counts ticks from S, the tick his Deflect rise (seq 14863)
+ * starts a phase 4 cycle, or names the phase and its own marks.
+ */
+export type FightLog = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8";
+type FightLogEntry = Readonly<{ recorded: "2026-10-23"; fight: "spectated kill" | "raid"; players: number; reached: string; records: string }>;
+const FIGHT_LOGS: Readonly<Record<FightLog, FightLogEntry>> = {
+  L1: { recorded: "2026-10-23", fight: "spectated kill", players: 8, reached: "the kill", records: "every boss animation, shout and floor graphic, his projectiles, each player's hitsplats with the overhead they had up, the boss's hitsplats and HP, player positions through each Untether and each phase 2 volley" },
+  L2: { recorded: "2026-10-23", fight: "spectated kill", players: 8, reached: "the kill", records: "as L1, plus the spotanims on the boss and on every player, NPC spawns, and each player's position and overhead on every tick of each spin" },
+  L3: { recorded: "2026-10-23", fight: "raid", players: 4, reached: "a wipe in phase 3's first quadrant", records: "by a player in the raid, with ticks counted from entering the arena and no phase marks: the boss's animations with his facing, floor graphics, projectiles, the spotanims on the boss and the players, each player's hitsplats with their overhead, NPC spawns and the chat" },
+  L4: { recorded: "2026-10-23", fight: "raid", players: 7, reached: "a wipe in phase 3, after two quadrants fell", records: "as L3" },
+  L5: { recorded: "2026-10-23", fight: "raid", players: 7, reached: "a wipe in phase 4's third cycle", records: "as L3" },
+  L6: { recorded: "2026-10-23", fight: "raid", players: 7, reached: "a wipe in phase 4's fifth cycle", records: "by a player in the raid, with phase marks: as L2, plus that player's own hitsplats with their type and prayer, the floor graphics the game sent that player, its own lifeforce orbs among them, and where it stepped into the 5x5" },
+  L7: { recorded: "2026-10-23", fight: "raid", players: 7, reached: "a wipe in phase 3, after two quadrants fell", records: "as L6" },
+  L8: { recorded: "2026-10-23", fight: "raid", players: 7, reached: "a wipe in phase 3, after one quadrant fell", records: "as L6" },
+};
+
 type OwnerDate = "2026-10-21" | "2026-10-22" | "2026-10-23" | "2026-10-24";
 
-type Source =
+export type Source =
+  | Readonly<{ kind: "fight-log"; log: FightLog; at: string }>
+  | Readonly<{ kind: "analysis"; url: string; at: string }>
   | Readonly<{ kind: "vod"; vod: Vod; at: string }>
   | Readonly<{ kind: "news"; url: string }>
   | Readonly<{ kind: "cache"; build: 2746; record: string }>
   | Readonly<{ kind: "owner"; date: OwnerDate; topic: string }>
   | Readonly<{ kind: "guide"; url: string; at: string }>;
 
-type Selected<T> = Readonly<{ kind: "selected"; value: T; evidence: Evidence<Source, Scale> }>;
+export type Selected<T> = Readonly<{ kind: "selected"; value: T; evidence: Evidence<Source, Scale> }>;
 
-function selected<T>(value: T, basis: Basis, scale: Scale, note: string, ...sources: Citations<Source>): Selected<T> {
+export function selected<T>(value: T, basis: Basis, scale: Scale, note: string, ...sources: Citations<Source>): Selected<T> {
   return { kind: "selected", value, evidence: { status: "unverified", basis, scale, note, sources } };
 }
 
@@ -39,20 +59,23 @@ function choice<O extends Options>(defaultKey: keyof O & string, options: O): Ch
   return { default: defaultKey, options };
 }
 
+export const fightLog = (log: FightLog, at: string): Source => ({ kind: "fight-log", log, at });
+/** A written analysis of packet captures, such as the RSProx notes on the raid. */
+export const analysis = (url: string, at: string): Source => ({ kind: "analysis", url, at });
 const vod = (which: Vod, at: string): Source => ({ kind: "vod", vod: which, at });
 const news = (url: string): Source => ({ kind: "news", url });
-const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
+export const cache = (record: string): Source => ({ kind: "cache", build: 2746, record });
 const owner = (topic: string, date: OwnerDate = "2026-10-21"): Source => ({ kind: "owner", date, topic });
-const guide = (url: string, at: string): Source => ({ kind: "guide", url, at });
+export const guide = (url: string, at: string): Source => ({ kind: "guide", url, at });
 const STRATEGIES_P4 = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381030);
 const BOSS_INFOBOX = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15380968);
 const VOID_RIFT_PAGE = wiki("https://oldschool.runescape.wiki/w/Void_Rift", 15380527);
 const NO_WIKI_TICKS = noWiki("the wiki's phase 4 steps give the order of events but no tick counts (Strategies rev 15381030)");
 const NO_WIKI_P4 = noWiki("the wiki's phase 4 steps do not state it (Strategies rev 15381030)");
 const NO_WIKI_ARENA = noWiki("the wiki has no tile layout of the phase 4 platform (Strategies rev 15381030, Ocellus rev 15380968)");
-const NO_WIKI_PRESENTATION = noWiki("presentation from the cache or footage, not a game rule");
-const NO_WIKI_PRACTICE = noWiki("a trainer option, not game data");
-const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
+export const NO_WIKI_PRESENTATION = noWiki("presentation from the cache or footage, not a game rule");
+export const NO_WIKI_PRACTICE = noWiki("a trainer option, not game data");
+export const pose = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, NO_WIKI_PRESENTATION, cache(`seq ${id} ${name}`));
 const DEFLECT_MELEE_SEEN = [vod("V1", "G53, G55 to G57, G109, G115 to G117, G153, G154, G175 to G177"), vod("V2", "k48, k60, k70 to k72, k131, k132, k168, k170, k250 to k252")] as const;
 const DEFLECT_RANGE_SEEN = [vod("V1", "G64 to G85 but G74, G124 to G145 but G133, G184 to G186, G189 to G193"), vod("V2", "k79 to k93, k143 to k153, k199, k200, k214 to k217, k259 to k273 but k266")] as const;
@@ -63,11 +86,11 @@ const ORB_OFF_HOLES = owner("healing orbs never spawn on a floor hole; community
 const STRATEGIES_RIFTS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379263);
 const STRATEGIES_VOID_POOLS = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15380016);
 const DEFLECT_MELEE_PAGE = wiki("https://oldschool.runescape.wiki/w/Deflect_Melee", 15124245);
-const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
-const HOTFIX_NEWS = news("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1");
+export const DEFENCE_REDUCTION_TABLE = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15379033);
+export const HOTFIX_NEWS = news("https://secure.runescape.com/m=news/the-fractured-archive---out-today?oldschool=1");
 const SOLO_SCALE = news("https://secure.runescape.com/m=news/the-fractured-archive---everything-you-need-to-know?oldschool=1");
 
-type AmmunitionClass = "light" | "standard" | "heavy";
+export type AmmunitionClass = "light" | "standard" | "heavy";
 type Footprint = "blocks-movement" | "walkable";
 
 type BossRecipe = Readonly<{
@@ -84,6 +107,7 @@ type BossRecipe = Readonly<{
 type LeadInRecipe = Readonly<{
   hiddenFor: Selected<TickSpan>;
   presentFor: Selected<TickSpan>;
+  presentBoss: Selected<"present-damageable">;
   shout: Selected<Readonly<{ text: string; at: TickSpan; lasts: TickSpan }>>;
 }>;
 
@@ -158,6 +182,7 @@ type RiftRecipe = Readonly<{
   burstDamage: Selected<DamageRange>;
   standardRangedAndMeleeRoll: Selected<Readonly<{ guaranteedHit: boolean; maxDamage: boolean }>>;
   killChat: Selected<string>;
+  killEmpowers: Selected<"resets-attack-delay">;
   poses: Readonly<Record<RiftPose, Selected<number>>>;
   burstFlare: Selected<number>;
 }>;
@@ -278,14 +303,38 @@ const BOSS: BossRecipe = {
 
 const LEAD_IN: LeadInRecipe = {
   hiddenFor: selected(span(4), "footage-repeated", "team-4-and-5", "boss model gone from t = 0, back on the main platform at t = 4", NO_WIKI_TICKS, vod("V1", "G25 to G29"), vod("V2", "k40 to k44")),
-  presentFor: selected(span(4), "footage-repeated", "team-4-and-5", "present from t = 4 but no splats until the first inner void at t = 8", NO_WIKI_TICKS, vod("V1", "G29 to G33, first hit G35"), vod("V2", "k44 to k48, first splats k48")),
-  shout: selected({ text: "End...", at: span(5), lasts: span(3) }, "footage-repeated", "team-4-and-5", "overhead text from t = 5 for 3 ticks", STRATEGIES_P4, vod("V1", "G30 to G32"), vod("V2", "k45 to k47")),
+  presentFor: selected(span(4), "footage-repeated", "team-4-and-5", "present from t = 4, the first inner void at t = 8", NO_WIKI_TICKS, vod("V1", "G29 to G33, first hit G35"), vod("V2", "k44 to k48, first splats k48")),
+  presentBoss: selected(
+    "present-damageable",
+    "log-repeated",
+    "unscaled",
+    "players' hits land on him once he is back, before his first Deflect: at S-1 (t = 7) in one kill and at S-3 and S-1 (t = 5 and 7) in the other; both clips show no splat before t = 8, but a logged hitsplat is direct evidence where a clip only shows that nobody hit him, so he takes damage from t = 4",
+    NO_WIKI_TICKS, fightLog("L1", "4 hits on him at S-1"),
+    fightLog("L2", "a hit on him at S-3 and 3 at S-1"),
+    vod("V1", "G29 to G33, first hit G35"),
+    vod("V2", "k44 to k48, first splats k48"),
+  ),
+  shout: selected(
+    { text: "End...", at: span(5), lasts: span(3) },
+    "footage-repeated",
+    "team-4-and-5",
+    "overhead text from t = 5 for 3 ticks; the fight logs have it 3 ticks before his first Deflect in all four logged fights that reached phase 4, as here",
+    STRATEGIES_P4, vod("V1", "G30 to G32"), vod("V2", "k45 to k47"),
+    fightLog("L1", "S-3"), fightLog("L2", "S-3"), fightLog("L5", "S-3"), fightLog("L6", "S-3"),
+  ),
 };
 
 const INNER_VOID: VoidRecipe<"inner-void"> = {
   kind: "inner-void",
   duration: selected(span(22), "footage-repeated", "team-4-and-5", "inner void visible 22 ticks", NO_WIKI_TICKS, vod("V1", "G33-G54, G93-G114, G153-G174"), vod("V2", "k48-k69, k108-k129, k168-k189, k228-k249")),
-  orbMaturesAfterHit: selected(span(12), "footage-repeated", "team-4-and-5", "orb glows teal 12 ticks after the hit", NO_WIKI_TICKS, vod("V1", "G49"), vod("V2", "k64"), cache("spotanim 4311 soul_fragment_spawn_12_ticks")),
+  orbMaturesAfterHit: selected(
+    span(12),
+    "footage-repeated",
+    "team-4-and-5",
+    "orb glows teal 12 ticks after the hit; the fight log has the game send the glowing orb, spotanim 4310, from S+16 in all three cycles it recorded",
+    NO_WIKI_TICKS, vod("V1", "G49"), vod("V2", "k64"), cache("spotanim 4311 soul_fragment_spawn_12_ticks"),
+    fightLog("L6", "4310 sent on the orb from S+16 to S+27, 4312 at S+28, cycles 1 to 3"),
+  ),
   orbLingersAfterClear: selected(
     span(5),
     "owner-estimated",
@@ -307,7 +356,14 @@ const AFTER_INNER: TransitionRecipe<"after-inner"> = {
 const OUTER_VOID: VoidRecipe<"outer-void"> = {
   kind: "outer-void",
   duration: selected(span(20), "footage-repeated", "team-4-and-5", "outer void visible 20 ticks", NO_WIKI_TICKS, vod("V1", "G64-G83, G124-G143"), vod("V2", "k79-k98, k139-k158, k199-k218")),
-  orbMaturesAfterHit: selected(span(6), "footage-repeated", "team-4-and-5", "outer orb first glows 5 to 6 ticks after the hit", NO_WIKI_TICKS, vod("V1", "G74"), vod("V2", "k88, k149"), cache("spotanim 4309 soul_fragment_spawn_6_ticks")),
+  orbMaturesAfterHit: selected(
+    span(6),
+    "footage-repeated",
+    "team-4-and-5",
+    "outer orb first glows 5 to 6 ticks after the hit; the fight log has the game send the glowing orb, spotanim 4310, from S+41, 6 ticks after the hit, in both cycles it recorded",
+    NO_WIKI_TICKS, vod("V1", "G74"), vod("V2", "k88, k149"), cache("spotanim 4309 soul_fragment_spawn_6_ticks"),
+    fightLog("L6", "4310 sent on the orb from S+41 to S+52, 4312 at S+53, cycles 1 and 2"),
+  ),
   orbLingersAfterClear: selected(
     span(2),
     "inferred",
@@ -382,13 +438,21 @@ const BOSS_HEALS: BossHealRecipe = {
 
 const RIFTS: RiftRecipe = {
   firstCycle: selected(cycle(2), "footage-repeated", "team-5", "rifts before every airborne half after the first; the wiki says he spawns them except at the very start of the phase (C5)", STRATEGIES, vod("V2", "k107, k167, k227")),
-  spawnBeforeOnset: selected(span(1), "footage-repeated", "team-4-and-5", "rifts one tick before the next inner void", NO_WIKI_TICKS, vod("V1", "G152"), vod("V2", "k107, k167, k227")),
+  spawnBeforeOnset: selected(
+    span(1),
+    "footage-repeated",
+    "team-4-and-5",
+    "rifts one tick before the next inner void, as in every cycle of the fight logs",
+    NO_WIKI_TICKS, vod("V1", "G152"), vod("V2", "k107, k167, k227"),
+    fightLog("L2", "S-1 of cycle 2"), fightLog("L5", "S-1 of cycles 2 and 3"), fightLog("L6", "S-1 of cycles 2 to 5"),
+  ),
   chargeAfterSpawn: selected(
-    span(23),
-    "owner-estimated",
+    span(30),
+    "log-repeated",
     "unscaled",
-    "the owner reports that rifts last much longer than 6.6 s (11 ticks), that none of the footage they found shows one bursting, and that they watched two killed within about 10 s with about 4 s still on the timer: about 14 s, 23 ticks of 0.6 s (inferred); both clips show a rift standing after spawn + 11, V1 at G164 and V2 from k177 to k196",
-    NO_WIKI_TICKS, owner("rift charge timer", "2026-10-22"),
+    "every rift left alive in the fight logs burst 30 ticks after it appeared, at S+29: it played its detonate sequence, the void flare (spotanim 4306) showed on every player and each took the hit on that tick, and the rift was gone 2 ticks later; one rift in one raid and three over two cycles of the other. This replaces the owner's estimate of about 14 s, 23 ticks, from a timer watched in game; both clips show a rift standing after spawn + 11, V1 at G164 and V2 from k177 to k196, as 30 allows",
+    NO_WIKI_TICKS, fightLog("L5", "a rift from S-1 of cycle 3 bursts at S+29"),
+    fightLog("L6", "a rift from S-1 of cycle 2 and two from S-1 of cycle 3 burst at S+29"),
     vod("V1", "G152 to G168"),
     vod("V2", "k167 to k196"),
   ),
@@ -413,7 +477,16 @@ const RIFTS: RiftRecipe = {
     NO_WIKI_ARENA, vod("V1", "G152-G164"),
     vod("V2", "k167-k173"),
   ),
-  burstDamage: selected({ min: 14, max: 14 }, "inferred", "team-5", "the streamer took 14 from an unseen source 11 ticks after the rifts appeared, with a rift still standing; taken as the burst's damage, though the burst now lands 23 ticks after spawn (inferred)", noWiki("the wiki says an unkilled rift damages all players but gives no amount (Strategies rev 15381030)"), vod("V2", "k118, k178")),
+  burstDamage: selected(
+    { min: 28, max: 41 },
+    "log-repeated",
+    "team-7",
+    "one typeless hit on each player per burst, however many rifts burst: 41 and 40 on the two players left when one rift burst, both under Protect from Magic, and 30 and 28 when two burst together, one under Protect from Missiles, in the same raid; the other raid's one burst hit its last player for 3 on the tick the transition attack also hit him for 3, and he died, so both hits were cut to his last HP and give no amount (inferred). The 14 the streamer took 11 ticks after the rifts appeared is the next cycle's first explosion, at S+10, which hit 14 to 16 in the logs",
+    noWiki("the wiki says an unkilled rift damages all players but gives no amount (Strategies rev 15381030)"),
+    fightLog("L6", "41 and 40 at S+29 of cycle 2, one rift; 30 and 28 at S+29 of cycle 3, two rifts"),
+    fightLog("L5", "3 and 3 at S+29 of cycle 3 on a player who then died"),
+    vod("V2", "k118, k178"),
+  ),
   standardRangedAndMeleeRoll: selected(
     { guaranteedHit: true, maxDamage: true },
     "community-tested",
@@ -423,14 +496,29 @@ const RIFTS: RiftRecipe = {
     owner("rifts almost always one-shot", "2026-10-22"),
     owner("Gnomonkey, playing the trainer on stream: melee attacks also always max-hit void rifts", "2026-10-24"),
   ),
-  killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; what the empower does is not shown", NO_WIKI_P4, vod("V1", "3:55:21.98"), vod("V2", "k116")),
+  killChat: selected("Destroying the void rift empowers you!", "footage-repeated", "team-4-and-5", "game chat line when a rift dies; the wiki says what the empower does (killEmpowers)", NO_WIKI_P4, vod("V1", "3:55:21.98"), vod("V2", "k116")),
+  killEmpowers: selected(
+    "resets-attack-delay",
+    "spec-single",
+    "unscaled",
+    "the wiki: \"It empowers you, resetting your tick cool down.\"; read as the player's attack delay set to 0, so the next attack can go at once; it applies on the tick the rift is destroyed, the tick the chat line shows, because the wiki gives no tick (inferred)",
+    VOID_RIFT_PAGE,
+  ),
   poses: {
     idle: pose(14895, "vfx_ocellus_voidflare_default_idle", "spec-confirmed", "rift stand and walk animation"),
     spawn: pose(14896, "vfx_ocellus_voidflare_default_spawn", "inferred", "rift appearing, 1 tick, frame sound 12643"),
     despawn: pose(14897, "vfx_ocellus_voidflare_default_despawn", "inferred", "rift dying, 1 tick, frame sound 12640"),
     detonate: pose(14898, "vfx_ocellus_voidflare_default_detonate", "inferred", "rift releasing its charge, 2 ticks, frame sounds 12641 and 12642"),
   },
-  burstFlare: selected(4306, "inferred", "unscaled", "vfx_human_ocellus_voidflare_default shares the rift's model 62369; played on the player as the charge lands", NO_WIKI_PRESENTATION, cache("spotanim 4306 vfx_human_ocellus_voidflare_default")),
+  burstFlare: selected(
+    4306,
+    "log-repeated",
+    "unscaled",
+    "vfx_human_ocellus_voidflare_default shares the rift's model 62369; played on each player on the burst tick, with the hit, in every burst of the fight logs",
+    NO_WIKI_PRESENTATION, cache("spotanim 4306 vfx_human_ocellus_voidflare_default"),
+    fightLog("L5", "S+29 of cycle 3"),
+    fightLog("L6", "S+29 of cycles 2 and 3"),
+  ),
 };
 
 const FLOOD_FRAMES = vod("V2", "k86, k95, k142, k156, k205, k212, k262, k269");
@@ -574,17 +662,25 @@ type LifeforceOrbRecipe = Readonly<{
   drainDivisor: Selected<number>;
   orbDistance: Selected<Readonly<{ min: number; max: number }>>;
   returnAfterStep: Selected<TickSpan>;
+  returnAfterMaturing: Selected<TickSpan>;
   look: Readonly<Record<OrbVisual, Selected<number>>>;
-  marker: Selected<Readonly<{ dormant: string; ready: string }>>;
 }>;
 
-const spotAnim = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
+export const spotAnim = (id: number, name: string, basis: Basis, note: string): Selected<number> =>
   selected(id, basis, "unscaled", note, NO_WIKI_PRESENTATION, cache(`spotanim ${id} ${name}`));
 
 const LIFEFORCE_ORB: LifeforceOrbRecipe = {
   drainDivisor: selected(2, "footage-repeated", "team-4-and-5", "every player loses floor(current HP / 2); no overhead prayer reduces it", STRATEGIES, vod("V1", "G37 through Protect from Magic, G68 through Melee"), vod("V2", "k52 through Magic, k112 through Missiles")),
   orbDistance: selected({ min: 2, max: 5 }, "footage-repeated", "team-4-and-5", "a dark orb 2 to 5 tiles from its player, never under the boss or on a floor hole; with no allowed floor that close, the nearest allowed tiles, because the wiki puts the orb on a safe tile and no capture shows a player that far from one (inferred)", STRATEGIES, vod("V1", "G39"), vod("V2", "k53"), ORB_OFF_HOLES),
   returnAfterStep: selected(span(1), "footage-repeated", "team-4-and-5", "returns exactly the HP that hit took, the tick after the player steps on the orb, and can pass max HP (58 to 114)", NO_WIKI_TICKS, vod("V2", "k67 then k68, k95 then k96"), vod("V1", "G51, G79")),
+  returnAfterMaturing: selected(
+    span(0),
+    "log-repeated",
+    "unscaled",
+    "a player already standing on the orb gets the HP back on the tick it matures, not a tick later: 7 returns (spotanim 4314 on the player, with the heal) came at S+16, the tick the game first sends the glowing inner orb, over 4 cycles of two fights; one of those players had stood on the tile since S+14. No outer orb return came on its first ready tick, S+41: the two earliest were at S+42, which fits players who stepped on as it glowed (inferred)",
+    NO_WIKI_TICKS, fightLog("L2", "inner returns at S+16 on 3 players in cycle 1 and 2 in cycle 2; outer returns at S+42 on 2 players in cycle 1"),
+    fightLog("L6", "inner returns at S+16 in cycles 1 and 3; the glowing orb sent from S+16"),
+  ),
   look: {
     innerSpawn: selected(
       4311,
@@ -610,26 +706,12 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
     tell: spotAnim(4313, "soul_fragment_player_idle", "assumption", "played on the player at the lifeforce tell, where the footage shows a teal swirl; the spec pairs it with the pickup"),
     regain: spotAnim(4314, "soul_fragment_player_regain", "inferred", "the fragment returning to the player"),
   },
-  marker: selected({ dormant: "#20251e", ready: "#7cecb2" }, "footage-repeated", "team-5", "the 2D orb: median of the darkest fifth of the new orb and the brightest fifth of the glowing one", NO_WIKI_PRESENTATION, vod("V2", "k53"), vod("V2", "k64")),
 };
 
 type ExplosionSeriesRecipe = Readonly<{
   seriesStartsAfterHit: Selected<TickSpan>;
   spotAnim: Selected<number>;
-  shards: Selected<string>;
-  look: Selected<ExplosionLook>;
   dodge: Selected<Readonly<{ radius: number }>>;
-}>;
-type Between = readonly [from: number, to: number];
-type ExplosionLook = Readonly<{
-  glow: string;
-  glowOpacity: number;
-  glowTiles: number;
-  shardTiles: number;
-  shardsFadeIn: number;
-  glowFrom: number;
-  glowRamp: number;
-  shardRadius: Between;
 }>;
 
 const EXPLOSION: ExplosionSeriesRecipe = {
@@ -643,30 +725,6 @@ const EXPLOSION: ExplosionSeriesRecipe = {
     cache("spotanim 4339 vfx_void_chain_explosion: model 62616, seq 14933 vfx_void_chain_explosion_full, 21 frames, 55 client cycles; 1990 of 2135 faces opaque and 145 with base alphas, none textured"),
     vod("V1", "3:54:06.40 to 3:54:07.35, shards high around the head at 6.45 to 6.55, glow on the left tile from 6.75, burst at 7.0"),
     owner("the void shards come in high over the player's head at the start of each mark, not at the feet", "2026-10-24"),
-  ),
-  shards: selected(
-    "#5e317b",
-    "footage-repeated",
-    "team-5",
-    "the 2D view's stand-in for the shards of spotanim 4339: median colour of the shards on four mark ticks",
-    STRATEGIES, vod("V2", "k57, k59, k61, k65"),
-  ),
-  look: selected(
-    {
-      glow: "#761ba2",
-      glowOpacity: 0.85,
-      glowTiles: 1.2,
-      shardTiles: 0.12,
-      shardsFadeIn: 0.1,
-      glowFrom: 0.5,
-      glowRamp: 0.2,
-      shardRadius: [0.8, 0.25],
-    },
-    "footage-repeated",
-    "unscaled",
-    "the 2D view's stand-in for spotanim 4339 on the mark tick: square shards close in on the marked tile over the units, so they show over the player's square, and for the tick's second half a translucent hexagonal purple glow fills the tile under them. Three cycles at 20 fps put the glow from 6 to 8 of the tick's 12 frames, so it starts halfway and ramps in over about 2 frames. The glow colour and opacity solve the 120, 55, 150 glow seen over the 126, 140, 115 floor. The glow size, the shard squares' size and the shards' path (radius in tiles) are chosen by eye against the same frames; times are fractions of the tick",
-    NO_WIKI_PRESENTATION, owner("explosion mark in https://www.twitch.tv/videos/2907533010 from 8:38:50 to 8:38:53, frames at 20 fps", "2026-10-22"),
-    owner("friends' screenshot of the explosion mark", "2026-10-22"),
   ),
   dodge: selected(
     { radius: 1 },
@@ -812,6 +870,7 @@ const drill = (first: Mechanic, ...rest: Mechanic[]): Selected<Focus<Mechanic>> 
 
 export const OCELLUS_P4 = {
   vods: VODS,
+  fightLogs: FIGHT_LOGS,
   boss: BOSS,
   leadIn: LEAD_IN,
   cycle: CYCLE,
@@ -942,112 +1001,23 @@ export const OCELLUS_P4 = {
   },
 } as const;
 
-const STRATEGIES_P3 = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381236);
-const BOSS_PAGE_P3 = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15381233);
-const NO_WIKI_P3_TICKS = noWiki("the wiki's phase 3 text gives the order and damage but no tick counts (Strategies rev 15381236)");
-const NO_WIKI_P3_ARENA = noWiki("the wiki has no tile layout of the phase 3 arena (Strategies rev 15381236, Ocellus rev 15381233)");
-const KIRBY_GUIDE = "https://www.youtube.com/watch?v=GU8_yiucWtk";
-const ROBINHOOD_GUIDE = "https://www.youtube.com/watch?v=9sji2HBjI98";
-const DEFBIGBEAST_GUIDE = "https://www.youtube.com/watch?v=lT4DVmgDJak";
-const PANFLEET_SOLO = "https://www.youtube.com/watch?v=_upW4hBgHbA";
-const P3_CYCLE_FRAMES = guide(PANFLEET_SOLO, "5:20 to 5:45 at 1x: swings f114, f168, f294, f348, waves f240, f421, smite f478 (raid timer 30:13.00 at f0)");
-const P3_CHIP_FRAMES = guide(DEFBIGBEAST_GUIDE, "20:28 to 21:12 at 1x: waves f310 and f490, the tank's chips red 2 at f363 and red 1 at f417");
+export const STRATEGIES_P3 = wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381236);
+export const BOSS_PAGE_P3 = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15381233);
+export const ROBINHOOD_GUIDE = "https://www.youtube.com/watch?v=9sji2HBjI98";
+export const RSPROX_PLAN = "https://github.com/MRobertEvers/oldschool-clientc/blob/HEAD/docs/rsprox-analysis/guthixian_archive/ocellus_plan.md";
+const P3_URL_CHOICES = {
+  reach: choice("melee-range", {
+    "melee-range": selected<ReachRule>("melee-range", "community-tested", "team-4-and-5", "a swing becomes a panic shot when the player is not in the SDK's melee range of the boss's 3x3 after his step; the wiki's unable to reach read as melee range", STRATEGIES_P3, guide(ROBINHOOD_GUIDE, "0:02:26")),
+    "within-two": selected<ReachRule>("within-two", "spec-single", "unscaled", "a panic shot when the player is more than 2 tiles from the boss's 3x3", BOSS_PAGE_P3),
+  }),
+} as const;
 
-type AutoStep = Readonly<{ attack: AutoAttack; next: TickSpan }>;
-type P3BossPose = "swing" | "voidShot" | "wave";
-
-type P3Recipe = Readonly<{
-  arena: Readonly<{ grid: Selected<readonly string[]>; playerSpawn: Selected<Tile>; bossAnchor: Selected<Tile> }>;
-  thresholds: Selected<Readonly<Record<Quadrant, HpFraction>>>;
-  firstAttackAfterStart: Selected<TickSpan>;
-  autos: Selected<readonly [AutoStep, ...AutoStep[]]>;
-  swing: Readonly<{ protectedDamage: Selected<DamageRange>; unprotectedDamage: Selected<DamageRange> }>;
-  voidShot: Selected<DamageRange>;
-  bossPoses: Readonly<Record<P3BossPose, Selected<number>>>;
-}>;
-
-const P3: P3Recipe = {
-  arena: {
-    grid: selected(
-      [
-        ".........bbbbbbbbbbbbb.........",
-        ".......bbbb222+++111bbbb.......",
-        "......bbbb2222+++1111bbbb......",
-        ".....bbbb22222+++11111bbbb.....",
-        "....bbBb222222+++111111bBbb....",
-        "...bbbb2222222+++1111111bbbb...",
-        "...bbb22222222+++11111111bbb...",
-        "..bbb222222222+++111111111bbb..",
-        "..bb2222222222+++1111111111bb..",
-        "..b22222222222+++11111111111b..",
-        "..b22222222222+++11111111111b..",
-        "..b22222222222+++11111111111b..",
-        "..b+++++++++++++++++++++++++b..",
-        "..b+++++++++++++++++++++++++b..",
-        "..b+++++++++++++++++++++++++b..",
-        "..b33333333333+++44444444444b..",
-        "..b33333333333+++44444444444b..",
-        "..b33333333333+++44444444444b..",
-        "..bb3333333333+++4444444444bb..",
-        "..bbb333333333+++444444444bbb..",
-        "...bbb33333333+++44444444bbb...",
-        "...bbbb3333333+++4444444bbbb...",
-        "....bbBb333333+++444444bBbb....",
-        ".....bbbb33333+++44444bbbb.....",
-        "......bbbb3333+++4444bbbb......",
-        ".......bbbb333+++444bbbb.......",
-        ".........bbbbb+++bbbbb.........",
-      ],
-      "spec-single",
-      "unscaled",
-      "row y = 0 first, x = 0 leftmost, at cache x = 16 + column and y = 54 - row; 1 to 4 are the north-east, north-west, south-west and south-east wedges of 85 floor tiles each, + the 3-wide cross between them, b the raised rim, B a brazier on the rim, . not floor; every floor tile of the map square is in the grid, and a quarter turn about The Blade at cache (31, 41) maps each wedge onto the next",
-      NO_WIKI_P3_ARENA, cache("map square 16472 plane 1: floor overlay 657, rim 656, brazier locs 62894"),
-    ),
-    playerSpawn: selected(tile(19, 9), "assumption", "unscaled", "a floor tile of the north-east wedge two tiles south-west of the boss; no clip pins where the phase starts", NO_WIKI_P3_ARENA),
-    bossAnchor: selected(tile(21, 7), "assumption", "unscaled", "south-west tile of the boss's 3x3, which covers x 21 to 23 and y 5 to 7, all on the north-east wedge; no clip pins where the phase starts", NO_WIKI_P3_ARENA),
-  },
-  thresholds: selected(
-    { 1: hpFraction(0.75), 2: hpFraction(0.5), 3: hpFraction(0.25) },
-    "community-tested",
-    "team-4-and-5",
-    "a quadrant breaks on the first tick the boss is at or below the fraction of his max HP; the wiki says only enough damage",
-    NO_WIKI_P3_TICKS, guide(ROBINHOOD_GUIDE, "0:06:13"), guide(KIRBY_GUIDE, "5:37"),
-  ),
-  firstAttackAfterStart: selected(span(7), "inferred", "unscaled", "the first swing 7 ticks after the phase's first boss step, so the second wave casts at 24 and a smite would start at 27, 3 ticks after it, as in F2a's quadrant 1; no clip shows the ticks from the phase start to the first attack", NO_WIKI_P3_TICKS, P3_CYCLE_FRAMES),
-  autos: selected(
-    [
-      { attack: "melee", next: span(3) },
-      { attack: "melee", next: span(4) },
-      { attack: "wave", next: span(3) },
-      { attack: "melee", next: span(3) },
-      { attack: "melee", next: span(4) },
-      { attack: "wave", next: span(3) },
-    ],
-    "footage-repeated",
-    "solo",
-    "swing, swing, wave twice, 20 ticks: the swings 3 ticks apart, the wave 4 after the second swing, the next swing 3 after the wave; the last gap leads into the special; panfleet's solo and DefBigbeast's quadrant 3 agree on every gap; the wiki infobox's attack speed of 6 is not the swing interval",
-    STRATEGIES_P3, BOSS_PAGE_P3, P3_CYCLE_FRAMES, P3_CHIP_FRAMES, guide(KIRBY_GUIDE, "4:18"), guide(KIRBY_GUIDE, "11:18"),
-  ),
-  swing: {
-    protectedDamage: selected<DamageRange>({ min: 0, max: 6 }, "footage-repeated", "solo", "chip through Protect from Melee: red 6, blue 0, red 6, blue 0 in panfleet's solo and red 2 and red 1 on DefBigbeast's tank; 6 is the most seen", NO_WIKI_P3_TICKS, P3_CYCLE_FRAMES, P3_CHIP_FRAMES, guide(ROBINHOOD_GUIDE, "0:02:09")),
-    unprotectedDamage: selected<DamageRange>({ min: 0, max: 26 }, "inferred", "unscaled", "the monster melee max hit ⌊0.5 + (250 + 9) × (0 + 64) / 640⌋ = 26 at the cache's Strength 250 with no strength bonus (assumption); no clip shows an unprotected swing", noWiki("no wiki page gives the phase 3 swing's max hit (Ocellus rev 15381233)"), cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
-  },
-  voidShot: selected<DamageRange>({ min: 20, max: 20 }, "spec-single", "unscaled", "a typeless void shot in place of a swing when the boss cannot reach the player; the wiki's 20+ taken as 20", STRATEGIES_P3, guide(ROBINHOOD_GUIDE, "0:02:26 to 0:02:31")),
-  bossPoses: {
-    swing: pose(14842, "npc_ocellus_phase3_melee_basic", "inferred", "the swing, 2 ticks; by its name"),
-    voidShot: pose(14851, "npc_ocellus_phase3_basic_projectile_all", "inferred", "the void shot, 3 ticks; by its name"),
-    wave: pose(14846, "npc_ocellus_phase3_melee_slash", "inferred", "the wave cast, 3 ticks; by its name and its four frame sounds"),
-  },
-};
-
-export const OCELLUS_P3 = {
-  ...P3,
-  choices: {
-    reach: choice("melee-range", {
-      "melee-range": selected<ReachRule>("melee-range", "community-tested", "team-4-and-5", "a swing becomes a void shot when the player is not in the SDK's melee range of the boss's 3x3 after his step; the wiki's unable to reach read as melee range", STRATEGIES_P3, guide(ROBINHOOD_GUIDE, "0:02:26")),
-      "within-two": selected<ReachRule>("within-two", "spec-single", "unscaled", "a void shot when the player is more than 2 tiles from the boss's 3x3", BOSS_PAGE_P3),
-    }),
-  },
+export const PORTAL_SKIP_GUIDE = "https://www.youtube.com/watch?v=c4PSUxjNUiY";
+const P2_URL_CHOICES = {
+  markers: choice("none", {
+    none: selected<"none" | "skip-tiles">("none", "assumption", "unscaled", "no tile markers", NO_WIKI_PRACTICE, PRACTICE),
+    "skip-tiles": selected<"none" | "skip-tiles">("skip-tiles", "assumption", "unscaled", "the portal skip's wait and run tiles marked in all four wedges, as the community's tile markers do; Settings switches them during the run", NO_WIKI_PRACTICE, guide(PORTAL_SKIP_GUIDE, "the tile markers")),
+  }),
 } as const;
 
 type Choices = typeof OCELLUS_P4.choices;
@@ -1177,10 +1147,10 @@ export function parseDrillRequest(url: URL, freshSeed: () => number): ParsedDril
   return { config: { seed: run.seed, choices, bossEntryHp }, invincible, rejected };
 }
 
-type P3ChoiceName = keyof typeof OCELLUS_P3.choices;
-type P3OptionsOf<K extends P3ChoiceName> = (typeof OCELLUS_P3.choices)[K]["options"];
+type P3ChoiceName = keyof typeof P3_URL_CHOICES;
+type P3OptionsOf<K extends P3ChoiceName> = (typeof P3_URL_CHOICES)[K]["options"];
 type P3OptionKey<K extends P3ChoiceName> = keyof P3OptionsOf<K> & string;
-const P3_CHOICES: { readonly [K in P3ChoiceName]: Readonly<{ default: P3OptionKey<K>; options: P3OptionsOf<K> }> } = OCELLUS_P3.choices;
+const P3_CHOICES: { readonly [K in P3ChoiceName]: Readonly<{ default: P3OptionKey<K>; options: P3OptionsOf<K> }> } = P3_URL_CHOICES;
 
 class ResolvedP3Choice<K extends P3ChoiceName> {
   readonly #name: K;
@@ -1196,7 +1166,7 @@ export type P3Choices = Readonly<{ setup: ResolvedChoice<"setup">; bossMaxHp: Re
 export type P3Config = Readonly<{ seed: Seed; choices: P3Choices; bossEntryHp: number | null }>;
 type ParsedP3 = Readonly<{ config: P3Config; invincible: boolean; rejected: readonly string[] }>;
 
-const P3_KEYS: readonly string[] = ["setup", "bossMaxHp", ...Object.keys(OCELLUS_P3.choices)];
+const P3_KEYS: readonly string[] = ["setup", "bossMaxHp", ...Object.keys(P3_URL_CHOICES)];
 
 function parseP3Request(url: URL, freshSeed: () => number): ParsedP3 {
   const rejected: string[] = [];
@@ -1223,14 +1193,84 @@ function parseP3Request(url: URL, freshSeed: () => number): ParsedP3 {
   return { config: { seed: run.seed, choices, bossEntryHp }, invincible, rejected };
 }
 
-export type DrillRequest = (Readonly<{ phase: "p4" }> & ParsedDrill) | (Readonly<{ phase: "p3" }> & ParsedP3);
+type P2ChoiceName = keyof typeof P2_URL_CHOICES;
+type P2OptionsOf<K extends P2ChoiceName> = (typeof P2_URL_CHOICES)[K]["options"];
+type P2OptionKey<K extends P2ChoiceName> = keyof P2OptionsOf<K> & string;
+const P2_CHOICES: { readonly [K in P2ChoiceName]: Readonly<{ default: P2OptionKey<K>; options: P2OptionsOf<K> }> } = P2_URL_CHOICES;
+
+class ResolvedP2Choice<K extends P2ChoiceName> {
+  readonly #name: K;
+  readonly option: P2OptionsOf<K>[P2OptionKey<K>];
+
+  constructor(name: K, readonly key: P2OptionKey<K>) {
+    this.#name = name;
+    this.option = P2_CHOICES[name].options[key];
+  }
+}
+
+export type P2Choices = Readonly<{ setup: ResolvedChoice<"setup">; bossMaxHp: ResolvedChoice<"bossMaxHp">; markers: ResolvedP2Choice<"markers"> }>;
+export type P2Config = Readonly<{ seed: Seed; choices: P2Choices; bossEntryHp: number | null }>;
+type ParsedP2 = Readonly<{ config: P2Config; invincible: boolean; rejected: readonly string[] }>;
+
+const P2_KEYS: readonly string[] = ["setup", "bossMaxHp", ...Object.keys(P2_URL_CHOICES)];
+
+function parseP2Request(url: URL, freshSeed: () => number): ParsedP2 {
+  const rejected: string[] = [];
+  rejectUnknownKeys(url, (key) => P2_KEYS.includes(key), rejected);
+  const invincible = readInvincible(url, rejected);
+  const run = readSeed(url, freshSeed);
+  const p4Choice = <K extends "setup" | "bossMaxHp">(name: K): ResolvedChoice<K> => {
+    const raw = url.searchParams.get(name);
+    const { options } = CHOICES[name];
+    if (raw !== null && hasKey(options, raw)) return new ResolvedChoice(name, raw);
+    if (raw !== null) rejected.push(`${name}=${raw}`);
+    return new ResolvedChoice(name, CHOICES[name].default);
+  };
+  const p2Choice = <K extends P2ChoiceName>(name: K): ResolvedP2Choice<K> => {
+    const raw = url.searchParams.get(name);
+    const { options } = P2_CHOICES[name];
+    if (raw !== null && hasKey(options, raw)) return new ResolvedP2Choice(name, raw);
+    if (raw !== null) rejected.push(`${name}=${raw}`);
+    return new ResolvedP2Choice(name, P2_CHOICES[name].default);
+  };
+  const choices: P2Choices = { setup: p4Choice("setup"), bossMaxHp: p4Choice("bossMaxHp"), markers: p2Choice("markers") };
+  if (run.rejected !== null) rejected.push(run.rejected);
+  const bossEntryHp = readBossHp(url, choices.bossMaxHp.option.value, rejected);
+  return { config: { seed: run.seed, choices, bossEntryHp }, invincible, rejected };
+}
+
+export type DrillRequest = (Readonly<{ phase: "p4" }> & ParsedDrill) | (Readonly<{ phase: "p3" }> & ParsedP3) | (Readonly<{ phase: "p2" }> & ParsedP2) | (Readonly<{ phase: "p1" }> & ParsedP1);
 
 export function parseRequest(url: URL, freshSeed: () => number, flags: BuildFlags): DrillRequest {
-  if (!flags.p3) return { phase: "p4", ...parseDrillRequest(url, freshSeed) };
+  if (!flags.p3 && !flags.p2 && !flags.p1) return { phase: "p4", ...parseDrillRequest(url, freshSeed) };
   const phase = url.searchParams.get("phase");
   const rest = new URL(url.href);
   rest.searchParams.delete("phase");
-  if (phase === "p3") return { phase: "p3", ...parseP3Request(rest, freshSeed) };
+  if (phase === "p3" && flags.p3) return { phase: "p3", ...parseP3Request(rest, freshSeed) };
+  if (phase === "p2" && flags.p2) return { phase: "p2", ...parseP2Request(rest, freshSeed) };
+  if (phase === "p1" && flags.p1) return { phase: "p1", ...parseP1Request(rest, freshSeed) };
   const p4 = parseDrillRequest(rest, freshSeed);
   return { phase: "p4", ...p4, rejected: phase === null || phase === "p4" ? p4.rejected : [`phase=${phase}`, ...p4.rejected] };
+}
+
+export const BOSS_PAGE_P1 = wiki("https://oldschool.runescape.wiki/w/Ocellus", 15381739);
+export const P1_MAX_HP = selected(2500, "spec-confirmed", "unscaled", "the hitpoints table lists 2,500 in phase 1 for a team of 1 or 2, the size a solo trainer plays at, and the cache's hitpoints match", BOSS_PAGE_P1, cache("npc 16674 stats [1, 215, 1, 2500, 250, 350]"));
+
+export type P1Choices = Readonly<{ setup: ResolvedChoice<"setup"> }>;
+export type P1Config = Readonly<{ seed: Seed; choices: P1Choices; bossEntryHp: number | null }>;
+type ParsedP1 = Readonly<{ config: P1Config; invincible: boolean; rejected: readonly string[] }>;
+
+function parseP1Request(url: URL, freshSeed: () => number): ParsedP1 {
+  const rejected: string[] = [];
+  rejectUnknownKeys(url, (key) => key === "setup", rejected);
+  const invincible = readInvincible(url, rejected);
+  const run = readSeed(url, freshSeed);
+  const raw = url.searchParams.get("setup");
+  const { options } = CHOICES.setup;
+  const known = raw !== null && hasKey(options, raw) ? raw : null;
+  if (raw !== null && known === null) rejected.push(`setup=${raw}`);
+  const setup = new ResolvedChoice("setup", known ?? CHOICES.setup.default);
+  if (run.rejected !== null) rejected.push(run.rejected);
+  const bossEntryHp = readBossHp(url, P1_MAX_HP.value, rejected);
+  return { config: { seed: run.seed, choices: { setup }, bossEntryHp }, invincible, rejected };
 }

@@ -138,6 +138,22 @@ describe("raid rooms in 3D", () => {
     })).toBe(false);
   });
 
+  it("does not say animation ids or crack counters in phase 1 or phase 3", () => {
+    const bare = (lines: readonly string[]) => lines.filter((line) => /^\d+$/.test(line) || line === "centre" || line === "magic" || line === "ranged");
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    fight(phase1.world, 2);
+    const opening = phase1.region.chat().some((line) => line === "Now... ascension...");
+    fight(phase1.world, 118);
+    const phase3 = open("ocellus-p3", "?encounter=ocellus-p3&seed=1&invincible=on");
+    fight(phase3.world, 12);
+    expect({
+      phase1: bare(phase1.region.chat()),
+      phase3: bare(phase3.region.chat()),
+      opening,
+      swing: phase3.region.chat().some((line) => line.includes("14842")),
+    }).toEqual({ phase1: [], phase3: [], opening: true, swing: false });
+  });
+
   it("draws one Ocellus in phase 1, and a missed tendril's heal of 2 lands on that body", () => {
     const { region, world, player } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
     const present = [...region.mobs, ...region.newMobs];

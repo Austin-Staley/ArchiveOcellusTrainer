@@ -1,9 +1,9 @@
-import { CardinalDirection, InvisibleMovementBlocker, Projectile, Region } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderReferences, CacheRenderSceneModel, CardinalDirection, CollisionType, Entity, InvisibleMovementBlocker, LineOfSightMask, Projectile, Region } from "osrs-sdk";
+import type { Model, Player } from "osrs-sdk";
 import type { BossMovement } from "../../movementDebug";
 import { WalkTint } from "../../movementDebug";
-import type { Player } from "osrs-sdk";
 import type { P1Config } from "./OcellusTimings";
-import { OCELLUS_P1, OCELLUS_P4 } from "./OcellusTimings";
+import { OCELLUS_P1 } from "./OcellusTimings";
 import { dress, loadoutSnapshot } from "./OcellusLoadout";
 import { OcellusPlayer } from "./OcellusPlayer";
 import type { Tile } from "../../../sim/brands";
@@ -11,9 +11,10 @@ import { tile } from "../../../sim/brands";
 import type { P1Event, P1HitSource, P1Log, P1Snapshot } from "./P1Types";
 import { FloorViews } from "./entities/P1Views";
 import { OcellusP1 } from "./mobs/OcellusP1";
-import { ARENA_SIZE, RIM, ROOM, distanceToBody } from "./p1/arena";
+import { ARENA_SIZE, ROOM, distanceToBody } from "./p1/arena";
 import { walkableAnchors } from "./p1/movement";
-import { centreCorrectedFlight } from "../../archive/visualSync";
+import { BLADE_MODEL, BLADE_SEAT, REGION_IDS } from "../../archive/poses";
+import { centreCorrectedFlight, FLOOR_SEATS } from "../../archive/visualSync";
 
 const LETHAL_HIT: Readonly<Record<P1HitSource, string>> = {
   volley: "a volley",
@@ -23,8 +24,13 @@ const LETHAL_HIT: Readonly<Record<P1HitSource, string>> = {
 };
 
 const { bossPoses, spotAnims, shot } = OCELLUS_P1.presentation;
-const FLOOR = ["#4a4339", "#3f392f"] as const;
 const SHOT_HEIGHT = 0.4;
+/**
+ * The drill grid is region 16472: trainer x = local x − 16, trainer y = 54 − local y.
+ * The scene places local (lx, ly) at trainer (lx + offsetX, offsetY + 63 − ly), so offset (−16, −9) pins that grid.
+ * The shared scene omits object 62706. The sword is drawn on the middle, the same scenery model the encounter room uses.
+ */
+const ARENA_OFFSET = { x: -16, y: -9 } as const;
 /** Client cycles between the strike's shots when the bar sends more than one; each lands with its hit a tick after the cast. */
 const STRIKE_SHOT_SPACING = 6;
 const CYCLES_PER_TICK = 30;
@@ -33,6 +39,83 @@ type Mounted = Readonly<{ kind: "unmounted" }> | Readonly<{ kind: "mounted"; bos
 
 function playerTile(player: Player): Tile {
   return tile(player.location.x, player.location.y);
+}
+
+class CapturedArena extends Entity {
+  override get size(): number {
+    return 1;
+  }
+
+  override entityName(): string {
+    return `Region ${REGION_IDS.ocellus}`;
+  }
+
+  override get color(): string {
+    return "#3c4638";
+  }
+
+  override get selectable(): boolean {
+    return false;
+  }
+
+  override get collisionType(): CollisionType {
+    return CollisionType.NONE;
+  }
+
+  override get lineOfSight(): LineOfSightMask {
+    return LineOfSightMask.NONE;
+  }
+
+  override draw(): void {
+    return;
+  }
+
+  override create3dModel(): Model {
+    return new CacheRenderSceneModel(`region:${REGION_IDS.ocellus}`, {
+      originOffset: { x: ARENA_OFFSET.x, y: ARENA_OFFSET.y },
+      elevation: -FLOOR_SEATS.ocellusP1.rise,
+    });
+  }
+}
+
+/** Scenery sword, model 62699, on the middle. A 3×3 hung toward lower Y centres it on grid (15, 13), region local (31, 41). */
+class BladeScenery extends Entity {
+  override get size(): number {
+    return 3;
+  }
+
+  override entityName(): string {
+    return "The Blade";
+  }
+
+  override get color(): string {
+    return "#c0c6d0";
+  }
+
+  override get selectable(): boolean {
+    return false;
+  }
+
+  override get collisionType(): CollisionType {
+    return CollisionType.NONE;
+  }
+
+  override get lineOfSight(): LineOfSightMask {
+    return LineOfSightMask.NONE;
+  }
+
+  override create3dModel(): Model {
+    return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(BLADE_MODEL), { basisRotation: 0 });
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    return { x: at.x, y: at.y, z: at.z - BLADE_SEAT };
+  }
+
+  override draw(): void {
+    return;
+  }
 }
 
 export class P1Region extends Region {
@@ -46,6 +129,11 @@ export class P1Region extends Region {
 
   override getName(): string {
     return "Ocellus";
+  }
+
+  /** The clickable walk plane stays. The texture is clear so region 16472 shows through it. */
+  override drawDefaultFloor(): boolean {
+    return true;
   }
 
   /** The player starts south of him, by the room's entrance, and looks north into the room. */
@@ -62,12 +150,7 @@ export class P1Region extends Region {
   }
 
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
-    const paint = (at: Tile, colour: string) => {
-      context.fillStyle = colour;
-      context.fillRect(at.x * scale, at.y * scale, scale, scale);
-    };
-    ROOM.tiles().forEach((at) => paint(at, (at.x + at.y) % 2 === 0 ? FLOOR[0] : FLOOR[1]));
-    RIM.tiles().forEach((at) => paint(at, OCELLUS_P4.geometry.walkway.value.top));
+    context.clearRect(0, 0, this.width * scale, this.height * scale);
     this.tint.paint(context, scale);
   }
 
@@ -76,6 +159,9 @@ export class P1Region extends Region {
     const boss: OcellusP1 = new OcellusP1(this, this.config, player, () => this.invincible);
     dress(player, this.config.choices.setup.option.value);
     for (const edge of ROOM.surround().tiles()) this.addEntity(new InvisibleMovementBlocker(this, { ...edge }));
+    this.addEntity(new CapturedArena(this, { x: 0, y: 0 }));
+    const middle = OCELLUS_P1.room.middle.value;
+    this.addEntity(new BladeScenery(this, { x: middle.x, y: middle.y }));
     this.addPlayer(player);
     this.addMob(boss);
     this.setBoss(boss);

@@ -12,8 +12,8 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "start": "tsx src/assetBundle/check.ts && webpack serve --mode development",
-    "build": "tsx src/assetBundle/check.ts && ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} webpack --mode production && tsx src/cacheHeaders/check.ts dist && ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} tsx src/phaseCode/check.ts dist",
+    "start": "ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} tsx src/assetBundle/check.ts && webpack serve --mode development",
+    "build": "ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} tsx src/assetBundle/check.ts && ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} webpack --mode production && tsx src/cacheHeaders/check.ts dist && ARCHIVE_P1=${ARCHIVE_P1:-on} ARCHIVE_P2=${ARCHIVE_P2:-on} ARCHIVE_P3=${ARCHIVE_P3:-on} tsx src/phaseCode/check.ts dist",
     "test": "vitest run",
     "typecheck": "tsgo --noEmit --moduleResolution bundler && node scripts/check-types.mjs",
     "typecheck:tsc": "tsc --noEmit && node scripts/check-types.mjs",

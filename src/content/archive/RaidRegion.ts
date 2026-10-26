@@ -438,6 +438,15 @@ function floorFor(launch: RaidLaunch): number {
 
 const CENSOR_NAMES = ["Bandosian censer", "Armadylean censer", "Zarosian censer", "Saradomin censer"] as const;
 
+/**
+ * An attack's text is an animation id, a crack counter, or a one-word style label unless the captures record a line.
+ * Those are not said. A recorded line has a space in it. The fight log still keeps the ids.
+ */
+function spokenAttack(name: string, text: string): string | null {
+  if (name === "repair" || name === "tendril" || !text.includes(" ") || /^\d+$/.test(text)) return null;
+  return text;
+}
+
 export class RaidRegion extends Region {
   invincible = false;
   private mounted: Mounted | null = null;
@@ -684,10 +693,12 @@ export class RaidRegion extends Region {
     if (!this.mounted) return;
     const { player, boss } = this.mounted;
     switch (event.kind) {
-      case "attack":
+      case "attack": {
         this.playAttack(event.name);
-        if (event.name !== "repair" && event.text !== "") this.say(event.text);
+        const line = spokenAttack(event.name, event.text);
+        if (line !== null) this.say(line);
         return;
+      }
       case "chat":
         this.say(event.text);
         return;

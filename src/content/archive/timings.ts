@@ -221,11 +221,12 @@ export const ARCHIVE = {
     /** Within 2 of his 3×3. 37 tiles at a captured corner and 40 in the middle. */
     blastRadius: 2,
     /**
-     * Disputed. Twelve logged hits are 26 to 34. The wiki cap is 35. The captures give 28 to 30.
-     * The room rolls the logged range.
+     * Disputed. Twelve logged hits are 26, 27, 27, 29, 29, 29, 30, 30, 33, 33, 34 and 34.
+     * The 182 captures and ocellus-sim 75bd193 `data.ts` blastDamage (28–30, radius already 2) agree.
+     * The captures win. The room rolls 28 to 30. The drill keeps the twelve hits.
      */
-    blastMin: 26,
-    blastMax: 34,
+    blastMin: 28,
+    blastMax: 30,
     /** The corner stage lasts this many ticks: the next walk's first volley is at C + 21, so the corner is offsets 0 to 20. */
     cornerLength: 21,
     /** On a volley tick that is also his arrival, he charges this many ticks later. 6 after 19 such poses. */
@@ -318,51 +319,95 @@ export const ARCHIVE = {
     thresholds: [75, 50, 25],
     order: ["NW", "SW", "SE", "NE"],
     /**
-     * The encounter room's previous 20-tick pattern: swing, swing, wave, twice.
-     * Disputed. The phase 3 drill follows the logged chain (swings at 4 and 7, shadow slash at 10). Upstream #88.
+     * The logged chain, not a 20-tick loop. First move at 4. A swing is 3 later, the shadow slash 3 after the second swing,
+     * and the next move 4 after the slash. A panic shot takes a swing's place and the next move is 6 later.
+     * Two sets, then a special. Logs L1 to L8 and upstream #88. ocellus-sim 75bd193 `data.ts` firstMove, swingGap, afterSlash, afterPanic, setsPerSpecial.
      */
-    autos: [
-      { attack: "melee", next: 3 },
-      { attack: "melee", next: 4 },
-      { attack: "wave", next: 3 },
-      { attack: "melee", next: 3 },
-      { attack: "melee", next: 4 },
-      { attack: "wave", next: 3 },
-    ] as const,
+    firstMove: 4,
+    swingGap: 3,
+    afterSlash: 4,
+    afterPanic: 6,
+    panicLands: 2,
+    /** Magic. 0 under Protect from Magic. The room deals the top of 20–26. The 182 segments put graphic 4297's splat on the cast tick; the logs land the hit at +2. */
+    panicMin: 20,
+    panicMax: 26,
+    setsPerSpecial: 2,
+    /** The shadow slash lands 1 tick after animation 14846, typeless, on a 3-wide band. The room deals the top of 25–28. */
+    slashLands: 1,
+    slashWidth: 3,
+    slashMin: 25,
+    slashMax: 28,
     /**
-     * Typeless 20, dealt on the swing tick when he cannot reach.
-     * Disputed. Animation 14851 is the drill's panic shot: magic, landing 2 ticks after the cast.
-     * The dossier's range is 12–33. The drill uses the wiki's 20–26. The 182 segments timed graphic 4297 at flight 0.5 with the splat on the cast tick.
+     * First spin when the tank stays in melee: two sets from tick 4, then the special at 24.
+     * The scene waits this many ticks after its opening tick, which lands on that spin.
      */
-    voidShot: 20,
-    spinAt: 20,
+    spinAt: 24,
     /** Unverified. Render digest 25 Oct 2026, 31 phase 3 files: animation 14869 lasts 5 ticks and carries graphic 4325 on all 192 spins. */
     spinGraphicTicks: 5,
-    spinWave: [4, 7, 10],
-    spinPrayed: 8,
-    spinUnprayed: 42,
-    insolenceAt: 40,
-    insolenceGap: 4,
-    insolenceWaves: 3,
-    insolenceDamage: 45,
-    fieldDamage: 6,
-    untetherAt: 60,
-    untetherWaves: [10, 14, 18, 22],
-    glowFirst: 24,
-    glows: 4,
-    eruption: 28,
-    eruptionDamage: 40,
-    magicPrayed: 10,
-    magicUnprayed: 40,
-    vineAt: 30,
-    /** Unverified. Unsourced practice stand-in inside the 10–12 tick vine window. Solo cannot strike their own vine. */
-    vineDelay: 12,
-    vineDamage: 50,
+    /** Saws at these offsets. Quadrant 1 uses the first, then one more per fallen quadrant, up to three. Logs L1 to L8. */
+    sawCuts: [5, 8, 11],
+    spinOpen: 1,
+    /** Logged S+1 splats run 0–18. ocellus-sim has no separate opening amount. 0 under Protect from Melee. */
+    spinOpenMin: 0,
+    spinOpenMax: 18,
+    /** 0 under Protect from Melee. The room deals the top of 15–27 otherwise. */
+    sawMin: 15,
+    sawMax: 27,
+    severTicks: 3,
+    /** His next move is this many ticks after the last saw. */
+    afterSpin: 4,
+    insolenceSlashes: [2, 7, 12],
+    insolenceLands: 3,
+    insolenceMin: 38,
+    insolenceMax: 46,
+    insolenceResume: 20,
+    /** Magic at these offsets. 0 under Protect from Magic. Sim 20–28. Twelve logged unprayed hits run 14–29; the room deals the sim top and the audit shows both. */
+    untetherMagic: [10, 14, 18, 22],
+    untetherMagicMin: 20,
+    untetherMagicMax: 28,
+    slamAt: 29,
+    /** Outside his 3×3. Sim 34–39. The logs run 34–41. The room deals the sim top. */
+    slamMin: 34,
+    slamMax: 39,
+    aftershockAt: 30,
+    /** Under his 3×3. Sim 18–41. The logs run 18–42. The room deals the sim top. */
+    aftershockMin: 18,
+    aftershockMax: 41,
+    untetherResume: 37,
+    /** A quadrant fall waits until this offset of Untether. Logs: the fall shout at U+31. */
+    untetherFall: 31,
+    /**
+     * ocellus-sim `data.ts` pools at these offsets for 20–30. No captured pool tile, so the room does not deal them.
+     */
+    untetherPools: [6, 10, 14, 18],
+    poolMin: 20,
+    poolMax: 30,
+    /** Roots 3 ticks after the shout. 44 hitpoints. No timeout. ocellus-sim `data.ts` vineRootsAfter and vineHp. */
+    vineRootsAfter: 3,
+    vineHp: 44,
     vineNpcId: 16681,
-    /** Unverified. Unsourced practice stand-in inside the 15–20 tick charge. */
-    voidCharge: 18,
-    voidBurst: 30,
-    siphonHeal: 22,
+    /** Later quadrants only. Quadrant 1 has none. Detonate 30 ticks on for 39–41. */
+    riftAt: [3, 51, 111],
+    riftDetonate: 30,
+    riftMin: 39,
+    riftMax: 41,
+    /** A healing rift heals him 12 or 14 every 4 ticks unless the player stands on the line. There is no player heal. */
+    siphonEvery: 4,
+    siphonHealLow: 12,
+    siphonHealHigh: 14,
+    /**
+     * Disputed. The room used to heal the player 22 for the killing blow (strategies page).
+     * ocellus-sim `phase3.ts` heals the boss and does not heal the player. The 22 is not applied.
+     */
+    siphonKillingBlow: 22,
+    /**
+     * Disputed. ocellus-sim `data.ts` patchDamage 6–7 for patchLasts 21–51 after the panic shot.
+     * The logs do not time that patch. The room deals the top, for the long end of the range.
+     */
+    patchMin: 6,
+    patchMax: 7,
+    patchLastMin: 21,
+    patchLastMax: 51,
     /**
      * Killing an augmenter sets these levels when the player started at 99.
      * https://oldschool.runescape.wiki/w/Void_Augmenter (25 Oct 2026).
@@ -398,7 +443,7 @@ export function standInNotice(id: RaidId): string {
     case "ocellus-p2":
       return `Missing the orange pad deals ${ARCHIVE.p2.padMiss}, an unsourced practice stand-in for a heavy hit.`;
     case "ocellus-p3":
-      return `The vine hits after ${ARCHIVE.p3.vineDelay} ticks, an unsourced practice stand-in inside 10–12. A void that lives ${ARCHIVE.p3.voidCharge} ticks bursts; that charge is an unsourced practice stand-in inside 15–20.`;
+      return `The panic shot's void patch, ${ARCHIVE.p3.patchMin} to ${ARCHIVE.p3.patchMax} for ${ARCHIVE.p3.patchLastMin} to ${ARCHIVE.p3.patchLastMax} ticks, is the sim's range. The logs do not time it. Untether's pools at ${ARCHIVE.p3.untetherPools.join(", ")} for ${ARCHIVE.p3.poolMin} to ${ARCHIVE.p3.poolMax} have no captured tile, so this room does not deal them. The siphon's old killing blow of ${ARCHIVE.p3.siphonKillingBlow} is disputed and is not applied.`;
     default: {
       const unhandled: never = id;
       return unhandled;

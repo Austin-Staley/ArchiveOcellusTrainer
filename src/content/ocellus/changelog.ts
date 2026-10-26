@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.16",
+    notes: [
+      "Phase 1 wears the Hooded Figure for one tick, then Ocellus. The sword in the middle stays scenery. There is no blade npc in phase 1. The blast rolls 28 to 30.",
+      "Phase 3 follows the logged chain: two swings and a shadow slash, twice, then a special. A blocked crack still chips 3 to 5.",
+      "A siphon heals him 12 or 14 unless you stand on its line. The old 22 heal is disputed. The vine roots and does not time out.",
+    ],
+  },
+  {
     version: "2026.10.26.15",
     notes: [
       "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",

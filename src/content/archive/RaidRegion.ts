@@ -518,7 +518,10 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p1") this.addEntity(new BladeScenery(this, { x: P1_CENTRE.x, y: P1_CENTRE.y }));
     this.addMob(boss);
     this.setBoss(boss);
-    adds.forEach((add) => this.addMob(add));
+    adds.forEach((add) => {
+      if (this.launch.id === "ocellus-p3") return;
+      this.addMob(add);
+    });
     censers.forEach((censer) => this.addMob(censer));
     fixtures.forEach((fixture) => this.addMob(fixture));
     this.wallIn();
@@ -647,6 +650,7 @@ export class RaidRegion extends Region {
     this.mounted.censers.forEach((censer, index) => this.applyBar(censer, { npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
     this.mounted.fixtures.forEach((fixture) => this.applyBar(fixture, fixtureBar(fixture.label)));
     dress(this.mounted.player, this.launch.gear);
+    if (this.launch.id === "ocellus-p1") this.wear(this.mounted.boss, ARCHIVE.p1.hoodedNpcId);
     this.memory = initialMemory(this.launch.id);
     this.clockTick = 0;
     this.rows = [];
@@ -666,7 +670,7 @@ export class RaidRegion extends Region {
     }
     if (this.launch.id === "ocellus-p1") this.say("Block the vines. The cyan tile is where to stand, and the red outline is the explosion.");
     if (this.launch.id === "ocellus-p2") this.say("Stand where the orange arms cross. The Blade passes on half its damage.");
-    if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
+    if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two swings, then a shadow slash. Two of those, then a special.");
     const notice = standInNotice(this.launch.id);
     if (notice.length > 0) this.say(notice);
     const place = arenaFor(this.launch.id);
@@ -772,6 +776,8 @@ export class RaidRegion extends Region {
     if (!this.mounted) return;
     const { boss } = this.mounted;
     boss.immune = name === "protect-melee";
+    if (name === "hooded") this.wear(boss, ARCHIVE.p1.hoodedNpcId);
+    if (name === "combat-form") this.wear(boss, ARCHIVE.p1.npcId);
     if (name === "rooted") this.rooted = tile(this.mounted.player.location.x, this.mounted.player.location.y);
     if (name === "free") this.rooted = null;
     if (name === "flying") {
@@ -842,9 +848,7 @@ export class RaidRegion extends Region {
       this.spent.add(add);
       switch (add.label) {
         case "Void siphon":
-          landSplat(add, player, -ARCHIVE.p3.siphonHeal);
-          player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + ARCHIVE.p3.siphonHeal);
-          this.say("The siphon's killing blow heals you for 22.");
+          this.say(`The siphon's killing blow does not heal you. The old heal of ${ARCHIVE.p3.siphonKillingBlow} is disputed. While it lived it healed him, unless you stood on its line.`);
           return;
         case "Void rift":
           player.attackDelay = 0;

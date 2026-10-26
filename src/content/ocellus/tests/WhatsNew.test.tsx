@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.15",
+  version: "2026.10.26.16",
   date: "2026-10-26",
   notes: [
-    "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",
-    "Vines open, close and explode on the logged ticks. Standing on one chips 3 to 5 and pays it back when you step off. The blast rolls 26 to 34.",
-    "A cyan tile counts 4, 3, 2, 1 before you need to move. A red outline marks the explosion five ticks early. Both can be turned off in Settings.",
+    "Phase 1 wears the Hooded Figure for one tick, then Ocellus. The sword in the middle stays scenery. There is no blade npc in phase 1. The blast rolls 28 to 30.",
+    "Phase 3 follows the logged chain: two swings and a shadow slash, twice, then a special. A blocked crack still chips 3 to 5.",
+    "A siphon heals him 12 or 14 unless you stand on its line. The old 22 heal is disputed. The vine roots and does not time out.",
   ],
 };
 

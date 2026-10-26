@@ -1,4 +1,4 @@
-import { CacheRenderModel, CacheRenderReferences, Collision, Mob } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderReferences, Mob } from "osrs-sdk";
 import type { Model, Projectile, Region, UnitBonuses } from "osrs-sdk";
 import type { P3Config } from "../OcellusTimings";
 import { OCELLUS_P3, OCELLUS_P4 } from "../OcellusTimings";
@@ -96,10 +96,9 @@ export class OcellusP3 extends Mob {
 
   override attackIfPossible(): void {}
 
-  /** The SDK steps a mob at random off a player under it; Ocellus holds still instead. */
+  /** Arrive, the autos and the quadrant breaks are stationary. He does not chase, and he does not step off a player. */
   override getNextMovementStep(): { dx: number; dy: number } {
-    const under = this.aggro !== undefined && Collision.collisionMath(this.location.x, this.location.y, this.size, this.aggro.location.x, this.aggro.location.y, 1);
-    return under ? { dx: this.location.x, dy: this.location.y } : super.getNextMovementStep();
+    return { dx: this.location.x, dy: this.location.y };
   }
 
   runState(): P3RunState {

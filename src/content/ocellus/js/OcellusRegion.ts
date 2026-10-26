@@ -1,4 +1,6 @@
 import { InvisibleMovementBlocker, Region, Sound, SoundCache, cacheSound } from "osrs-sdk";
+import type { BossMovement } from "../../movementDebug";
+import { WalkTint } from "../../movementDebug";
 import type { Player } from "osrs-sdk";
 import type { DrillConfig } from "./OcellusTimings";
 import { OCELLUS_P4 } from "./OcellusTimings";
@@ -124,6 +126,7 @@ function present(event: FightEvent, views: Views, player: Tile): void {
 
 export class OcellusRegion extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  private readonly tint = new WalkTint(this, () => [OCELLUS_P4.geometry.bossAnchor.value]);
   invincible = false;
 
   constructor(private readonly config: DrillConfig) {
@@ -175,6 +178,7 @@ export class OcellusRegion extends Region {
         }
       }
     }
+    this.tint.paint(context, scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -210,10 +214,23 @@ export class OcellusRegion extends Region {
 
   /** Unit constructors and Region.reset's setStats pass write SDK default stats, so P4 entry is applied after both. */
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     if (this.mounted.kind === "mounted") this.mounted.ocellus.enterP4();
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (this.mounted.kind !== "mounted") return null;
+    const run = this.mounted.ocellus.runState();
+    const at = run.kind === "waiting" ? 0 : run.kind === "running" ? run.tick : run.at;
+    return { mobility: "stationary", tick: at, actor: "Ocellus" };
   }
 
   override beforeNpcTurns(): void {

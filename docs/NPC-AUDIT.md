@@ -2,7 +2,7 @@
 
 Compared with the 25 Oct 2026 render digest and cache 2746 region placement. A trainer tile is the captured template minus the region base, then the room's scene offset: `trainerX = localX + offsetX`, `trainerY = offsetY + 63 - localY`. The digest records a position histogram, not a tile per tick, so a path is a stand-in wherever that histogram has no order.
 
-Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. `Disputed` means the render digest and the eight fight logs (L1 to L8, upstream #85) disagree, and the room uses the stronger count. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056 and 4057, and hitsplat 11.
+Boss movement, the walkable tiles and the stationary ticks, is in [Boss movement](#boss-movement). Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. `Disputed` means the render digest and the eight fight logs (L1 to L8, upstream #85) disagree, and the room uses the stronger count. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056 and 4057, and hitsplat 11.
 
 ## Bork and the Smorks
 
@@ -210,3 +210,66 @@ The view draws the SDK damage, block and heal images. It does not draw RuneLite 
 | All rooms | block | types 12 and 13 | SDK block image on a zero hit | same | stand-in |
 | All rooms | heal | type 6 | SDK heal image | same | stand-in |
 | Cauldron | hitsplat 11 | four samples, no sprite | not drawn | not drawn | stand-in |
+
+## Boss movement
+
+A trainer tile is a south-west anchor. The digest stored a position histogram, and only the six most common tiles of each, so a box below is the limit of every sample and the tiles inside it that were not listed are a stand-in. An anchor outside that limit is blocked. Settings, Boss movement, tints the set the room enforces and labels the current tick STATIONARY or MOBILE.
+
+The phase 1 drill uses the fight-log path. The encounter room uses the digest's own grid, which is a different origin, so the same monster is named twice where the grids differ.
+
+### Walkable anchors
+
+| Actor | Where | Set | Support | Status |
+| --- | --- | --- | --- | --- |
+| Bork 16640 | encounter room | box (8, 8) to (19, 21), clipped to the 17×17 room. Mode (10, 12) | 107 fights, 6,767 samples. The six listed tiles are 1,293 of them, and (10, 12) has 229 | stand-in |
+| Smorks 16641 | encounter room | (14, 14) only | 107 of 107 | captured |
+| Ezekiel 16652 | encounter room | box (5, 6) to (11, 12). Mode (8, 8) | 10 fights, 470 samples. Six listed tiles are 140, and (8, 8) has 27 | stand-in |
+| Archive Guardian 16659 / 16660 | encounter room | box (2, −4) to (22, 36), clipped to the room. Mode (11, 11) | 175 flying fights, 318 samples. (11, 11) has 41. The one grounded sample is the same tile | stand-in |
+| Battery 16662 | encounter room | (25, 3), (25, 16), (0, 3), (0, 16) | the listed rows are all 229 samples | captured |
+| Moia 16667 | encounter room | (0, 7), (7, 0), (14, 7), (7, 7), (7, 14) | 3 fights, 17 samples, and these five are all of them | captured |
+| Undead binder 16670 | encounter room | box (4, 2) to (12, 10) | 3 fights, 747 samples. Six listed tiles are 163 | stand-in |
+| Xarth 16684 | encounter room | (7, 7) only | 40 of 40 | captured |
+| Dagon'hai Elder 16643 | encounter room | box (−1, 8) to (4, 16), clipped to the room. Spawn (2, 9) | 1 fight, 17 samples. Six listed tiles sum to 7 | stand-in |
+| Cauldron 16649 | encounter room | box (5, 12) to (8, 14). The visit is (5, 12), (6, 12), (6, 13), (7, 12), (8, 12), (8, 13) | 1 fight, 7 samples. Six are listed. The order was not | stand-in |
+| Hooded Figure 16672 | encounter room | (5, 20) only | 32 of 32 | captured |
+| Ocellus 16674 | encounter room | box (−1, 11) to (11, 23), clipped to the room. Mode (5, 17) | 32 fights, 2,167 samples. (5, 17) has 129. Corner clusters (−1, 23), (−1, 11), (11, 23), (11, 11) | disputed |
+| Ocellus 16674 | phase 1 drill | every straight-then-diagonal step between the start (14, 17), the middle (14, 14) and the corners (20, 8), (20, 20), (8, 20), (8, 8) | logs L3 to L5 for the path. The 32 captures' corner clusters are those corners in the other grid | captured |
+| The Blade 16676 | encounter room | (11, 13) only | 31 of 31 | captured |
+| The Blade 16676 | phase 2 drill | (14, 14) only, the same stand in that grid | logs L2 and the phase 2 raids, and the 31 captures | captured |
+| Ocellus 16677 | encounter room | box (−12, 2) to (9, 22), clipped to the room. Mode (5, 18) | 31 fights, 850 samples. (5, 18) is tied at 45 | stand-in |
+| Ocellus 16677 | phase 3 drill | (21, 7) only | no clip pins the phase-start tile | stand-in |
+| Ocellus 16677 | phase 4 drill | (4, 6) only, the 3×3 inside the 5×5 | footage of the platform. The 8 phase 4 segments have no template tile | stand-in |
+
+Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smorks, The Blade, the Hooded Figure and the batteries block every tile except the one they were captured on. Moia blocks every anchor except her five. A 3×3 or larger boss is placed by the south-west tile, so the footprint hangs east and north of that anchor.
+
+### Tick windows
+
+| Actor | When | Mobility | Destination | Support |
+| --- | --- | --- | --- | --- |
+| Bork | the whole fight | stationary | holds (10, 12) | no tick path in 107 fights |
+| Smorks | the whole fight | stationary | holds (14, 14) | 107 of 107, no walk pose |
+| Ezekiel | the whole fight | stationary | holds (8, 8) | no tick path in 10 fights |
+| Archive Guardian | flying, landing, grounded, takeoff | stationary | holds (11, 11) | no tick path. The mode is the leading tile |
+| Batteries | the whole fight | stationary | the four corners | 229 samples, four tiles |
+| Moia | phase 1, except every 25 ticks from tick 20 | stationary | the station she last moved to, starting at (0, 7) | the five tiles are the whole histogram |
+| Moia | phase 1, ticks 20, 45, 70, … | mobile | the next of (0, 7), (7, 14), (14, 7), (7, 0) | same 3 fights. The order of the cycle is a practice stand-in |
+| Moia | vanished | stationary | hidden | she is not on a tile |
+| Moia | the tick she reappears | mobile | (7, 7) | (7, 7) is 2 of the 17 samples |
+| Moia | phase 2 after that tick | stationary | holds (7, 7) | same |
+| Binders | every 15 ticks, including tick 0 | mobile | the next practice stop that sits inside (4, 2)–(12, 10). (4, 12) and (12, 12) are refused | the box is 747 samples. The hop order is a stand-in |
+| Binders | every other tick | stationary | the tile they reached | same |
+| Xarth | the whole fight | stationary | holds (7, 7) | 40 of 40 |
+| Dagon'hai Elder | the whole fight | stationary | holds (2, 9) | 1 fight, no tick path |
+| Cauldron | from tick 23, six steps of 2 ticks, each cycle of 50 | mobile | the next trail tile inside (5, 12)–(8, 14) | 1 fight. The order is a stand-in |
+| Cauldron | every other tick | stationary | the tile it occupies | same |
+| Hooded Figure | the whole fight | stationary | holds (5, 20) | 32 of 32 |
+| Ocellus, encounter phase 1 | the whole fight | stationary | holds (5, 17). Corner hops such as (17, 17) are outside the box and are refused | the box is 32 fights. The hop was a practice path |
+| Ocellus, phase 1 drill | arrive, before the first walk | stationary | holds (14, 17) | logs: the walk starts at A + 4 |
+| Ocellus, phase 1 drill | walk-from-start, walk-from-corner, walk-from-middle | mobile | one tile a tick, straight on the longer axis, then diagonal, toward the corner he is heading for | logs L3 to L5. One tile a tick in L1 to L8 |
+| Ocellus, phase 1 drill | a corner | stationary | the corner stop | logs: he charges there. 34 corners in L1 to L8 |
+| Ocellus, phase 1 drill | the middle, except the teleport-in beat | stationary | the middle (14, 14) once he has arrived | logs: beats and the strike, 15 of 15 middles |
+| Ocellus, phase 1 drill | the teleport-in beat, M + 4, and the same beat if an end starts off the middle | mobile | the middle (14, 14) | 15 of 15 teleports in at M + 4 |
+| The Blade, both rooms | the whole fight | stationary | the one captured tile | 31 of 31, and the logs |
+| Ocellus, encounter phase 3 | autos, spins, untether, the whole fight | stationary | holds (5, 18) | no tick path in 31 fights |
+| Ocellus, phase 3 drill | arrive, autos, destroy | stationary | holds (21, 7). He does not chase | the anchor is an assumption. The captures show the box above, in the other grid |
+| Ocellus, phase 4 | lead-in, inner void, after inner, outer void, after outer | stationary | holds (4, 6). During the outer void his 3×3 blocks the player, who paths around the edge | footage. 8 segments, no template tile |

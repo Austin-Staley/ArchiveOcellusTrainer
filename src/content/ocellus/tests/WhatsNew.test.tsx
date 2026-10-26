@@ -14,14 +14,11 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.8",
+  version: "2026.10.26.9",
   date: "2026-10-26",
   notes: [
-    "The page opens in the 3D view, facing north.",
-    "Ocellus takes damage as soon as he is back on the platform, and standing on a lifeforce orb as it glows gives that HP back on the same tick.",
-    "A void rift left alive bursts 30 ticks after it appears and hits once for 28 to 41. Destroying a rift resets the attack timer.",
-    "The encounter rooms stay in Settings. Phase 1 cracks open 2 ticks apart, and phase 2's health drops only when The Blade releases it.",
-    "Phase 2's volley is projectile 4269. Graphic 4304 plays on the sword every 3 ticks.",
+    "Settings has a Boss movement toggle. It tints the tiles a boss may stand on and labels the current tick STATIONARY or MOBILE.",
+    "A boss stays inside the tiles the captures recorded, and he does not step on a tick where he is standing still.",
   ],
 };
 

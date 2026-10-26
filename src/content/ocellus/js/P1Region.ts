@@ -1,4 +1,6 @@
 import { CardinalDirection, InvisibleMovementBlocker, Projectile, Region } from "osrs-sdk";
+import type { BossMovement } from "../../movementDebug";
+import { WalkTint } from "../../movementDebug";
 import type { Player } from "osrs-sdk";
 import type { P1Config } from "./OcellusTimings";
 import { OCELLUS_P1, OCELLUS_P4 } from "./OcellusTimings";
@@ -10,6 +12,7 @@ import type { P1Event, P1HitSource, P1Log, P1Snapshot } from "./P1Types";
 import { FloorViews } from "./entities/P1Views";
 import { OcellusP1 } from "./mobs/OcellusP1";
 import { ARENA_SIZE, RIM, ROOM, distanceToBody } from "./p1/arena";
+import { walkableAnchors } from "./p1/movement";
 
 const LETHAL_HIT: Readonly<Record<P1HitSource, string>> = {
   volley: "a volley",
@@ -33,6 +36,7 @@ function playerTile(player: Player): Tile {
 
 export class P1Region extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  private readonly tint = new WalkTint(this, () => walkableAnchors());
   invincible = false;
 
   constructor(private readonly config: P1Config) {
@@ -63,6 +67,7 @@ export class P1Region extends Region {
     };
     ROOM.tiles().forEach((at) => paint(at, (at.x + at.y) % 2 === 0 ? FLOOR[0] : FLOOR[1]));
     RIM.tiles().forEach((at) => paint(at, OCELLUS_P4.geometry.walkway.value.top));
+    this.tint.paint(context, scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -79,10 +84,27 @@ export class P1Region extends Region {
 
   /** Unit constructors and Region.reset's setStats pass write SDK default stats, so P1 entry is applied after both. */
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     if (this.mounted.kind === "mounted") this.mounted.boss.enterP1();
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
+  }
+
+  /** South-west anchors on the logged straight-then-diagonal paths. */
+  walkableTiles(): readonly Tile[] {
+    return walkableAnchors();
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (this.mounted.kind !== "mounted") return null;
+    const readout = this.mounted.boss.movementReadout();
+    return { mobility: readout.mobility, tick: readout.tick, actor: "Ocellus" };
   }
 
   override beforeNpcTurns(): void {

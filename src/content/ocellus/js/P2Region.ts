@@ -1,4 +1,6 @@
 import { InvisibleMovementBlocker, Region, TileMarker } from "osrs-sdk";
+import type { BossMovement } from "../../movementDebug";
+import { WalkTint } from "../../movementDebug";
 import type { Player } from "osrs-sdk";
 import type { P2Config } from "./OcellusTimings";
 import { OCELLUS_P2, OCELLUS_P4 } from "./OcellusTimings";
@@ -70,6 +72,7 @@ function cachedPortalLooks(views: Views): () => readonly PortalView[] {
 
 export class P2Region extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  private readonly tint = new WalkTint(this, () => [OCELLUS_P2.arena.bossAnchor.value]);
   invincible = false;
 
   constructor(private readonly config: P2Config) {
@@ -96,6 +99,7 @@ export class P2Region extends Region {
     const checker = (at: Tile) => (at.x + at.y) % 2 === 0;
     FLOOR.tiles().forEach((at) => paint(at, ROOM.contains(at) ? (checker(at) ? OPEN_FLOOR[0] : OPEN_FLOOR[1]) : checker(at) ? CLOSED_FLOOR[0] : CLOSED_FLOOR[1]));
     RIM.tiles().forEach((at) => paint(at, OCELLUS_P4.geometry.walkway.value.top));
+    this.tint.paint(context, scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -141,10 +145,23 @@ export class P2Region extends Region {
 
   /** Unit constructors and Region.reset write SDK default stats, so phase 2's are applied after both. */
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     if (this.mounted.kind === "mounted") this.mounted.boss.enterP2();
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (this.mounted.kind !== "mounted") return null;
+    const run = this.mounted.boss.runState();
+    const at = run.kind === "waiting" ? 0 : run.kind === "running" ? run.tick : run.at;
+    return { mobility: "stationary", tick: at, actor: "The Blade" };
   }
 
   override beforeNpcTurns(): void {

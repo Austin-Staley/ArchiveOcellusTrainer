@@ -8,6 +8,7 @@ import { crackId } from "../P1Types";
 import type { PlayerObservation } from "../P4Types";
 import { roll, rollInt } from "../roll";
 import { CORNERS, beatLine, blastTiles, cornerLine, distanceToBody, facing, lineTiles, middleCentre, sameTile, stepToward } from "./arena";
+import { keptAnchor } from "./movement";
 import type { Line } from "./arena";
 import type { P1Schedule } from "./schedule";
 import { compileP1Schedule, cornerOfLeg, endSlots } from "./schedule";
@@ -133,7 +134,9 @@ class TurnBuilder {
 
   walkOn(phase: P1Phase, heading: Corner): void {
     const target = room.corners.value[heading];
-    if (isWalk(phase) && !sameTile(this.fight.bossAt, target)) this.update({ bossAt: stepToward(this.fight.bossAt, target) });
+    if (!isWalk(phase) || sameTile(this.fight.bossAt, target)) return;
+    const next = keptAnchor(this.fight.bossAt, stepToward(this.fight.bossAt, target), "mobile");
+    if (!sameTile(next, this.fight.bossAt)) this.update({ bossAt: next });
   }
 
   openCrack(line: Line, length: number, closesAfter: TickSpan, nth: number): void {
@@ -203,10 +206,12 @@ class TurnBuilder {
       case "teleport-out":
         this.log({ kind: "teleported-out", at, from: this.fight.bossAt });
         return;
-      case "teleport-in":
-        this.update({ bossAt: room.middle.value });
-        this.log({ kind: "teleported-in", at, to: room.middle.value });
+      case "teleport-in": {
+        const next = keptAnchor(this.fight.bossAt, room.middle.value, "mobile");
+        this.update({ bossAt: next });
+        this.log({ kind: "teleported-in", at, to: next });
         return;
+      }
       case "beat": {
         const { length, closesAfter } = middle.beats.value;
         this.log({ kind: "boss-charged", at, facing: facing(this.fight.bossAt, beat.side) });

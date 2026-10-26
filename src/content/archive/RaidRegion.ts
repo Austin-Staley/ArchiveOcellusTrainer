@@ -11,6 +11,9 @@ import { dress } from "./loadout";
 import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
 import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
+import type { BossMovement, Mobility } from "../movementDebug";
+import { WalkTint } from "../movementDebug";
+import { acceptAddStep, acceptBossStep, actorName, addMobility, bossMobility, cauldronMayStand, overlayTiles } from "./movement";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
 
@@ -332,6 +335,9 @@ export class RaidRegion extends Region {
   private mounted: Mounted | null = null;
   private memory: RaidMemory = initialMemory(this.launch.id);
   private clockTick: number | null = null;
+  private mobility: Mobility = "stationary";
+  private shownTick = 0;
+  private readonly tint = new WalkTint(this, () => overlayTiles(this.launch.id));
   private rows: Stamp[] = [];
   private lines: string[] = [];
   private previous: Tile = ROOMS[this.launch.id].player;
@@ -371,6 +377,16 @@ export class RaidRegion extends Region {
 
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
     context.clearRect(0, 0, this.width * scale, this.height * scale);
+    this.tint.paint(context, scale);
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (!this.mounted) return null;
+    return { mobility: this.mobility, tick: this.shownTick, actor: actorName(this.launch.id) };
   }
 
   initialiseRegion(): { player: Player } {
@@ -394,8 +410,12 @@ export class RaidRegion extends Region {
   }
 
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     this.boot();
+    this.mobility = "stationary";
+    this.shownTick = 0;
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
   }
@@ -416,8 +436,11 @@ export class RaidRegion extends Region {
       prayer: protectionOf(player),
       previous: this.previous,
     };
-    const step = advance(this.memory, this.launch.options, input, tick(this.clockTick ?? 0));
+    const atTick = this.clockTick ?? 0;
+    const step = advance(this.memory, this.launch.options, input, tick(atTick));
     this.memory = step.memory;
+    this.mobility = bossMobility(step.memory, atTick);
+    this.shownTick = atTick;
     this.rows.push(...step.events);
     step.events.forEach((stamp) => this.present(stamp.event));
     this.crossPad();
@@ -546,12 +569,18 @@ export class RaidRegion extends Region {
         this.say(`The Blade passes on ${half}.`);
         return;
       }
-      case "boss-at":
-        boss.setLocation({ x: event.tile.x, y: event.tile.y });
+      case "boss-at": {
+        const from = tile(boss.location.x, boss.location.y);
+        const next = acceptBossStep(this.launch.id, from, event.tile, this.mobility);
+        boss.setLocation({ x: next.x, y: next.y });
         return;
+      }
       case "add-at": {
         const add = this.mounted.adds[event.index];
-        if (add) add.setLocation({ x: event.tile.x, y: event.tile.y });
+        if (!add) return;
+        const from = tile(add.location.x, add.location.y);
+        const next = acceptAddStep(this.launch.id, from, event.tile, addMobility(this.launch.id, this.shownTick));
+        add.setLocation({ x: next.x, y: next.y });
         return;
       }
       case "respawn-adds":
@@ -568,7 +597,7 @@ export class RaidRegion extends Region {
         this.say("An orange portal is open. Step on it.");
         return;
       case "mark":
-        event.tiles.forEach((at) => {
+        (event.text === "cauldron" ? event.tiles.filter((at) => cauldronMayStand(at)) : event.tiles).forEach((at) => {
           const mark = new Mark(this, { x: at.x, y: at.y });
           mark.paint = event.colour;
           mark.label = event.text;

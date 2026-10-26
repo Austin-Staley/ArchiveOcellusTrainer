@@ -1,4 +1,6 @@
 import { InvisibleMovementBlocker, Region } from "osrs-sdk";
+import type { BossMovement } from "../../movementDebug";
+import { WalkTint } from "../../movementDebug";
 import type { Player } from "osrs-sdk";
 import type { P3Config } from "./OcellusTimings";
 import { OCELLUS_P3, OCELLUS_P4 } from "./OcellusTimings";
@@ -43,6 +45,7 @@ function present(event: P3Event, boss: OcellusP3, chat: string[]): void {
 
 export class P3Region extends Region {
   private mounted: Mounted = { kind: "unmounted" };
+  private readonly tint = new WalkTint(this, () => [OCELLUS_P3.arena.bossAnchor.value]);
   invincible = false;
 
   constructor(private readonly config: P3Config) {
@@ -69,6 +72,7 @@ export class P3Region extends Region {
     const checker = (at: Tile) => (at.x + at.y) % 2 === 0;
     FLOOR.tiles().forEach((at) => paint(at, QUADRANT_1_FLOOR.contains(at) ? (checker(at) ? OPEN_FLOOR[0] : OPEN_FLOOR[1]) : checker(at) ? CLOSED_FLOOR[0] : CLOSED_FLOOR[1]));
     RIM.tiles().forEach((at) => paint(at, OCELLUS_P4.geometry.walkway.value.top));
+    this.tint.paint(context, scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -85,10 +89,23 @@ export class P3Region extends Region {
 
   /** Unit constructors and Region.reset's setStats pass write SDK default stats, so P3 entry is applied after both. */
   override reset(startWorld = true): { player: Player } {
+    this.tint.forget();
     const result = super.reset(false);
     if (this.mounted.kind === "mounted") this.mounted.boss.enterP3();
+    this.tint.repaint();
     if (startWorld) this.world.startTicking();
     return result;
+  }
+
+  showBossMovement(on: boolean): void {
+    this.tint.show(on);
+  }
+
+  bossMovement(): BossMovement | null {
+    if (this.mounted.kind !== "mounted") return null;
+    const run = this.mounted.boss.runState();
+    const at = run.kind === "waiting" ? 0 : run.kind === "running" ? run.tick : run.at;
+    return { mobility: "stationary", tick: at, actor: "Ocellus" };
   }
 
   override beforeNpcTurns(): void {

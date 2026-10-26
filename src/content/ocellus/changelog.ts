@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.9",
+    notes: [
+      "Settings has a Boss movement toggle. It tints the tiles a boss may stand on and labels the current tick STATIONARY or MOBILE.",
+      "A boss stays inside the tiles the captures recorded, and he does not step on a tick where he is standing still.",
+    ],
+  },
+  {
     version: "2026.10.26.8",
     notes: [
       "The page opens in the 3D view, facing north.",

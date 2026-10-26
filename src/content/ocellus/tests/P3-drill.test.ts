@@ -32,13 +32,13 @@ describe("P3 drill", () => {
   test.each([
     {
       prayer: "Protect from Melee" as const,
-      hits: [[7, "swing", receipt(5, 99, "melee")], [10, "swing", receipt(2, 94, "melee")], [17, "swing", receipt(1, 92, "melee")], [20, "swing", receipt(2, 91, "melee")]],
+      hits: [[7, "void-shot", receipt(20, 99, "melee")], [10, "void-shot", receipt(20, 79, "melee")], [17, "void-shot", receipt(20, 59, "melee")], [20, "void-shot", receipt(20, 39, "melee")]],
     },
     {
       prayer: null,
-      hits: [[7, "swing", receipt(19, 99, null)], [10, "swing", receipt(8, 80, null)], [17, "swing", receipt(7, 72, null)], [20, "swing", receipt(7, 65, null)]],
+      hits: [[7, "void-shot", receipt(20, 99, null)], [10, "void-shot", receipt(20, 79, null)], [17, "void-shot", receipt(20, 59, null)], [20, "void-shot", receipt(20, 39, null)]],
     },
-  ])("the autos swing at 7, 10, 17 and 20 and cast a wave that does nothing yet at 14 and 24, with prayer $prayer", async ({ prayer, hits }) => {
+  ])("he holds his anchor, so the spawn two tiles out takes a void shot at 7, 10, 17 and 20, and a wave that does nothing yet at 14 and 24, with prayer $prayer", async ({ prayer, hits }) => {
     const drill = await startP3Drill({ seed: 1 });
     if (prayer !== null) drill.pray(prayer);
     drill.tickTo(26);
@@ -51,15 +51,17 @@ describe("P3 drill", () => {
     expect(observed).toEqual({ stages: [[0, "arrive"], [7, "autos"]], hits, waves: [[14, SPAWN], [24, SPAWN]] });
   });
 
-  test("a player who runs to the far east of the wedge after P3 tick 6 takes the swing at 7 and a typeless void shot of 20 at 10", async () => {
+  test("he stays on his anchor, so a player who runs to the far east after P3 tick 6 takes a void shot at 7 and at 10", async () => {
     const drill = await startP3Drill({ seed: 1 });
     drill.pray("Protect from Melee");
     drill.tickTo(6);
     await drill.click(FAR_EAST);
     drill.tickTo(10);
     const hits = drill.events("player-hit").map((event) => [event.at, event.hit.kind, event.receipt]);
+    const place = { x: drill.boss().location.x, y: drill.boss().location.y };
     drill.dispose();
-    expect(hits).toEqual([[7, "swing", receipt(5, 99, "melee")], [10, "void-shot", receipt(20, 94, "melee")]]);
+    expect(place).toEqual({ x: 21, y: 7 });
+    expect(hits).toEqual([[7, "void-shot", receipt(20, 99, "melee")], [10, "void-shot", receipt(20, 79, "melee")]]);
   });
 
   test.each([

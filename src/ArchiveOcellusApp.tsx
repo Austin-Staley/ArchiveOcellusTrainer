@@ -4,6 +4,7 @@ import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, So
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
+import { movementDebug } from "./content/movementDebug";
 import { ENCOUNTERS, defaultGear, encounterName, isRaidId, parseRaid } from "./content/archive/catalog";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
@@ -292,7 +293,7 @@ const UnseenDot = () => <span className="unseen_dot" role="img" aria-label="new"
 
 type MenuView = "closed" | "settings" | "whats-new";
 
-function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFlags }>) {
+function DrillControls({ drill, flags, movement }: Readonly<{ drill: Drill; flags: BuildFlags; movement: MovementToggle }>) {
   const { config, region } = drill;
   const [setup, setSetup] = useState<string>(config.choices.setup.key);
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
@@ -397,6 +398,9 @@ function DrillControls({ drill, flags }: Readonly<{ drill: Drill; flags: BuildFl
         </label>
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+        <label>
+          Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
         <label>
           Send anonymous performance data <input id="perf_data" type="checkbox" checked={sendsPerfData} onChange={(event) => { setPerfDataAllowed(event.target.checked); setSendsPerfData(event.target.checked); }} />
@@ -677,7 +681,9 @@ function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; regi
   );
 }
 
-function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
+type MovementToggle = Readonly<{ shown: boolean; setShown: (on: boolean) => void }>;
+
+function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; movement: MovementToggle }>) {
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   return (
@@ -719,6 +725,9 @@ function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region:
         </label>
         <label>
           Invincible <input id="invincible" type="checkbox" defaultChecked={region.invincible} onChange={(event) => { region.invincible = event.target.checked; }} />
+        </label>
+        <label>
+          Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
       </div>
       <button id="settings" type="button" aria-expanded={view !== "closed"} onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>⚙ Settings</button>
@@ -763,17 +772,45 @@ export function ArchiveOcellusApp() {
   return opening.kind === "open" ? <TrainerPage session={opening.opened} /> : null;
 }
 
+function MovementBadge({ region, shown }: Readonly<{ region: object; shown: boolean }>) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    if (!shown) return;
+    let frame = 0;
+    let last = "";
+    const read = () => {
+      const view = movementDebug(region)?.bossMovement() ?? null;
+      const next = view === null ? "" : `${view.mobility === "stationary" ? "STATIONARY" : "MOBILE"} · tick ${view.tick} · ${view.actor}`;
+      if (next !== last) {
+        last = next;
+        setText(next === "" ? null : next);
+      }
+      frame = requestAnimationFrame(read);
+    };
+    frame = requestAnimationFrame(read);
+    return () => cancelAnimationFrame(frame);
+  }, [region, shown]);
+  if (!shown || text === null) return null;
+  return <p id="movement_badge">{text}</p>;
+}
+
 function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
+  const [showMovement, setShowMovement] = useState(false);
   const region = session.kind === "drill" ? session.drill.region : session.region;
+  const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
+  useEffect(() => {
+    movementDebug(region)?.showBossMovement(showMovement);
+  }, [region, showMovement]);
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
       <GameOverlay>
         <TrainerLoadingSplash state={loading} />
         <div id="hud_corner">
+          <MovementBadge region={region} shown={showMovement} />
           <GameChat region={region} />
-          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} /> : <RaidControls launch={session.launch} region={session.region} />}
+          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} movement={movement} />}
           <Credits />
         </div>
         {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}

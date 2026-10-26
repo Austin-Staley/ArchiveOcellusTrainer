@@ -15,6 +15,7 @@ import { drawHealSplats } from "../entities/P4Views";
 import { TonalzticsOfRalos } from "../gear/OcellusGear";
 import type { P1Fight, TurnOutput } from "../p1/fight";
 import { landed, momentAt, startFight, turn } from "../p1/fight";
+import { mobilityOf, walkableHas } from "../p1/movement";
 
 type BossStep = Readonly<{ player: PlayerObservation; bossHp: number }>;
 type P1Run = Readonly<{ input: InputObservation; event: P1Event; cause: P1Hit; snapshot: BossStep; row: P1Row; end: P1End }>;
@@ -171,6 +172,13 @@ export class OcellusP1 extends Mob {
     return this.fight.meter;
   }
 
+  movementReadout(): Readonly<{ mobility: "stationary" | "mobile"; tick: number }> {
+    const run = this.binding.view();
+    const at = run.kind === "waiting" ? tick(0) : run.at;
+    const moment = momentAt(this.fight, at);
+    return { mobility: mobilityOf(moment.phase, moment.beats), tick: at };
+  }
+
   runState(): P1RunState {
     const run = this.binding.view();
     switch (run.kind) {
@@ -228,8 +236,9 @@ export class OcellusP1 extends Mob {
     }
   }
 
-  /** A step to the next tile is walked; anything farther is a teleport. */
+  /** A step to the next tile is walked; anything farther is a teleport. An anchor off the path is ignored. */
   private stand(anchor: Tile): void {
+    if (!walkableHas(anchor)) return;
     const { x, y } = this.location;
     if (anchor.x === x && anchor.y === y) return;
     if (Math.max(Math.abs(anchor.x - x), Math.abs(anchor.y - y)) > 1) {

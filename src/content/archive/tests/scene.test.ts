@@ -2,7 +2,8 @@ import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Settings, TileMark
 import type { Player } from "osrs-sdk";
 import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
-import { parseRaid } from "../catalog";
+import { RAID_IDS, parseRaid } from "../catalog";
+import { seed, tick } from "../../../sim/brands";
 import { GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -62,6 +63,11 @@ describe("raid rooms in 3D", () => {
 
     const phase2 = open("ocellus-p2", "?encounter=ocellus-p2&seed=1&invincible=on");
     expect(phase2.region.chat().some((line) => line.includes("4269"))).toBe(true);
+    expect(phase2.region.chat().some((line) => line.includes("stands still"))).toBe(true);
+    const blade = [...phase2.region.mobs, ...phase2.region.newMobs].find((mob) => mob.mobName() === "The Blade");
+    if (!blade) throw new Error("the Blade was not in the room");
+    expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect({ x: blade.location.x, y: blade.location.y, npc: phase2.region.snapshot()?.boss.npcId }).toEqual({ x: 11, y: 11, npc: ARCHIVE.p2.npcId });
     fight(phase2.world, 12);
     const volley = phase2.region.entities.find((entity) => entity.entityName() === "Stand-in projectile");
     if (!volley) throw new Error("the volley was not a stand-in");
@@ -120,5 +126,47 @@ describe("raid rooms in 3D", () => {
     expect(region.chat().some((line) => line.includes("censers are coloured stand-ins"))).toBe(true);
     fight(world, 1);
     expect(region.snapshot()?.boss.npcId).toBe(ARCHIVE.p3.npcId);
+  });
+
+  it.each<[RaidId, number]>([
+    ["xarth", 10],
+    ["ocellus-p3", 10],
+  ])("records a death in %s on tick %i and keeps the player in the room", (id, at) => {
+    const { region, world, player } = open(id, `?encounter=${id}&seed=7`);
+    fight(world, at + 1);
+    expect(region.snapshot()?.run).toEqual({ kind: "ended", seed: seed(7), at: tick(at), reason: "death" });
+    expect(region.snapshot()?.player.hp).toBe(player.stats.hitpoint);
+    expect(player.dying).toBe(-1);
+    expect(region.players).toContain(player);
+    fight(world, 8);
+    expect(region.players).toContain(player);
+    expect(region.snapshot()?.run).toEqual({ kind: "ended", seed: seed(7), at: tick(at), reason: "death" });
+  });
+
+  it.each(RAID_IDS)("a lethal hit in %s restores the player instead of removing them", (id) => {
+    const { region, world, player } = open(id, `?encounter=${id}&seed=1`);
+    player.currentStats.hitpoint = 1;
+    let died = false;
+    for (let step = 0; step < 160 && !died; step += 1) {
+      world.tickWorld();
+      const run = region.snapshot()?.run;
+      died = run?.kind === "ended" && run.reason === "death";
+    }
+    if (!died) throw new Error(`${id} never recorded a death`);
+    expect(region.snapshot()?.player.hp).toBe(player.stats.hitpoint);
+    expect(player.dying).toBe(-1);
+    expect(region.players).toContain(player);
+    fight(world, 6);
+    expect(region.players).toContain(player);
+  });
+
+  it("an invincible lethal hit stays in the fight and says so", () => {
+    const { region, world, player } = open("xarth", "?encounter=xarth&seed=7&invincible=on");
+    player.currentStats.hitpoint = 1;
+    fight(world, 3);
+    expect(region.snapshot()?.run).toEqual({ kind: "running", seed: seed(7) });
+    expect(region.snapshot()?.player.hp).toBe(player.stats.hitpoint);
+    expect(player.dying).toBe(-1);
+    expect(region.chat().some((line) => line.includes("Invincible"))).toBe(true);
   });
 });

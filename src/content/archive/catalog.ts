@@ -57,17 +57,46 @@ export function isRaidId(value: string): value is RaidId {
   }
 }
 
+export function encounterName(id: RaidId | "ocellus-p4"): string {
+  switch (id) {
+    case "ocellus-p4":
+      return "Ocellus phase 4";
+    case "ocellus-p1":
+      return "Ocellus phase 1";
+    case "ocellus-p2":
+      return "Ocellus phase 2";
+    case "ocellus-p3":
+      return "Ocellus phase 3";
+    case "bork":
+      return "Bork";
+    case "ezekiel":
+      return "Ezekiel";
+    case "guardian":
+      return "Archive Guardian";
+    case "moia":
+      return "Moia";
+    case "xarth":
+      return "Xarth";
+    case "dagonhai":
+      return "Dagon'hai trio";
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}
+
 export const ENCOUNTERS: readonly Readonly<{ id: RaidId | "ocellus-p4"; label: string }>[] = [
-  { id: "ocellus-p4", label: "Ocellus phase 4" },
-  { id: "ocellus-p1", label: "Ocellus phase 1" },
-  { id: "ocellus-p2", label: "Ocellus phase 2" },
-  { id: "ocellus-p3", label: "Ocellus phase 3" },
-  { id: "bork", label: "Bork" },
-  { id: "ezekiel", label: "Ezekiel" },
-  { id: "guardian", label: "Archive Guardian" },
-  { id: "moia", label: "Moia" },
-  { id: "xarth", label: "Xarth" },
-  { id: "dagonhai", label: "Dagon'hai trio" },
+  { id: "ocellus-p4", label: encounterName("ocellus-p4") },
+  { id: "ocellus-p1", label: encounterName("ocellus-p1") },
+  { id: "ocellus-p2", label: encounterName("ocellus-p2") },
+  { id: "ocellus-p3", label: encounterName("ocellus-p3") },
+  { id: "bork", label: encounterName("bork") },
+  { id: "ezekiel", label: encounterName("ezekiel") },
+  { id: "guardian", label: encounterName("guardian") },
+  { id: "moia", label: encounterName("moia") },
+  { id: "xarth", label: encounterName("xarth") },
+  { id: "dagonhai", label: encounterName("dagonhai") },
 ];
 
 const KNOWN = ["encounter", "seed", "invincible", "bosshp", "enrage", "beam", "ezenrage", "sword", "smorkdef", "moiahp", "p2beam", "p2floors", "bladehp", "gear"];

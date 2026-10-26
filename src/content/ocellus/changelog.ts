@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.2",
+    notes: [
+      "Attack sounds this cache does not store are left out, so a missing sound no longer stops the room.",
+      "In phase 2 the Blade stands as its own model on the tile where it was captured. The captures record no animation, so it stands still.",
+      "Dying in any room shows You died with that room's tick, and Restart and Retry seed, the same as phase 4.",
+    ],
+  },
+  {
     version: "2026.10.26.1",
     notes: [
       "Bosses play recorded stand, attack and death animations, and hits show as hitsplats.",

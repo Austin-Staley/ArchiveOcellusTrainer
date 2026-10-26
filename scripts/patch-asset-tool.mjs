@@ -1,11 +1,16 @@
 /**
- * Two fixes for the pinned asset tool, both idempotent.
- * Attack sequences name frame sounds this cache does not store, and the tool
- * stops the extract on the first missing sound.
+ * Fixes for the pinned asset tool, each idempotent.
+ * Attack sequences name frame sounds this cache does not store. The tool
+ * used to stop the extract on the first missing sound, and leaving the
+ * reference on the animation makes the runtime throw when the frame plays.
+ * A missing sound is left out of the pack and dropped from the animation,
+ * with one warning for the whole list.
  * Ocellus's floor overlay stores the sentinel as its 3D colour and a real
  * colour in the secondary slot. The tool was dropping those tiles. The
  * secondary colour is the one the cache stores for that overlay, so the
  * floor is painted with it.
+ * The Blade's cache model stores every face at alpha 254, which draws as
+ * fully clear. The same mesh is stored solid so the model can be seen.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -15,7 +20,8 @@ let source = readFileSync(target, "utf8");
 let changed = false;
 
 const soundMarker = "sound effect ${id2} is not in this cache";
-if (source.includes(soundMarker)) {
+const droppedSounds = "sound effects missing from this cache are dropped from animations";
+if (source.includes(droppedSounds) || source.includes(soundMarker)) {
   console.log("patch-asset-tool: missing sound effects are already skipped");
 } else {
   const previous = `        const file = await cache.getFile(IndexType.SOUNDEFFECTS, id2, 0, { cacheResults: false });
@@ -99,6 +105,80 @@ if (source.includes(floorMarker)) {
   );
   changed = true;
   console.log("patch-asset-tool: sentinel floors use the secondary colour");
+}
+
+const dropMarker = "sound effects missing from this cache are dropped from animations";
+if (source.includes(dropMarker)) {
+  console.log("patch-asset-tool: missing animation sounds are already dropped");
+} else {
+  const warned = `      const soundEffects = [];
+      for (const id2 of [...soundEffectIds].sort((a, b) => a - b)) {
+        const file = await cache.getFile(IndexType.SOUNDEFFECTS, id2, 0, { cacheResults: false });
+        if (!file?.content) {
+          console.warn(\`osrs-sdk-assets: sound effect \${id2} is not in this cache\`);
+          continue;
+        }
+        soundEffects.push({ id: id2, bytes: Uint8Array.from(file.content) });
+      }`;
+  const thrown = `      const soundEffects = [];
+      for (const id2 of [...soundEffectIds].sort((a, b) => a - b)) {
+        const file = await cache.getFile(IndexType.SOUNDEFFECTS, id2, 0, { cacheResults: false });
+        soundEffects.push({ id: id2, bytes: Uint8Array.from(file.content) });
+      }`;
+  const dropped = `      const soundEffects = [];
+      const missingSounds = [];
+      for (const id2 of [...soundEffectIds].sort((a, b) => a - b)) {
+        const file = await cache.getFile(IndexType.SOUNDEFFECTS, id2, 0, { cacheResults: false });
+        if (!file?.content) {
+          missingSounds.push(id2);
+          continue;
+        }
+        soundEffects.push({ id: id2, bytes: Uint8Array.from(file.content) });
+      }
+      if (missingSounds.length) {
+        const missing = new Set(missingSounds);
+        for (const asset of assets) {
+          for (const animation of Object.values(asset.payload.animations ?? {})) {
+            if (!animation.frameSounds) continue;
+            for (const [frame, sounds] of Object.entries(animation.frameSounds)) {
+              const kept = sounds.filter((sound) => !missing.has(sound.id));
+              if (kept.length) animation.frameSounds[frame] = kept;
+              else delete animation.frameSounds[frame];
+            }
+            if (!Object.keys(animation.frameSounds).length) delete animation.frameSounds;
+          }
+        }
+        console.warn(\`osrs-sdk-assets: sound effects missing from this cache are dropped from animations: \${missingSounds.join(", ")}\`);
+      }`;
+  if (source.includes(warned)) source = source.replace(warned, dropped);
+  else if (source.includes(thrown)) source = source.replace(thrown, dropped);
+  else {
+    console.error("patch-asset-tool: the sound-effect pack loop was not where this patch expects it");
+    process.exit(1);
+  }
+  changed = true;
+  console.log("patch-asset-tool: missing animation sounds are dropped");
+}
+
+const bladeMarker = "blade 16676 stores a solid mesh";
+if (source.includes(bladeMarker)) {
+  console.log("patch-asset-tool: the Blade mesh is already stored solid");
+} else {
+  const previous = `        npcPayload.poseMap = Object.fromEntries(sequenceIds.map((id2, index) => [index, id2]));
+        assets.push({ id: \`npc-\${npcAsset.id}\`, payload: npcPayload });`;
+  const next = `        npcPayload.poseMap = Object.fromEntries(sequenceIds.map((id2, index) => [index, id2]));
+        if (npcAsset.id === 16676 && npcPayload.alphas?.length && npcPayload.alphas.every((alpha) => alpha === 254)) {
+          // blade 16676 stores a solid mesh
+          npcPayload.alphas = npcPayload.alphas.map(() => 0);
+        }
+        assets.push({ id: \`npc-\${npcAsset.id}\`, payload: npcPayload });`;
+  if (!source.includes(previous)) {
+    console.error("patch-asset-tool: the npc payload write was not where this patch expects it");
+    process.exit(1);
+  }
+  source = source.replace(previous, next);
+  changed = true;
+  console.log("patch-asset-tool: the Blade mesh is stored solid");
 }
 
 if (changed) writeFileSync(target, source);

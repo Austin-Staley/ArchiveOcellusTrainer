@@ -4,7 +4,7 @@ import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, So
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
-import { ENCOUNTERS, defaultGear, isRaidId, parseRaid } from "./content/archive/catalog";
+import { ENCOUNTERS, defaultGear, encounterName, isRaidId, parseRaid } from "./content/archive/catalog";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import { P3Region } from "./content/ocellus/js/P3Region";
@@ -493,11 +493,43 @@ function GameChat({ region }: Readonly<{ region: Readonly<{ chat(): readonly str
   );
 }
 
+function restartRaid(nextSeed: string | null, invincible: boolean) {
+  const url = new URL(window.location.href);
+  if (nextSeed === null) url.searchParams.delete("seed");
+  else url.searchParams.set("seed", nextSeed);
+  if (invincible) url.searchParams.set("invincible", "on");
+  else url.searchParams.delete("invincible");
+  window.location.assign(url.href);
+}
+
 function setRaidParam(key: string, value: string, absent: string) {
   const url = new URL(window.location.href);
   if (value === absent) url.searchParams.delete(key);
   else url.searchParams.set(key, value);
   window.location.assign(url.href);
+}
+
+function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
+  const [death, setDeath] = useState<Readonly<{ at: Tick; seed: Seed }> | null>(null);
+  useEffect(() => {
+    if (death) return;
+    const poll = window.setInterval(() => {
+      const run = region.snapshot()?.run;
+      if (run?.kind === "ended" && run.reason === "death") setDeath({ at: run.at, seed: run.seed });
+    }, RESULT_POLL_MS);
+    return () => window.clearInterval(poll);
+  }, [region, death]);
+
+  if (!death) return null;
+  const again = (nextSeed: string | null) => restartRaid(nextSeed, region.invincible);
+  return (
+    <section id="run_result" role="dialog" aria-labelledby="run_result_title">
+      <h2 id="run_result_title">You died</h2>
+      <p id="run_result_time">on {encounterName(launch.id)} tick {death.at}</p>
+      <button id="result_restart" type="button" onClick={() => again(null)}>Restart</button>
+      <button id="result_retry" type="button" onClick={() => again(String(death.seed))}>Retry seed</button>
+    </section>
+  );
 }
 
 function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region: RaidRegion }>) {
@@ -566,7 +598,10 @@ export function ArchiveOcellusApp() {
             <RunResultPanel drill={session.drill} />
           </>
         ) : (
-          <RaidControls launch={session.launch} region={session.region} />
+          <>
+            <RaidControls launch={session.launch} region={session.region} />
+            <RaidResultPanel launch={session.launch} region={session.region} />
+          </>
         )}
         <footer id="credits">
           <p id="maker_credit">

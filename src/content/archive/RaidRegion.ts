@@ -1,6 +1,6 @@
 import { BasicModel, CacheRenderModel, CacheRenderReferences, CacheRenderSceneModel, CollisionType, Entity, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Projectile, Region, Settings, TileMarkerModel, TwistedBow } from "osrs-sdk";
 import type { Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
-import type { Seed, Tile } from "../../sim/brands";
+import type { Seed, Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import { protectionOf } from "../../sim/sdk/EncounterBinding";
 import type { RaidLaunch } from "./catalog";
@@ -252,6 +252,12 @@ class Arena extends Entity {
   }
 }
 
+type RaidFinish = "death" | "complete";
+
+type RaidRunState = Readonly<{ kind: "running" }> | Readonly<{ kind: "ended"; at: Tick; reason: RaidFinish }>;
+
+type RaidRunView = Readonly<{ kind: "running"; seed: Seed }> | Readonly<{ kind: "ended"; seed: Seed; at: Tick; reason: RaidFinish }>;
+
 type Mounted = Readonly<{ player: Player; boss: PracticeMob; adds: readonly PracticeMob[]; censers: readonly PracticeMob[] }>;
 
 function barFor(launch: RaidLaunch): Bar {
@@ -325,7 +331,7 @@ export class RaidRegion extends Region {
   private spent = new Set<PracticeMob>();
   private marks: Mark[] = [];
   private shots: Shot[] = [];
-  private ended = false;
+  private run: RaidRunState = { kind: "running" };
   private banked = 0;
   private escape: Readonly<{ tile: Tile; next: Tile; until: number }> | null = null;
 
@@ -381,7 +387,7 @@ export class RaidRegion extends Region {
   }
 
   override postTick(): void {
-    if (this.world.getReadyTimer > 0 || this.ended || !this.mounted) return;
+    if (this.world.getReadyTimer > 0 || this.run.kind === "ended" || !this.mounted) return;
     const { player, boss } = this.mounted;
     const at = tile(player.location.x, player.location.y);
     const shieldBroken = this.form === "flying" && boss.currentStats.hitpoint <= 0;
@@ -411,14 +417,28 @@ export class RaidRegion extends Region {
     if (player.currentStats.hitpoint <= 0) this.finish(this.invincible);
   }
 
-  snapshot(): Readonly<{ run: { seed: Seed; ended: boolean }; boss: { npcId: number; hp: number; maxHp: number; visible: boolean; defence: number }; player: { hp: number } }> | null {
+  snapshot(): Readonly<{ run: RaidRunView; boss: { npcId: number; hp: number; maxHp: number; visible: boolean; defence: number }; player: { hp: number } }> | null {
     if (!this.mounted) return null;
     const { boss, player } = this.mounted;
     return {
-      run: { seed: this.launch.options.seed, ended: this.ended },
+      run: this.runView(),
       boss: { npcId: barFor(this.launch).npcId, hp: boss.currentStats.hitpoint, maxHp: boss.stats.hitpoint, visible: true, defence: boss.currentStats.defence },
       player: { hp: player.currentStats.hitpoint },
     };
+  }
+
+  private runView(): RaidRunView {
+    const seed = this.launch.options.seed;
+    switch (this.run.kind) {
+      case "running":
+        return { kind: "running", seed };
+      case "ended":
+        return { kind: "ended", seed, at: this.run.at, reason: this.run.reason };
+      default: {
+        const unhandled: never = this.run;
+        return unhandled;
+      }
+    }
   }
 
   chat(): readonly string[] {
@@ -445,7 +465,7 @@ export class RaidRegion extends Region {
     this.clockTick = 0;
     this.rows = [];
     this.lines = [];
-    this.ended = false;
+    this.run = { kind: "running" };
     this.banked = 0;
     this.spent = new Set();
     this.previous = ROOMS[this.launch.id].player;
@@ -559,7 +579,7 @@ export class RaidRegion extends Region {
       this.wear(boss, ARCHIVE.guardian.groundedNpcId);
     }
     if (name === "void-rift" || name === "void-siphon" || name === "void-augmenter") this.summonVoid(name);
-    if (name === "complete") this.ended = true;
+    if (name === "complete") this.run = { kind: "ended", at: tick(this.clockTick ?? 0), reason: "complete" };
   }
 
   private summonVoid(name: "void-rift" | "void-siphon" | "void-augmenter"): void {
@@ -704,12 +724,14 @@ export class RaidRegion extends Region {
 
   private finish(invincible: boolean): void {
     if (!this.mounted) return;
+    const player = this.mounted.player;
+    player.currentStats.hitpoint = player.stats.hitpoint;
+    player.cancelDeath();
     if (invincible) {
-      this.mounted.player.currentStats.hitpoint = this.mounted.player.stats.hitpoint;
       this.say("Invincible: that hit would have killed you.");
       return;
     }
-    this.ended = true;
+    this.run = { kind: "ended", at: tick(Math.max(0, (this.clockTick ?? 1) - 1)), reason: "death" };
   }
 
   private say(text: string): void {
@@ -740,7 +762,7 @@ export class RaidRegion extends Region {
         this.say(`The volleys are graphics ${GRAPHICS.p1Magic} and ${GRAPHICS.p1Ranged}. Ocellus has no captured death animation, so none plays.`);
         return;
       case "ocellus-p2":
-        this.say("Projectile 4269 has no captured source, so the volley is a coloured stand-in. The Blade's animations are a stand-in. The captures record none.");
+        this.say("Projectile 4269 has no captured source, so the volley is a coloured stand-in. The Blade stands still, because the captures record no animation.");
         return;
       case "ocellus-p3":
         this.say(`The void shot is graphic ${GRAPHICS.p3Void}. Ocellus has no captured death animation, so none plays. The vine's animations are a stand-in.`);

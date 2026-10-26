@@ -43,3 +43,5 @@ describe("Run recorder", () => {
     });
   });
 });
+
+export {};

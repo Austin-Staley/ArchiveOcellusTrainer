@@ -1,6 +1,6 @@
 # Lifeforce orb
 
-Four ticks after each void forms, Ocellus takes half the player's current HP, rounded down, whatever prayer is on. A teal swirl plays on the player a tick before the hit. On the hit tick an orb starts to form, never on a floor hole and never under the boss. The inner orb forms 2 to 5 tiles from the player, off the void. The outer orb forms on the 5x5 rim tile farthest from the tile where the player last stepped into the 5x5, or from the player when they are outside it. Its four chimes count down to the glow, and the dark orb shows a tick or two after the hit. Every tile of the measured platform is within 4 tiles of safe floor, so a near-player orb always lands within 5. It glows teal once it is ready, 12 ticks after an inner hit or 6 after an outer one. A player who ends a tick on the ready orb gets back exactly the HP that hit took, the tick after, even above 99. An orb stays pickable after its void clears: the inner orb for 5 ticks, into the transition tell, and the outer orb for 2. Then it vanishes, at 35 for the inner orb and 61 for the outer one. The tick after an outer orb nobody took vanishes, it heals the boss by the HP it held.
+Four ticks after each void forms, Ocellus takes half the player's current HP, rounded down, whatever prayer is on. A teal swirl plays on the player a tick before the hit. On the hit tick an orb starts to form, never on a floor hole and never under the boss. The inner orb forms 2 to 5 tiles from the player, off the void. The outer orb forms on the 5x5 rim tile farthest from the tile where the player last stepped into the 5x5, or from the player when they are outside it. Its four chimes count down to the glow, and the dark orb shows a tick or two after the hit. Every tile of the measured platform is within 4 tiles of safe floor, so a near-player orb always lands within 5. It glows teal once it is ready, 12 ticks after an inner hit or 6 after an outer one. A player who ends a tick on the ready orb gets back exactly the HP that hit took, the tick after, even above 99. A player already on the orb when it glows gets it back on that tick ([p4-recorded-fights.md](./p4-recorded-fights.md)). An orb stays pickable after its void clears: the inner orb for 5 ticks, into the transition tell, and the outer orb for 2. Then it vanishes, at 35 for the inner orb and 61 for the outer one. The tick after an outer orb nobody took vanishes, it heals the boss by the HP it held.
 
 ## Sub-features
 
@@ -8,7 +8,7 @@ Four ticks after each void forms, Ocellus takes half the player's current HP, ro
 - `lifeforce-hit` logs `lifeforce-drained` at 12 (and 43) with a receipt of `floor(HP / 2)`, through any protection prayer.
 - `orb-dormant` logs `orb-spawned` on the hit tick, 12 (and 43), and plays spotanim 4311 (inner) or 4309 (outer) on the orb's tile. Their frame sounds are the orb's four chimes, checked in the [timing cues](./timing-cues.md) recipe.
 - `orb-glow` logs `orb-matured` at 24 (and 49) and loops spotanim 4310.
-- `orb-return` logs `orb-returned` the tick after the player ends a tick on a ready orb, writes the HP back without the max-HP cap, and plays 4312 on the orb and 4314 on the player.
+- `orb-return` logs `orb-returned` the tick after the player ends a tick on a ready orb, or on the tick it matures when the player already stands on it, writes the HP back without the max-HP cap, and plays 4312 on the orb and 4314 on the player.
 - `orb-expiry` logs `orb-expired` at 35 (and 61) and plays 4312.
 - `unclaimed-orb-heal` logs `boss-healed` with cause `unclaimed-orb` at 62 when the outer orb was not collected.
 - `orb-opposite-entry` puts the default outer orb on the rim tile farthest in a straight line from the 5x5 entry tile. Equally far tiles are a seeded pick.
@@ -18,7 +18,7 @@ Four ticks after each void forms, Ocellus takes half the player's current HP, ro
 ## How to get to it (user POV)
 
 - Open `http://127.0.0.1:8002/` and watch the HP orb halve at P4 tick 12 and 43 in every cycle.
-- Click the orb's tile once it appears and stand on it until it glows. HP comes back the tick after.
+- Click the orb's tile once it appears and stand on it until it glows. HP comes back on the glow tick. A player who steps on after the glow gets it the tick after.
 - Pick `Lifeforce orb` in the `Focus` selector and press `Restart` to practise the orb alone, or `Orb retrieval` to practise it with the void floor.
 
 ## Driving it with agent-browser
@@ -34,7 +34,7 @@ Preconditions:
 - **Pick up the inner orb late.** Run `agent-browser open "http://127.0.0.1:8002/?seed=75&focus=lifeforce-orb"` and leave the player on spawn. The inner void clears at P4 tick 30. Wait for tick 31 and screenshot `orb-late.png`. It shows the glowing orb on (9, 4) on clear floor. Click the same pixel as in the first step. Wait for tick 36. `log()` shows one inner `orb-returned` after 30 and by 35, with receipt `{requested 49, applied 49, beforeHp 50, afterHp 99}`, and no inner `orb-expired`.
 - **Enter the 5x5 at a corner.** Reload the same link. After P4 tick 34, click `ORB_ENTRY_CLICK_RIGHT_PX` (106) right of and `ORB_ENTRY_CLICK_UP_PX` (50) above the canvas centre. With the camera on spawn, that pixel is the 5x5's north-west corner (3, 3). Wait for tick 44 and screenshot `orb-entry.png`. `log()` shows one walk order to (3, 3) and the outer `orb-spawned` at 43 on the opposite corner (7, 7).
 - **Orb off the holes.** Run `agent-browser open "http://127.0.0.1:8002/?seed=86&floorHoleLayout=v1-turn"` and leave the player on spawn. Wait for P4 tick 13 and screenshot `orb-off-holes.png`. The dark orb sits on (2, 5), just east of the holes on (1, 5) and (1, 6). The link pins the `v1-turn` layout, so a change to the seeded layout leaves the page alone. `log()` shows that layout in the header and one `orb-spawned` at 12 on (2, 5). Without the hole filter, this seed puts it on the hole at (8, 5).
-- **Scripted.** `scripts/verify.sh browser` runs these steps and records `orbPickedUpAfterTheClear`, `outerOrbOppositeEntry`, `orbFormsOffTheHoles`, `orbToldAndDrained`, `orbSpawnedDormant`, `orbClickTargetedOrb`, `orbGlowsOnSchedule`, `orbReturnedTickAfterArrival`, `orbGlowDrawn` and `skippedOrbHealsBoss` in `observed.json`, with the measured shares under `observed.orb.tealShare`.
+- **Scripted.** `scripts/verify.sh browser` runs these steps in the `lifeforce_orb`, `orb_late_and_entry` and `orb_off_holes` units and records `orbPickedUpAfterTheClear`, `outerOrbOppositeEntry`, `orbFormsOffTheHoles`, `orbToldAndDrained`, `orbSpawnedDormant`, `orbClickTargetedOrb`, `orbGlowsOnSchedule`, `orbReturnedTickAfterArrival`, `orbGlowDrawn` and `skippedOrbHealsBoss` in their units' `verdict.json`, with the measured shares under `observed.orb.tealShare`.
 
 ## Gotchas
 

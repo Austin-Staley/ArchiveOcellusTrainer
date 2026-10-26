@@ -342,7 +342,9 @@ export class RaidRegion extends Region {
   private marks: Mark[] = [];
   private shots: Shot[] = [];
   private run: RaidRunState = { kind: "running" };
-  private banked = 0;
+  /** Damage The Blade is holding. The bar drops only when a release pays half of it. */
+  private held = 0;
+  private released = 0;
   private escape: Readonly<{ tile: Tile; next: Tile; until: number }> | null = null;
 
   constructor(private readonly launch: RaidLaunch) {
@@ -401,6 +403,7 @@ export class RaidRegion extends Region {
   override postTick(): void {
     if (this.world.getReadyTimer > 0 || this.run.kind === "ended" || !this.mounted) return;
     const { player, boss } = this.mounted;
+    if (this.launch.id === "ocellus-p2") this.holdBladeDamage(boss);
     const at = tile(player.location.x, player.location.y);
     const shieldBroken = this.form === "flying" && boss.currentStats.hitpoint <= 0;
     if (shieldBroken) boss.currentStats.hitpoint = 1;
@@ -461,6 +464,14 @@ export class RaidRegion extends Region {
     return { header: { seed: this.launch.options.seed }, rows: this.rows };
   }
 
+  /** Hits on The Blade stay in `held` until a release. The bar shows only what has already been released. */
+  private holdBladeDamage(boss: PracticeMob): void {
+    const missing = Math.max(0, boss.stats.hitpoint - boss.currentStats.hitpoint);
+    const fresh = missing - this.held - this.released;
+    if (fresh > 0) this.held += fresh;
+    boss.currentStats.hitpoint = boss.stats.hitpoint - this.released;
+  }
+
   private boot(): void {
     if (!this.mounted) return;
     const bar = barFor(this.launch);
@@ -479,7 +490,8 @@ export class RaidRegion extends Region {
     this.rows = [];
     this.lines = [];
     this.run = { kind: "running" };
-    this.banked = 0;
+    this.held = 0;
+    this.released = 0;
     this.spent = new Set();
     this.previous = ROOMS[this.launch.id].player;
     if (this.launch.id === "ocellus-p1" || this.launch.id === "ocellus-p2" || this.launch.id === "ocellus-p3") {
@@ -503,7 +515,7 @@ export class RaidRegion extends Region {
     switch (event.kind) {
       case "attack":
         this.playAttack(event.name);
-        this.say(event.text);
+        if (event.name !== "repair") this.say(event.text);
         return;
       case "chat":
         this.say(event.text);
@@ -526,11 +538,11 @@ export class RaidRegion extends Region {
         if (this.form === "grounded") this.realHp = boss.currentStats.hitpoint;
         return;
       case "bank-halve": {
-        const stored = Math.max(0, boss.stats.hitpoint - boss.currentStats.hitpoint - this.banked);
-        const half = Math.floor(stored / 2);
-        landSplat(player, boss, -half);
-        boss.currentStats.hitpoint = Math.min(boss.stats.hitpoint, boss.currentStats.hitpoint + half);
-        this.banked += stored;
+        const half = Math.min(Math.floor(this.held / 2), Math.max(0, boss.stats.hitpoint - this.released - 1));
+        this.released += half;
+        this.held = 0;
+        boss.currentStats.hitpoint = boss.stats.hitpoint - this.released;
+        if (half > 0) landSplat(player, boss, half);
         this.say(`The Blade passes on ${half}.`);
         return;
       }
@@ -776,7 +788,7 @@ export class RaidRegion extends Region {
         this.say(`The volleys are graphics ${GRAPHICS.p1Magic} and ${GRAPHICS.p1Ranged}. Ocellus has no captured death animation, so none plays.`);
         return;
       case "ocellus-p2":
-        this.say(`The volley is ground graphic ${GRAPHICS.p2Volley}. Projectile 4269 has no captured source, so it is not drawn. The Blade stands still, because the captures record no animation.`);
+        this.say(`The volley is projectile ${GRAPHICS.p2Volley}. Repair particles ${GRAPHICS.p2Repair} play on the sword. The Blade stands still, because the captures record no animation.`);
         return;
       case "ocellus-p3":
         this.say(`The void shot is graphic ${GRAPHICS.p3Void} and the spin is ${GRAPHICS.p3Spin}. Ocellus has no captured death animation, so none plays. The vine's animations are a stand-in.`);
@@ -962,6 +974,7 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
       return [];
     case "ocellus-p2":
       if (name === "volley") return [travel(ARCHIVE.p2.hitDelay, TYPELESS_SHOT, GRAPHICS.p2Volley)];
+      if (name === "repair") return [held(ARCHIVE.p2.repairEvery, GRAPHICS.p2Repair)];
       return [];
     case "ocellus-p3":
       if (name === "void-shot") return [travel(1, TYPELESS_SHOT, GRAPHICS.p3Void)];

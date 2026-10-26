@@ -1,9 +1,8 @@
 (() => {
-  const view = new URLSearchParams(location.hash.slice(1)).get("perf-view");
-  if (view !== "3d" && view !== "2d") return;
+  if (location.hash !== "#perf") return;
   const SETTINGS = "osrs-sdk:settings";
   const saved = JSON.parse(localStorage.getItem(SETTINGS) ?? '{"version":1,"values":{}}');
-  saved.values = { ...saved.values, use3dView: view === "3d", playsAudio: false, playsAreaAudio: false };
+  saved.values = { ...saved.values, playsAudio: false, playsAreaAudio: false };
   localStorage.setItem(SETTINGS, JSON.stringify(saved));
 
   const frames = [];
@@ -53,7 +52,7 @@
       if (this.domElement.width * this.domElement.height > 1) {
         renderer = this;
         scene = args[0];
-        draws.push([performance.now(), this.info.render.calls]);
+        draws.push([performance.now(), this.info.render.calls, this.info.render.triangles]);
       }
       return out;
     };
@@ -96,14 +95,16 @@
     p4Tick,
     noteHeap: (usedBytes, backingBytes) => heap.push({ p4: p4Tick(), usedBytes, backingBytes }),
     capture: () => ({
-      view,
       viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
       frames,
       ticks,
       draws,
       heap,
       largestCanvas,
-      retired: (region?.fightLog().rows ?? []).flatMap((row) => row.events).filter(({ kind }) => kind === "rift-destroyed" || kind === "rift-burst").map(({ at }) => at),
+      // One tick per retired rift. A burst names every rift it retires; a base build before that logged one burst per rift.
+      retired: (region?.fightLog().rows ?? [])
+        .flatMap((row) => row.events)
+        .flatMap((event) => (event.kind === "rift-destroyed" ? [event.at] : event.kind === "rift-burst" ? (event.rifts ?? [event.rift]).map(() => event.at) : [])),
       errors,
     }),
   });

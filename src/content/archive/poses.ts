@@ -5,7 +5,7 @@ import { ARCHIVE } from "./timings";
  * Animation and graphic ids from the 25 Oct 2026 render digest.
  * A sequence with no captured id is absent here, and the room leaves it as a stand-in.
  * The Blade (16676) and the void vine (16681) have no captured animations.
- * Ocellus has no captured death animation. Projectile sources 4056, 4057 and 4269 were not resolved.
+ * Ocellus has no captured death animation. Projectile sources 4056 and 4057 were not resolved.
  */
 
 /**
@@ -52,8 +52,13 @@ export const GRAPHICS = {
   dagonMagic: 1459,
   p1Magic: 4229,
   p1Ranged: 4232,
-  /** Ground graphic on the phase 2 volley. 31 fights, 1,262 spawns, life mode 3. Projectile 4269 stays unresolved. */
-  p2Volley: 4304,
+  /**
+   * Portal bolt. Fight logs L1–L8 name projectile 4269 as each lit portal's bolt.
+   * The digest counted 314 of them and did not resolve a source.
+   */
+  p2Volley: 4269,
+  /** Sword-repair particles. 31 fights, 1,262 spawns, life mode 3. The logs play this on the middle every 3 ticks. */
+  p2Repair: 4304,
   p3Void: 4297,
   /** On every phase 3 spin, animation 14869. 31 fights, 192 of 192. */
   p3Spin: 4325,

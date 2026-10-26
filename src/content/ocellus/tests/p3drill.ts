@@ -19,12 +19,12 @@ export async function startP3Drill(options: P3DrillOptions = {}) {
   if (options.reach !== undefined) link.searchParams.set("reach", options.reach);
   const request = parseRequest(link, () => {
     throw new Error(`the drill link has no usable seed: ${link.search}`);
-  }, { p3: true });
+  }, { p3: true, p2: false, p1: false });
   if (request.phase !== "p3") throw new Error(`the drill link opened ${request.phase}: ${link.search}`);
   if (request.rejected.length > 0) throw new Error(`the drill link has options the trainer rejects: ${request.rejected.join(", ")}`);
   const region = new P3Region(request.config);
   region.invincible = options.invincible ?? false;
-  const trainer = new TrainerInstance(region, { force2d: true });
+  const trainer = new TrainerInstance(region);
   trainer.mount(document.createElement("canvas"), document.createElement("div"));
   region.world.tickWorld(region.world.getReadyTimer - 1);
   Viewport.viewport.resize(800, 800);

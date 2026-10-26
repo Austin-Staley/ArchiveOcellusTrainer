@@ -2,6 +2,16 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.8",
+    notes: [
+      "The page opens in the 3D view, facing north.",
+      "Ocellus takes damage as soon as he is back on the platform, and standing on a lifeforce orb as it glows gives that HP back on the same tick.",
+      "A void rift left alive bursts 30 ticks after it appears and hits once for 28 to 41. Destroying a rift resets the attack timer.",
+      "The encounter rooms stay in Settings. Phase 1 cracks open 2 ticks apart, and phase 2's health drops only when The Blade releases it.",
+      "Phase 2's volley is projectile 4269. Graphic 4304 plays on the sword every 3 ticks.",
+    ],
+  },
+  {
     version: "2026.10.26.7",
     notes: [
       "In phase 1, Ocellus alternates the captured charge and slam animations on the 8-tick beat those 32 fights show most often.",

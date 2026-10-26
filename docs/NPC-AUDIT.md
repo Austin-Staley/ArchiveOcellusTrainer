@@ -2,7 +2,7 @@
 
 Compared with the 25 Oct 2026 render digest and cache 2746 region placement. A trainer tile is the captured template minus the region base, then the room's scene offset: `trainerX = localX + offsetX`, `trainerY = offsetY + 63 - localY`. The digest records a position histogram, not a tile per tick, so a path is a stand-in wherever that histogram has no order.
 
-Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056, 4057 and 4269, and hitsplat 11.
+Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. `Disputed` means the render digest and the eight fight logs (L1 to L8, upstream #85) disagree, and the room uses the stronger count. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056 and 4057, and hitsplat 11.
 
 ## Bork and the Smorks
 
@@ -134,9 +134,9 @@ Same region and plane. Offset (-19, -10).
 | The Blade 16676 | model | scenery model 62699, object 62706, stand 14873; the npc model is an uncoloured clickbox | model 62699, lowered 3.135 so the sword meets the marker | same | matched |
 | The Blade 16676 | movement | does not move | stands | stands | matched |
 | The Blade 16676 | animations | none captured | none play | none play | stand-in |
-| Ocellus form 16675 | tile | no template position | not placed | not placed | stand-in |
-| Volley | ground graphic | gobj 4304, 1,262 spawns, life mode 3, 31 files; hit stays +4 | coloured sphere, hit delay 4 | graphic 4304, travel 4 | fixed |
-| Volley | projectile 4269 | source unresolved, flight about 2.8, 314 samples | not drawn | not drawn | stand-in |
+| Ocellus form 16675 | tile | digest: no template position. Logs: the form stands in the middle while 16676 takes the hits | not placed | not placed in the encounter room. The flagged phase 2 drill draws it | Disputed |
+| Volley | projectile 4269 | digest: source unresolved, 314 samples. Logs L1 to L8: each lit portal's bolt | not drawn | drawn on the volley | Disputed |
+| Sword repair | spotanim 4304 | digest: 1,262 spawns, life mode 3, 31 files. Logs: on the middle every 3 ticks | drawn as the volley | drawn on the sword every 3 ticks | Disputed |
 
 ## Ocellus phase 3
 
@@ -178,12 +178,27 @@ The digest does not record camera pitch, yaw, or zoom. The capture setup exclude
 | Phase | segments | What the segments support | Sim after this pass |
 | --- | --- | --- | --- |
 | P1 | 32 | Boss mode tile (4126, 5672) plane 1, 129 of 2,167 samples. Hooded Figure on (4126, 5669) in all 32. Charge 14809 gap 8 in 174 gaps, also 37 (55), 28 (44), 29 (22). Slam 14811 gap 8 in 168 gaps. Volley graphics 4229 (1,187) and 4232 (1,046), flight mode 2.17, hit +2. Specials 14812/14813 with graphics 4266/4267, n=92 each, but the 81-tick gap is only 5 and 4 samples. | Charge and slam alternate on the 8-tick mode during a corner. The tendril script is unchanged. 14812/14813 stay off, because the interval is not one value. |
-| P2 | 31 | Blade on one tile in all 31, no animation. Ocellus form 16675 has spawn 14837 and the line 14878 in all 31, and no template tile. Volley gobj 4304 ×1,262, life mode 3. Projectile 4269 ×314, source unresolved, flight mode 2.8. Objects 62707 and 62709 spawn once per fight (31/31) and last about 32 and 84 ticks. | One Blade, seated as before. Volley draws 4304. 4269 is not drawn. 16675 is not placed. The extra blade objects are not added on top of the one sword. |
+| P2 | 31 | Blade on one tile in all 31, no animation. Ocellus form 16675 has spawn 14837 and the line 14878 in all 31, and no template tile. Graphic 4304 ×1,262, life mode 3. Projectile 4269 ×314, source unresolved in the digest. Objects 62707 and 62709 spawn once per fight (31/31) and last about 32 and 84 ticks. | One Blade, seated as before. The volley draws 4269. Repair particles 4304 play every 3 ticks. 16675 is not placed in this room. The extra blade objects are not added on top of the one sword. |
 | P3 | 31 | Boss mode tile (4132, 5666). Melee 14842 gap 3 in 559 of its gaps, wave 14846 gap 10 in 313. Spin 14869 every about 89 ticks (18 at 89, 14 at 72, 12 at 86) with graphic 4325 on all 192. Void shot 14851, graphic 4297, flight mode 0.5. Untether 14857 gap about 161, only a handful of repeats. Vine 16681 has no animation. Censers 62693, 62695, 62697, 62699 are present at load; the props note says 32 files. | Melee, wave, void shot, and spin ids unchanged. The spin draws 4325. The 89-tick and 161-tick gaps are not a single interval, so those clocks stay. Vine and censer tiles stay stand-ins. |
 | P4 | 8 | No template tile. Loop anims 14863 and 14864 and 14865 and 14856 and 14855 and 14844. 14863 repeats at 60 ticks in 8 of its gaps. | The shipped 60-tick loop is unchanged. It already plays 14863, 14864, 14865, and 14844. |
 | Adds | 31 | Rift, siphon, and augmenter spawn and death ids as in the earlier table. Positions are scattered, a few samples per tile. Siphon projectile 4303, flight 1, on the order of 180 shots. | One rift beside the player. Spawn tiles stay a stand-in. |
 
 Player hitsplats in these phases are type 17 for damage and type 13 for a block, plus type 6 heals. P1 boss hits are type 19 (8,203 on 16674). The view still draws the SDK damage, block, and heal images.
+
+## Disputed with fight logs L1 to L8
+
+The eight anonymised logs are `docs/fight-logs/L1.txt` to `L8.txt` (upstream #85). The phase 1 and phase 2 drills behind `ARCHIVE_P1` and `ARCHIVE_P2` (upstream #87 and #79) follow those logs in full. The encounter rooms stay on in every build. Where a room number changed, the fight logs were the stronger count: they name the tick and the sample size, and the digest either had no source or was counting a different event. Phase 4's lead-in, orb and rift fixes are upstream #86 and match the same logs; the 60-tick loop was already the logged gap.
+
+| Field | Digest / previous room | Fight logs | Default now | Why |
+| --- | --- | --- | --- | --- |
+| The Blade's npc | 16676 on the sword tile in all 31 phase 2 segments. 16675 had no template tile | #79's merged timings: 16676 is the hitbox players attack. 16675 is the sword form in the middle, not the hitbox | 16676 stays the attackable sword. 16675 stays unspawned in the encounter room | Both sources agree on 16676. The prompt's "Blade is 16675" does not match the merged #79 text |
+| Phase 1 cracks | animation 14809 and 14811 repeat every 8 ticks (174 and 168 gaps, 32 segments) | L6 to L8: 85 of 85 cracks open every 2 ticks, seven of them, and a block costs 3 to 5, refunded on stepping off | cracks every 2 ticks; a block rolls 3 to 5 and is refunded on stepping off. The charge animation stays on the 8-tick mode | The 8-tick figure counts the animation. The 2-tick figure counts the cracks |
+| Phase 1 volley damage | the room dealt 12 through prayer and 42 without | L1, L2, L6 to L8: 246 of 246 matching prayers dealt 0, and 18 misses were 0 to 27 | prayer blocks it. A miss rolls 0 to 27 | The logs count the hits. 12 and 42 were not in the digest |
+| Phase 1 slam | wiki cap 35. Captures saw 25 to 40 | 12 blast hits of 26 to 34, and a separate strike of 17 to 19 | the slam stays 35, the published cap | Neither set is one value, so the labelled cap stays |
+| Phase 2 rounds | the room's gap put later rounds at 47 and 83, and the phase ended at 130 | lightings at 11, 53 and 95. Phase 3 starts at 131 in all five logged phase 2s. Portals at 2, The Blade at 7, releases at 46, 88 and 124 | those ticks. The bar drops only on the release, by half of what The Blade stored | The logs give one timeline. 130 was one of three earlier lengths |
+| Phase 2 volley graphic | 4304 was drawn as the volley (1,262 spawns). 4269's source was unresolved (314) | 4269 is the portal bolt. 4304 is the repair spotanim every 3 ticks, and 1,262 is about 41 spawns times 31 fights | the volley draws 4269. 4304 plays on the sword every 3 ticks | The spawn count fits the repair clock. The logs name both ids |
+| Phase 2 damage | a flat hit at the beam cap, 27 | 18 to 27, typeless, prayer or not | rolls 18 to 27. The 50 cap remains a practice ceiling | The logs are a range, not one hit |
+| Phase 4 rifts and orbs | a rift burst was 23 ticks, and an orb healed a tick after it glowed | #86, logs L2, L5 and L6: burst at 30 ticks as one hit, and a player already on the orb is healed as it glows. Destroying a rift resets attack delay. He is hittable in the lead-in | the phase 4 fight follows #86 | The logs replace the earlier 23-tick estimate |
 
 ## Hitsplats
 

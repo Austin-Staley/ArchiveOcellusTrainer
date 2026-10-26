@@ -124,17 +124,29 @@ describe("raid clocks", () => {
     expect(second.at(-1)).toBe(73);
   });
 
-  it("sends seven corner tendrils and then the two-tile slam", () => {
-    const rows = names("ocellus-p1", 44);
-    expect(rows.filter((row) => row.name === "tendril").map((row) => row.at)).toEqual([0, 6, 12, 18, 24, 30, 36]);
-    expect(rows.filter((row) => row.name === "14809").map((row) => row.at)).toEqual([0, 8, 16, 24, 32, 40]);
-    expect(rows.filter((row) => row.name === "14811").map((row) => row.at)).toEqual([4, 12, 20, 28, 36, 44]);
-    expect(rows.find((row) => row.name === "slam")?.at).toBe(41);
-    const walked = project("ocellus-p1", options, 47, hold("ocellus-p1"));
+  it("sends seven corner cracks two ticks apart, then the walk", () => {
+    const rows = names("ocellus-p1", 20);
+    expect(rows.filter((row) => row.name === "tendril").map((row) => row.at)).toEqual([0, 2, 4, 6, 8, 10, 12]);
+    expect(rows.filter((row) => row.name === "14809").map((row) => row.at)).toEqual([0, 8, 16]);
+    expect(rows.filter((row) => row.name === "14811").map((row) => row.at)).toEqual([4, 12, 20]);
+    expect(rows.find((row) => row.name === "slam")?.at).toBe(17);
+    const walked = project("ocellus-p1", options, 28, hold("ocellus-p1"));
     const volley = walked.find((stamp) => stamp.event.kind === "attack" && (stamp.event.name === "4229" || stamp.event.name === "4232"));
     const landed = walked.find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "volley");
-    expect(volley?.at).toBe(45);
-    expect(landed?.at).toBe(47);
+    expect(volley?.at).toBe(21);
+    expect(landed?.at).toBe(23);
+  });
+
+  it("lights phase 2 at the logged round ticks and releases at 46, 88 and 124", () => {
+    const rows = project("ocellus-p2", options, 131, hold("ocellus-p2"));
+    const volleys = rows.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "volley").map((stamp) => stamp.at);
+    expect(volleys.slice(0, 3)).toEqual([11, 16, 21]);
+    expect(volleys.filter((at) => at === 53 || at === 95)).toEqual([53, 95]);
+    expect(rows.filter((stamp) => stamp.event.kind === "phase" && stamp.event.name === "portals").map((stamp) => stamp.at)).toEqual([2]);
+    expect(rows.filter((stamp) => stamp.event.kind === "phase" && stamp.event.name === "blade-open").map((stamp) => stamp.at)).toEqual([7]);
+    expect(rows.filter((stamp) => stamp.event.kind === "bank-halve").map((stamp) => stamp.at)).toEqual([46, 88, 124]);
+    expect(rows.some((stamp) => stamp.event.kind === "chat" && stamp.at === 123)).toBe(true);
+    expect(rows.some((stamp) => stamp.event.kind === "phase" && stamp.event.name === "complete" && stamp.at === 131)).toBe(true);
   });
 
   it("runs four centre pairs and then the annihilation", () => {

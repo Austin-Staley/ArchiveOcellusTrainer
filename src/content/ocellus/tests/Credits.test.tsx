@@ -1,11 +1,21 @@
 import { loadPage } from "./page";
 
-beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
+beforeEach(() => localStorage.removeItem("osrs-sdk:settings"));
+afterEach(() => vi.unstubAllEnvs());
 
-test("the footer credits the makers with GitHub and X links that open in a new tab, above the unchanged Jagex credit line", () => {
+const LINK = { target: "_blank", rel: "noopener noreferrer" };
+
+test.each([
+  { p2: "off", p3: "off" },
+  { p2: "on", p3: "off" },
+  { p2: "off", p3: "on" },
+])("with ARCHIVE_P2 $p2 and ARCHIVE_P3 $p3, the footer credits the makers and Alessandro Rodi with links that open in a new tab above the unchanged Jagex credit line, and the encounter rooms stay available", ({ p2, p3 }) => {
+  vi.stubEnv("ARCHIVE_P2", p2);
+  vi.stubEnv("ARCHIVE_P3", p3);
   const page = loadPage("/?seed=1");
   const maker = page.element("maker_credit");
   const footer = {
+    comingSoon: document.getElementById("coming_soon")?.textContent ?? null,
     maker: maker.textContent,
     links: [...maker.querySelectorAll("a")].map((link) => ({ text: link.textContent, href: link.href, target: link.target, rel: link.rel })),
     jagex: page.element("credit_line").textContent,
@@ -14,10 +24,12 @@ test("the footer credits the makers with GitHub and X links that open in a new t
   page.close();
 
   expect(footer).toEqual({
-    maker: "Made by Julian Dasilva / Moarhots GitHub · @ShadowJdas",
+    comingSoon: null,
+    maker: "Made by Julian Dasilva / Moarhots GitHub · @ShadowJdasWith help from Alessandro Rodi",
     links: [
-      { text: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer", target: "_blank", rel: "noopener noreferrer" },
-      { text: "@ShadowJdas", href: "https://x.com/ShadowJdas", target: "_blank", rel: "noopener noreferrer" },
+      { text: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer", ...LINK },
+      { text: "@ShadowJdas", href: "https://x.com/ShadowJdas", ...LINK },
+      { text: "Alessandro Rodi", href: "https://github.com/alessandrorodi", ...LINK },
     ],
     jagex: "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.",
     order: ["maker_credit", "credit_line", "app_version"],

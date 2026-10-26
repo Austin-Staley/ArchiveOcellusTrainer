@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CacheRenderInstancedModel, CacheRenderModel, CacheRenderReferences, CollisionType, Entity, GROUND_OVERLAY_Y, LineOfSightMask, Settings } from "osrs-sdk";
+import { CacheRenderInstancedModel, CacheRenderModel, CacheRenderReferences, CollisionType, Entity, GROUND_OVERLAY_Y, LineOfSightMask } from "osrs-sdk";
 import type { Location3, Model, Region, Renderable, Unit } from "osrs-sdk";
 import { spriteFile } from "../../../../assets";
 import { OCELLUS_P4 } from "../OcellusTimings";
@@ -199,30 +199,6 @@ export class VoidField extends Entity {
     return LineOfSightMask.NONE;
   }
 
-  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
-    if (this.showing === null) return;
-    const mask = VOID_MASKS[this.showing];
-    const scale = Settings.tileSize;
-    context.fillStyle = LOOK.void;
-    for (const { x, y } of mask.tiles()) context.fillRect(x * scale, y * scale, scale, scale);
-    for (const { floorCorner, cut: [from, to] } of floodedHalves(mask)) {
-      context.beginPath();
-      context.moveTo(floorCorner.x * scale, floorCorner.y * scale);
-      context.lineTo(from.x * scale, from.y * scale);
-      context.lineTo(to.x * scale, to.y * scale);
-      context.closePath();
-      context.fill();
-    }
-    context.strokeStyle = LOOK.rim;
-    context.lineWidth = 2;
-    context.beginPath();
-    for (const { from, to } of voidRim(mask)) {
-      context.moveTo(from.x * scale, (from.z + 1) * scale);
-      context.lineTo(to.x * scale, (to.z + 1) * scale);
-    }
-    context.stroke();
-  }
-
   protected override create3dModel(): Model {
     return new VoidFloorModel(() => this.showing);
   }
@@ -261,26 +237,15 @@ export class FloorHole extends Entity {
     return HOLES.look.idle.value;
   }
 
-  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
-    if (!this.visible()) return;
-    const scale = Settings.tileSize;
-    const { x, y } = this.location;
-    context.fillStyle = LOOK.rim;
-    context.fillRect((x + 0.1) * scale, (y + 0.1) * scale, 0.8 * scale, 0.8 * scale);
-    context.fillStyle = LOOK.void;
-    context.fillRect((x + 0.2) * scale, (y + 0.2) * scale, 0.6 * scale, 0.6 * scale);
-  }
-
   protected override create3dModel(): Model {
     return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(HOLES.look.model.value));
   }
 }
 
 const ORB_LOOK = OCELLUS_P4.lifeforceOrb.look;
-const ORB_MARKER = OCELLUS_P4.lifeforceOrb.marker.value;
 const SPAWN_LOOK: Readonly<Record<VoidKind, number>> = { "inner-void": ORB_LOOK.innerSpawn.value, "outer-void": ORB_LOOK.outerSpawn.value };
 
-type Cue = Readonly<{ spotAnim: number; loops: boolean }>;
+export type Cue = Readonly<{ spotAnim: number; loops: boolean }>;
 
 class Playing {
   ended = false;
@@ -299,7 +264,7 @@ class Playing {
 export class SpotAnimModel implements Model {
   private playing: Playing | null = null;
 
-  constructor(private readonly renderable: Renderable, private readonly cue: () => Cue | null) {}
+  constructor(private readonly renderable: Renderable, private readonly cue: () => Cue | null, private readonly looks: readonly number[] = []) {}
 
   draw(scene: THREE.Scene, clockDelta: number, tickPercent: number, location: Location3, angleRadians: number, pitchRadians: number, visible: boolean, modelOffsets: Location3[]): void {
     const cue = this.cue();
@@ -319,11 +284,29 @@ export class SpotAnimModel implements Model {
     return this.playing?.model.getWorldPosition() ?? new THREE.Vector3();
   }
 
-  async preload(): Promise<void> {}
+  /** The SDK builds a spotanim's meshes on its first draw and starts its animation and frame sounds only after them. */
+  async preload(): Promise<void> {
+    await Promise.all(this.looks.map((spotAnim) => buildLook(this.renderable, spotAnim)));
+  }
+}
+
+// The SDK keeps one instance pool per look and draws every slot it ever handed out, so two views building a look at once would leave a hidden instance drawn.
+const builtLooks = new Map<number, Promise<void>>();
+
+function buildLook(renderable: Renderable, spotAnim: number): Promise<void> {
+  const built =
+    builtLooks.get(spotAnim) ??
+    (async () => {
+      const model = CacheRenderInstancedModel.forRenderable(renderable, CacheRenderReferences.spotAnim([{ id: spotAnim }]));
+      await model.preload();
+      model.destroy(new THREE.Scene());
+    })();
+  builtLooks.set(spotAnim, built);
+  return built;
 }
 
 export class OrbView extends Entity {
-  private shown: Readonly<{ cue: Cue; marker: string | null }> | null = null;
+  private cue: Cue | null = null;
 
   constructor(region: Region) {
     super(region, { x: 0, y: 0 });
@@ -331,15 +314,15 @@ export class OrbView extends Entity {
 
   spawn(kind: VoidKind, at: Tile): void {
     this.location = { x: at.x, y: at.y };
-    this.shown = { cue: { spotAnim: SPAWN_LOOK[kind], loops: false }, marker: ORB_MARKER.dormant };
+    this.cue = { spotAnim: SPAWN_LOOK[kind], loops: false };
   }
 
   mature(): void {
-    this.shown = { cue: { spotAnim: ORB_LOOK.idle.value, loops: true }, marker: ORB_MARKER.ready };
+    this.cue = { spotAnim: ORB_LOOK.idle.value, loops: true };
   }
 
   leave(): void {
-    this.shown = { cue: { spotAnim: ORB_LOOK.despawn.value, loops: false }, marker: null };
+    this.cue = { spotAnim: ORB_LOOK.despawn.value, loops: false };
   }
 
   override get collisionType(): CollisionType {
@@ -350,17 +333,8 @@ export class OrbView extends Entity {
     return LineOfSightMask.NONE;
   }
 
-  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
-    if (!this.shown?.marker) return;
-    const scale = Settings.tileSize;
-    context.fillStyle = this.shown.marker;
-    context.beginPath();
-    context.arc((this.location.x + 0.5) * scale, (this.location.y + 0.5) * scale, scale / 3, 0, 2 * Math.PI);
-    context.fill();
-  }
-
   protected override create3dModel(): Model {
-    return new SpotAnimModel(this, () => this.shown?.cue ?? null);
+    return new SpotAnimModel(this, () => this.cue, [...Object.values(SPAWN_LOOK), ORB_LOOK.idle.value, ORB_LOOK.despawn.value]);
   }
 }
 
@@ -392,8 +366,6 @@ export class FragmentFlash extends Entity {
     return LineOfSightMask.NONE;
   }
 
-  override draw(): void {}
-
   protected override create3dModel(): Model {
     return new SpotAnimModel(this, () => this.cue);
   }
@@ -415,8 +387,9 @@ export function drawOverheadIcon(context: OffscreenCanvasRenderingContext2D, sca
 const HEAL_SPLAT_SLOTS: readonly Readonly<{ x: number; y: number }>[] = [{ x: 0, y: 30 }, { x: -18, y: 20 }, { x: 18, y: 20 }];
 
 /** Drawn like the SDK's own hitsplats, in the slots its damage splats use last. */
-export function drawHealSplats(context: OffscreenCanvasRenderingContext2D, image: HTMLImageElement, amounts: readonly number[], verticalOffset: number): void {
-  amounts.slice(0, HEAL_SPLAT_SLOTS.length).forEach((amount, slot) => {
+export function drawHealSplats(context: OffscreenCanvasRenderingContext2D, image: HTMLImageElement, splats: readonly Readonly<{ amount: number }>[], verticalOffset: number): void {
+  for (let slot = 0; slot < Math.min(splats.length, HEAL_SPLAT_SLOTS.length); slot++) {
+    const { amount } = splats[slot];
     const { x, y } = HEAL_SPLAT_SLOTS[slot];
     context.drawImage(image, x - 11, verticalOffset - y - 1, 24, 23);
     context.font = "16px Stats_11";
@@ -426,7 +399,7 @@ export function drawHealSplats(context: OffscreenCanvasRenderingContext2D, image
     context.fillStyle = "#FFFFFF";
     context.fillText(String(amount), x, verticalOffset - y + 15);
     context.textAlign = "left";
-  });
+  }
 }
 
 export class PlayerLook {

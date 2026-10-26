@@ -1,18 +1,18 @@
 import type { Tick } from "../sim/brands";
 import { tick } from "../sim/brands";
 
-export const VIEWS = ["3d", "2d"] as const;
-export type View = (typeof VIEWS)[number];
 export const SIDES = ["base", "head"] as const;
 export type Side = (typeof SIDES)[number];
 const GROWTH_BUDGETS = ["geometriesPerRetiredRift3d", "texturesPerRetiredRift3d", "heapGrowthMiB3d", "mobGrowth3d", "entityGrowth3d", "projectileGrowth3d", "sceneObjectGrowth3d"] as const;
 type GrowthBudget = (typeof GROWTH_BUDGETS)[number];
-const BUDGETS = ["drawCallsMedian3d", "drawCallsMax3d", "canvasToViewport2d", "tickGapExcess3d", "tickGapExcess2d", ...GROWTH_BUDGETS] as const;
+const PAIR_BUDGETS = ["tickGapExcess3d"] as const;
+const BUDGETS = ["drawCallsMedian3d", "drawCallsMax3d", "trianglesMax3d", ...PAIR_BUDGETS, ...GROWTH_BUDGETS, "bundleKiB"] as const;
 export type BudgetName = (typeof BUDGETS)[number];
 const LIMITS = [...BUDGETS, "medianRatioLimit"] as const;
 export type Limit = (typeof LIMITS)[number];
 const TIMINGS = ["frameP95", "tickGapP95"] as const;
 export type TimingMeasure = (typeof TIMINGS)[number];
+export const PAIRS_ONLY: readonly (BudgetName | TimingMeasure)[] = [...PAIR_BUDGETS, ...TIMINGS];
 const MIB = 1024 * 1024;
 
 type TickRange = Readonly<{ from: Tick; to: Tick }>;
@@ -21,6 +21,7 @@ export type Config = Readonly<{
   workload: Readonly<{ query: string; cpuThrottleRate: number; window: TickRange; resources: TickRange }>;
   budgets: Readonly<Record<BudgetName, number>>;
   timing: Readonly<{ pairs: number; medianRatioLimit: number }>;
+  headless: Readonly<{ viewAllocationsPerFrame: number }>;
   exceptions: readonly BudgetException[];
 }>;
 export type BaseLimits = Readonly<{ limits: Readonly<Partial<Record<Limit, number>>>; exceptions: readonly BudgetException[] }>;
@@ -28,10 +29,9 @@ export type BaseLimits = Readonly<{ limits: Readonly<Partial<Record<Limit, numbe
 type WorldCounts = Readonly<{ mobs: number; entities: number; projectiles: number }>;
 type RendererCounts = Readonly<{ geometries: number; textures: number; sceneObjects: number }>;
 type TickSample = Readonly<{ at: number; p4: Tick | null; stage: string | null; world: WorldCounts; renderer: RendererCounts | null }>;
-type DrawSample = Readonly<{ at: number; calls: number }>;
+type DrawSample = Readonly<{ at: number; calls: number; triangles: number }>;
 type HeapReading = Readonly<{ p4: Tick; usedBytes: number; backingBytes: number }>;
 export type Capture = Readonly<{
-  view: View;
   viewportPixels: number;
   frames: readonly number[];
   ticks: readonly TickSample[];
@@ -41,8 +41,9 @@ export type Capture = Readonly<{
   retired: readonly Tick[];
   errors: readonly string[];
 }>;
-export type Pair = Readonly<Record<View, Readonly<Record<Side, Capture>>>>;
-export type Runs = Readonly<{ pairs: readonly Pair[]; long: Capture }>;
+export type Pair = Readonly<Record<Side, Capture>>;
+export type Timing = Readonly<{ kind: "pairs"; pairs: readonly Pair[] }> | Readonly<{ kind: "not-run" }>;
+export type Runs = Readonly<{ long: Capture; bundleBytes: number; timing: Timing }>;
 
 export type RunMetrics = Readonly<{
   frameP95: number;
@@ -50,12 +51,13 @@ export type RunMetrics = Readonly<{
   tickGapMax: number;
   drawCallsMedian: number | null;
   drawCallsMax: number | null;
+  trianglesMax: number | null;
   canvasToViewport: number;
 }>;
 
 export type Line =
   | Readonly<{ kind: "budget"; name: BudgetName; observed: number; budget: number }>
-  | Readonly<{ kind: "timing"; measure: TimingMeasure; view: View; base: readonly number[]; head: readonly number[]; medianRatio: number; limit: number }>
+  | Readonly<{ kind: "timing"; measure: TimingMeasure; base: readonly number[]; head: readonly number[]; medianRatio: number; limit: number }>
   | Readonly<{ kind: "raise"; limit: Limit; base: number; head: number; exception: BudgetException | null }>
   | Readonly<{ kind: "measurement"; run: string; problem: string }>;
 
@@ -104,7 +106,7 @@ function measurementProblems(name: string, capture: Capture, window: TickRange):
   return [
     ...capture.errors.map((error) => problem(`page error: ${error}`)),
     ...(capture.frames.filter((at) => at >= within.start && at <= within.end).length < 2 ? [problem("fewer than 2 frames in the window")] : []),
-    ...(capture.view === "3d" && !capture.draws.some(({ at }) => at >= within.start && at <= within.end) ? [problem("no 3D render in the window")] : []),
+    ...(!capture.draws.some(({ at }) => at >= within.start && at <= within.end) ? [problem("no 3D render in the window")] : []),
   ];
 }
 
@@ -113,10 +115,12 @@ function tickGapsByTick(capture: Capture, { from, to }: TickRange): ReadonlyMap<
   return new Map(ticks.slice(1).map(({ at, p4 }, i) => [p4, at - ticks[i].at]));
 }
 
-function tickGapExcess(pairs: readonly Pair[], view: View, window: TickRange): number {
-  const base = pairs.map((pair) => tickGapsByTick(pair[view].base, window));
-  const longestBase = (p4: Tick) => Math.max(...base.map((gaps) => gaps.get(p4) ?? -Infinity));
-  return Math.max(...pairs.flatMap((pair) => [...tickGapsByTick(pair[view].head, window)].map(([p4, gap]) => gap - longestBase(p4))));
+function tickGapExcess(pairs: readonly Pair[], window: TickRange): number {
+  const base = pairs.map((pair) => tickGapsByTick(pair.base, window));
+  // The world loop repays a late tick on the next one, so a base gap shorter than a normal tick is a repayment, not the bar.
+  const normalBase = median(base.flatMap((gaps) => [...gaps.values()]));
+  const longestBase = (p4: Tick) => Math.max(normalBase, ...base.map((gaps) => gaps.get(p4) ?? -Infinity));
+  return Math.max(...pairs.flatMap((pair) => [...tickGapsByTick(pair.head, window)].map(([p4, gap]) => gap - longestBase(p4))));
 }
 
 export function runMetrics(capture: Capture, window: TickRange): RunMetrics {
@@ -125,13 +129,16 @@ export function runMetrics(capture: Capture, window: TickRange): RunMetrics {
   const inWindow = (at: number) => at >= within.start && at <= within.end;
   const frameGaps = gaps(capture.frames.filter(inWindow));
   const tickGaps = gaps(capture.ticks.filter(({ p4 }) => p4 !== null && p4 >= window.from && p4 <= window.to).map(({ at }) => at));
-  const draws = capture.draws.filter(({ at }) => inWindow(at)).map(({ calls }) => calls);
+  const renders = capture.draws.filter(({ at }) => inWindow(at));
+  const draws = renders.map(({ calls }) => calls);
+  const triangles = renders.map(({ triangles: count }) => count);
   return {
     frameP95: percentile(frameGaps, 0.95),
     tickGapP95: percentile(tickGaps, 0.95),
     tickGapMax: Math.max(...tickGaps),
     drawCallsMedian: draws.length > 0 ? median(draws) : null,
     drawCallsMax: draws.length > 0 ? Math.max(...draws) : null,
+    trianglesMax: triangles.length > 0 ? Math.max(...triangles) : null,
     canvasToViewport: capture.largestCanvasPixels / capture.viewportPixels,
   };
 }
@@ -174,30 +181,36 @@ function longRunGrowth(capture: Capture, { from, to }: TickRange): Growth {
 
 export function judge(config: Config, runs: Runs): readonly Line[] {
   const { window, resources } = config.workload;
-  const named = runs.pairs.flatMap((pair, i) => VIEWS.flatMap((view) => SIDES.map((side) => [`${side}-${view}-${i + 1}`, pair[view][side]] as const)));
-  const problems = [...named.flatMap(([name, capture]) => measurementProblems(name, capture, window)), ...measurementProblems("long-3d", runs.long, resources)];
+  const pairs = runs.timing.kind === "pairs" ? runs.timing.pairs : [];
+  const named = pairs.flatMap((pair, i) => SIDES.map((side) => [`${side}-${i + 1}`, pair[side]] as const));
+  const problems = [
+    ...named.flatMap(([name, capture]) => measurementProblems(name, capture, window)),
+    ...measurementProblems("long", runs.long, window),
+    ...measurementProblems("long", runs.long, resources),
+  ];
   const growth = longRunGrowth(runs.long, resources);
-  if ("problem" in growth) problems.push({ kind: "measurement", run: "long-3d", problem: growth.problem });
+  if ("problem" in growth) problems.push({ kind: "measurement", run: "long", problem: growth.problem });
   if (problems.length > 0 || "problem" in growth) return problems;
 
-  const metrics = (view: View, side: Side) => runs.pairs.map((pair) => runMetrics(pair[view][side], window));
-  const worst = (values: readonly (number | null)[]) => Math.max(...values.map((value) => value ?? Infinity));
-  const observed: Readonly<Record<BudgetName, number>> = {
-    drawCallsMedian3d: worst(metrics("3d", "head").map((run) => run.drawCallsMedian)),
-    drawCallsMax3d: worst(metrics("3d", "head").map((run) => run.drawCallsMax)),
-    canvasToViewport2d: worst(metrics("2d", "head").map((run) => run.canvasToViewport)),
-    tickGapExcess3d: tickGapExcess(runs.pairs, "3d", window),
-    tickGapExcess2d: tickGapExcess(runs.pairs, "2d", window),
+  const long = runMetrics(runs.long, window);
+  const measured = (value: number | null) => value ?? Infinity;
+  const observed: Readonly<Record<Exclude<BudgetName, "tickGapExcess3d">, number>> = {
+    drawCallsMedian3d: measured(long.drawCallsMedian),
+    drawCallsMax3d: measured(long.drawCallsMax),
+    trianglesMax3d: measured(long.trianglesMax),
     ...growth.observed,
+    bundleKiB: Math.ceil(runs.bundleBytes / 1024),
   };
-  const budgets: Line[] = BUDGETS.map((name) => ({ kind: "budget", name, observed: observed[name], budget: config.budgets[name] }));
-  const timings: Line[] = VIEWS.flatMap((view) =>
-    TIMINGS.map((measure) => {
-      const base = metrics(view, "base").map((run) => run[measure]);
-      const head = metrics(view, "head").map((run) => run[measure]);
-      return { kind: "timing", measure, view, base, head, medianRatio: median(head.map((value, i) => value / base[i])), limit: config.timing.medianRatioLimit };
-    }),
-  );
+  const budget = (name: BudgetName, value: number): Line => ({ kind: "budget", name, observed: value, budget: config.budgets[name] });
+  const excess = runs.timing.kind === "pairs" ? [budget("tickGapExcess3d", tickGapExcess(pairs, window))] : [];
+  const budgets = BUDGETS.flatMap((name): Line[] => (name === "tickGapExcess3d" ? excess : [budget(name, observed[name])]));
+  if (runs.timing.kind === "not-run") return budgets;
+  const metrics = (side: Side) => pairs.map((pair) => runMetrics(pair[side], window));
+  const timings: Line[] = TIMINGS.map((measure) => {
+    const base = metrics("base").map((run) => run[measure]);
+    const head = metrics("head").map((run) => run[measure]);
+    return { kind: "timing", measure, base, head, medianRatio: median(head.map((value, i) => value / base[i])), limit: config.timing.medianRatioLimit };
+  });
   return [...budgets, ...timings];
 }
 
@@ -249,10 +262,6 @@ function range(raw: Json, key: string): TickRange {
   return { from: tick(num(value, "from")), to: tick(num(value, "to")) };
 }
 
-function isView(value: Json): value is View {
-  return VIEWS.some((view) => view === value);
-}
-
 function isLimit(value: Json): value is Limit {
   return LIMITS.some((limit) => limit === value);
 }
@@ -290,9 +299,8 @@ export function parseConfig(raw: Json): Config {
     budgets: {
       drawCallsMedian3d: num(budgets, "drawCallsMedian3d"),
       drawCallsMax3d: num(budgets, "drawCallsMax3d"),
-      canvasToViewport2d: num(budgets, "canvasToViewport2d"),
+      trianglesMax3d: num(budgets, "trianglesMax3d"),
       tickGapExcess3d: num(budgets, "tickGapExcess3d"),
-      tickGapExcess2d: num(budgets, "tickGapExcess2d"),
       geometriesPerRetiredRift3d: num(budgets, "geometriesPerRetiredRift3d"),
       texturesPerRetiredRift3d: num(budgets, "texturesPerRetiredRift3d"),
       heapGrowthMiB3d: num(budgets, "heapGrowthMiB3d"),
@@ -300,8 +308,10 @@ export function parseConfig(raw: Json): Config {
       entityGrowth3d: num(budgets, "entityGrowth3d"),
       projectileGrowth3d: num(budgets, "projectileGrowth3d"),
       sceneObjectGrowth3d: num(budgets, "sceneObjectGrowth3d"),
+      bundleKiB: num(budgets, "bundleKiB"),
     },
     timing: { pairs, medianRatioLimit: num(timing, "medianRatioLimit") },
+    headless: { viewAllocationsPerFrame: num(field(raw, "headless"), "viewAllocationsPerFrame") },
     exceptions: exceptions(raw),
   };
 }
@@ -317,12 +327,9 @@ export function parseBaseLimits(raw: Json): BaseLimits {
 }
 
 export function parseCapture(raw: Json): Capture {
-  const view = field(raw, "view");
-  if (!isView(view)) throw new TypeError(`view ${String(view)} is not 3d or 2d`);
   const viewport = field(raw, "viewport");
   const canvas = field(raw, "largestCanvas");
   return {
-    view,
     viewportPixels: num(viewport, "width") * num(viewport, "height") * num(viewport, "dpr") ** 2,
     frames: list(raw, "frames").map(finite),
     ticks: list(raw, "ticks").map((sample) => {
@@ -340,8 +347,8 @@ export function parseCapture(raw: Json): Capture {
       };
     }),
     draws: list(raw, "draws").map((sample) => {
-      const [at, calls] = tuple(sample, 2);
-      return { at: finite(at), calls: finite(calls) };
+      const [at, calls, triangles] = tuple(sample, 3);
+      return { at: finite(at), calls: finite(calls), triangles: finite(triangles) };
     }),
     heap: list(raw, "heap").map((reading) => ({ p4: tick(num(reading, "p4")), usedBytes: num(reading, "usedBytes"), backingBytes: num(reading, "backingBytes") })),
     largestCanvasPixels: num(canvas, "width") * num(canvas, "height"),

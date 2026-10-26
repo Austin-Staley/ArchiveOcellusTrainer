@@ -2,11 +2,26 @@ import type { CacheAssets } from "osrs-sdk/asset-manifest";
 import { BLADE_MODEL, BLADE_STAND, GRAPHICS, PLAYER_BLOCK, REGION_IDS, SEQUENCES } from "./content/archive/poses";
 import { ARCHIVE } from "./content/archive/timings";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
-import { OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
+import { OCELLUS_P1, OCELLUS_P2, OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
+import { readBuildFlags } from "./flags";
 
 const { boss, gear, presentation, lifeforceOrb, rifts, explosion, geometry, floorHoles } = OCELLUS_P4;
 
 const sequences = (poses: Readonly<Record<string, Readonly<{ value: number }>>>) => Object.fromEntries(Object.entries(poses).map(([pose, sequence]) => [pose, sequence.value]));
+const { looks: portalLooks } = OCELLUS_P2.portals;
+const p2Key = (name: string) => `p2${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+/**
+ * Phase 2's models, poses and spotanims are extracted only when ARCHIVE_P2 is on, so a build with the drill hidden asks the
+ * cache for nothing it doesn't play. Cache 2746 also lacks three of its poses' frame sounds (12814, 12825, 12832).
+ */
+const { p2 } = readBuildFlags();
+
+const P1_LOOK = OCELLUS_P1.presentation;
+const p1CrackPieces = [...Object.values(P1_LOOK.crackPieces.straight), ...Object.values(P1_LOOK.crackPieces.diagonal)].flatMap(({ value }) => [value.start, value.piece, value.end]);
+const p1SpotAnims = [
+  ...Object.entries(P1_LOOK.spotAnims).map(([name, spotAnim]) => [`p1${name.charAt(0).toUpperCase()}${name.slice(1)}`, { id: spotAnim.value }]),
+  ...[...p1CrackPieces, ...P1_LOOK.floorExplosions.value.pieces].map((id) => [`p1Floor${id}`, { id }]),
+];
 
 function poseMap<T extends Readonly<Record<string, number>>>(poses: T): Readonly<Record<string, number>> {
   return Object.fromEntries(Object.entries(poses));
@@ -26,11 +41,12 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     undeadBinder: { id: ARCHIVE.moia.binderNpcId, animations: poseMap(SEQUENCES.binder) },
     xarth: { id: ARCHIVE.xarth.npcId, animations: poseMap(SEQUENCES.xarth) },
     dagonhai: { id: ARCHIVE.dagonhai.npcId, animations: poseMap(SEQUENCES.dagon) },
-    ocellusPhase1: { id: ARCHIVE.p1.npcId, animations: poseMap(SEQUENCES.p1) },
+    ocellusPhase1: { id: ARCHIVE.p1.npcId, animations: { ...poseMap(SEQUENCES.p1), ...sequences(P1_LOOK.bossPoses) } },
     hoodedFigure: { id: ARCHIVE.p1.hoodedNpcId, animations: poseMap(SEQUENCES.hooded) },
     theBlade: { id: ARCHIVE.p2.npcId },
     voidSiphon: { id: ARCHIVE.p3.siphonNpcId, animations: poseMap(SEQUENCES.siphon) },
     voidAugmenter: { id: ARCHIVE.p3.augmenterNpcId, animations: poseMap(SEQUENCES.augmenter) },
+    ...(p2 ? { ocellusP2: { id: OCELLUS_P2.ocellusNpcId.value, animations: sequences(OCELLUS_P2.bossPoses) } } : {}),
   },
   regions: {
     raidBork: { id: REGION_IDS.bork },
@@ -45,6 +61,12 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     brazier: { id: geometry.brazier.value.model, animations: { burning: geometry.brazier.value.burning } },
     voidHole: { id: floorHoles.look.model.value, animations: { idle: floorHoles.look.idle.value } },
     theBlade: { id: BLADE_MODEL, animations: { stand: BLADE_STAND } },
+    ...(p2
+      ? {
+          p2PortalInactive: { id: portalLooks.value.inactive.model, animations: { idle: portalLooks.value.inactive.idle } },
+          p2PortalLit: { id: portalLooks.value.lit.model, animations: { idle: portalLooks.value.lit.idle } },
+        }
+      : {}),
   },
   items: Object.fromEntries(Object.entries(gear.items).map(([key, item]) => [key, { id: item.itemId.value }])),
   spotAnims: Object.fromEntries([
@@ -65,9 +87,12 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     ["raidP1Magic", { id: GRAPHICS.p1Magic }],
     ["raidP1Ranged", { id: GRAPHICS.p1Ranged }],
     ["raidP2Volley", { id: GRAPHICS.p2Volley }],
+    ["raidP2Repair", { id: GRAPHICS.p2Repair }],
     ["raidP3Void", { id: GRAPHICS.p3Void }],
     ["raidP3Spin", { id: GRAPHICS.p3Spin }],
     ["raidSmorkBomb", { id: GRAPHICS.smorkBomb }],
+    ...p1SpotAnims,
+    ...(p2 ? Object.entries(OCELLUS_P2.spotAnims).map(([name, spotAnim]) => [p2Key(name), { id: spotAnim.value }]) : []),
   ]),
   playerAnimations: {
     block: { id: PLAYER_BLOCK },
@@ -84,7 +109,7 @@ export const ARCHIVE_OCELLUS_OVERRIDES = {
 } as const satisfies CacheAssets;
 
 /** The asset tool extracts no sprites, so scripts/extract-sprites.mjs writes these beside its output. */
-export const ARCHIVE_OCELLUS_SPRITES: readonly SpriteFrame[] = Object.values(presentation.overheadIcons).map((icon) => icon.value);
+export const ARCHIVE_OCELLUS_SPRITES: readonly SpriteFrame[] = [...Object.values(presentation.overheadIcons).map((icon) => icon.value), P1_LOOK.overheadIcon.value];
 
 export function spriteFile({ archive, frame }: SpriteFrame): string {
   return `sprites/${archive}-${frame}.png`;

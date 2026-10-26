@@ -4,9 +4,6 @@ import type { IncomingStyle, Style } from "../../sim/combat";
 import type { Side } from "../../sim/tiles";
 import { OCELLUS_P3 } from "../ocellus/js/OcellusTimings";
 import type { Corner } from "../ocellus/js/P1Types";
-import { beatSide, cornerOfLeg } from "../ocellus/js/p1/schedule";
-import { distanceToBody, stepsBetween, stepToward } from "../ocellus/js/p1/arena";
-import { roll, rollInt } from "../ocellus/js/roll";
 import type { RaidOptions } from "./catalog";
 import type { RaidId } from "./catalog";
 import {
@@ -30,13 +27,20 @@ import {
   OUTLINE_COLOUR,
   P1_START,
   STAND_COLOUR,
+  beatSide,
   beatTiles,
   closestTile,
+  cornerOfLeg,
   countdownStart,
+  distanceToBody,
   isVolleyElapsed,
   moveTiles,
   p1CornerTile,
+  p1Roll,
+  p1RollInt,
   safeTile,
+  stepToward,
+  stepsBetween,
   tileGap,
   walkSpan,
 } from "./p1Route";
@@ -567,7 +571,7 @@ function settleCracks(memory: P1Memory, options: RaidOptions, input: RaidInput, 
   let meter = memory.meter;
   due.forEach((crack, draw) => {
     if (onTiles(crack.tiles, input.player)) {
-      const chip = rollInt(options.seed, "blockDamage", tick(at), { min: rules.blockMin, max: rules.blockMax }, draw);
+      const chip = p1RollInt(options.seed, "blockDamage", tick(at), { min: rules.blockMin, max: rules.blockMax }, draw);
       events.push(damage("tendril-chip", "typeless", chip, chip));
       owed += chip;
       return;
@@ -581,7 +585,7 @@ function settleCracks(memory: P1Memory, options: RaidOptions, input: RaidInput, 
 function landVolleys(memory: P1Memory, options: RaidOptions, at: number, events: RaidEvent[]): P1Memory {
   const rules = ARCHIVE.p1;
   memory.inFlight.filter((shot) => shot.landsAt === at).forEach((shot) => {
-    const amount = rollInt(options.seed, "p1VolleyDamage", tick(at), { min: rules.volleyMin, max: rules.volleyMax }, shot.magic ? 0 : 1);
+    const amount = p1RollInt(options.seed, "p1VolleyDamage", tick(at), { min: rules.volleyMin, max: rules.volleyMax }, shot.magic ? 0 : 1);
     events.push(damage("volley", shot.magic ? "magic" : "ranged", 0, amount));
   });
   return { ...memory, inFlight: memory.inFlight.filter((shot) => shot.landsAt !== at) };
@@ -589,7 +593,7 @@ function landVolleys(memory: P1Memory, options: RaidOptions, at: number, events:
 
 function castVolley(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
   const rules = ARCHIVE.p1;
-  const switched = roll(options.seed, "volleyElement", tick(at), 0) < rules.switchChance;
+  const switched = p1Roll(options.seed, "volleyElement", tick(at), 0) < rules.switchChance;
   const element = switched ? (memory.element === "fire" ? "water" : "fire") : memory.element;
   const magic = element === "water";
   const last = at - memory.since === memory.walkSteps - 1;
@@ -644,7 +648,7 @@ function paintBlast(memory: P1Memory, options: RaidOptions, input: RaidInput, at
   if (at !== when) return memory;
   events.push({ kind: "mark", tiles: blastRing(from), colour: "#3d8f4a", text: "vine", ticks: 2 });
   if (distanceToBody(from, input.player) <= rules.blastRadius) {
-    const hit = rollInt(options.seed, "blastDamage", tick(at), { min: rules.blastMin, max: rules.blastMax }, 0);
+    const hit = p1RollInt(options.seed, "blastDamage", tick(at), { min: rules.blastMin, max: rules.blastMax }, 0);
     events.push(damage("blast", "typeless", hit, hit));
   }
   return { ...memory, blastAt: null };
@@ -753,7 +757,7 @@ function stepCorner(memory: P1Memory, options: RaidOptions, input: RaidInput, at
   if (elapsed >= rules.tendrilGreen && elapsed < rules.explodeAt && (elapsed - rules.tendrilGreen) % rules.tendrilGap === 0) events.push(attack("4260", ""));
   if (elapsed === rules.tauntAt) {
     const texts = ["Pointless...", "You... fail...", "Unworthy..."] as const;
-    const line = texts[Math.floor(roll(options.seed, "taunt", tick(at), 0) * texts.length)] ?? texts[0];
+    const line = texts[Math.floor(p1Roll(options.seed, "taunt", tick(at), 0) * texts.length)] ?? texts[0];
     events.push(chat(line));
   }
   if (elapsed === rules.explodeAt) {
@@ -815,7 +819,7 @@ function stepMiddle(memory: P1Memory, options: RaidOptions, input: RaidInput, at
   }
   if (elapsed === told + rules.strikeCastAfter + rules.strikeFlight) {
     for (let shot = 0; shot < next.strikeShots; shot += 1) {
-      const hit = rollInt(options.seed, "strikeDamage", tick(at), { min: rules.strikeMin, max: rules.strikeMax }, shot);
+      const hit = p1RollInt(options.seed, "strikeDamage", tick(at), { min: rules.strikeMin, max: rules.strikeMax }, shot);
       events.push(damage("strike", "typeless", hit, hit));
     }
   }
@@ -829,7 +833,7 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
   const events: RaidEvent[] = [];
   let next = memory;
   if (at === 0 && next.stage === "arrive") {
-    const element = roll(options.seed, "volleyElement", tick(0), 1) < 0.5 ? "fire" : "water";
+    const element = p1Roll(options.seed, "volleyElement", tick(0), 1) < 0.5 ? "fire" : "water";
     next = { ...next, element, heading: cornerOfLeg(options.seed, 0, null) };
     events.push(phase("arrive"));
     events.push(chat("Now... ascension..."));

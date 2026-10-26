@@ -6,9 +6,8 @@ import type { RaidId } from "../catalog";
 import { portalOpening, project } from "../clock";
 import type { RaidInput } from "../clock";
 import { blastRing, crackFrom } from "../cracks";
-import { distanceToBody } from "../../ocellus/js/p1/arena";
 import { DAGON_TRAIL, P1_CENTRE, ROOMS, WAVE_SKIP, beamHits } from "../layout";
-import { countdownStart, tileGap, vinePlace } from "../p1Route";
+import { countdownStart, distanceToBody, tileGap, vinePlace } from "../p1Route";
 import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
 
 const options = defaultOptions(seed(1));

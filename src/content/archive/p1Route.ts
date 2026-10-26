@@ -1,11 +1,92 @@
-import type { Tile } from "../../sim/brands";
-import { tile } from "../../sim/brands";
-import type { Corner } from "../ocellus/js/P1Types";
+import type { Seed, Tick, Tile } from "../../sim/brands";
+import { tick, tile } from "../../sim/brands";
+import type { Corner, CornerTurn } from "../ocellus/js/P1Types";
 import { OCELLUS_P1 } from "../ocellus/js/OcellusTimings";
 import type { Side } from "../../sim/tiles";
-import { distanceToBody } from "../ocellus/js/p1/arena";
 import { sameTile } from "./layout";
 import { ARCHIVE } from "./timings";
+
+/**
+ * The drill's phase 1 rolls, copied so this room does not import the fight module.
+ * Stream numbers match that mix, so one seed picks the same corner, element and hit.
+ */
+const P1_STREAM = {
+  cornerRoute: 101,
+  volleyElement: 102,
+  p1VolleyDamage: 103,
+  beatSide: 105,
+  taunt: 106,
+  blastDamage: 107,
+  blockDamage: 108,
+  strikeDamage: 109,
+} as const;
+
+type P1Stream = keyof typeof P1_STREAM;
+
+export function p1Roll(seed: Seed, stream: P1Stream, at: Tick, draw: number): number {
+  let mixed = (seed ^ Math.imul(P1_STREAM[stream], 0x9e3779b9) ^ Math.imul(at, 0x85ebca6b) ^ Math.imul(draw, 0xc2b2ae35)) >>> 0;
+  mixed ^= mixed >>> 16;
+  mixed = Math.imul(mixed, 0x21f0aaad);
+  mixed ^= mixed >>> 15;
+  mixed = Math.imul(mixed, 0x735a2d97);
+  mixed ^= mixed >>> 15;
+  return (mixed >>> 0) / 2 ** 32;
+}
+
+export function p1RollInt(seed: Seed, stream: P1Stream, at: Tick, range: Readonly<{ min: number; max: number }>, draw: number): number {
+  return range.min + Math.floor(p1Roll(seed, stream, at, draw) * (range.max - range.min + 1));
+}
+
+const CORNERS: readonly Corner[] = ["north-east", "south-east", "south-west", "north-west"];
+const TURNS: Readonly<Record<CornerTurn, number>> = { clockwise: 1, across: 2, anticlockwise: 3 };
+const CLOCKWISE: readonly Side[] = ["east", "south", "west", "north"];
+
+function cornerAfter(from: Corner, turn: CornerTurn): Corner {
+  const index = CORNERS.indexOf(from);
+  const next = CORNERS[(index + TURNS[turn]) % CORNERS.length];
+  return next ?? from;
+}
+
+/** The first corner is an even pick. Each later one is weighted by the turn from the corner he is at. */
+export function cornerOfLeg(seed: Seed, leg: number, from: Corner | null): Corner {
+  const draw = p1Roll(seed, "cornerRoute", tick(0), leg);
+  if (from === null) return CORNERS[Math.floor(draw * CORNERS.length)] ?? CORNERS[0];
+  const weights = OCELLUS_P1.route.value;
+  const total = weights.anticlockwise + weights.clockwise + weights.across;
+  const pick = draw * total;
+  if (pick < weights.anticlockwise) return cornerAfter(from, "anticlockwise");
+  if (pick < weights.anticlockwise + weights.clockwise) return cornerAfter(from, "clockwise");
+  return cornerAfter(from, "across");
+}
+
+/** The middle's first beat faces a seeded side, and each later beat the next side clockwise. */
+export function beatSide(seed: Seed, middleStart: Tick, nth: number): Side {
+  const first = Math.floor(p1Roll(seed, "beatSide", middleStart, 0) * CLOCKWISE.length);
+  return CLOCKWISE[(first + nth) % CLOCKWISE.length] ?? CLOCKWISE[0];
+}
+
+const sign = (n: number): -1 | 0 | 1 => (n > 0 ? 1 : n < 0 ? -1 : 0);
+
+/** Tiles between a tile and the nearest tile of his 3×3. The body hangs toward lower Y. 0 means he is standing on it. */
+export function distanceToBody(anchor: Tile, at: Tile): number {
+  const size = ARCHIVE.p1.bossSize;
+  const across = Math.max(anchor.x - at.x, 0, at.x - (anchor.x + size - 1));
+  const along = Math.max(anchor.y - size + 1 - at.y, 0, at.y - anchor.y);
+  return Math.max(across, along);
+}
+
+/** One step: straight along the longer axis until both offsets are equal, then diagonally. */
+export function stepToward(from: Tile, to: Tile): Tile {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) > Math.abs(dy)) return tile(from.x + sign(dx), from.y + 0);
+  if (Math.abs(dy) > Math.abs(dx)) return tile(from.x + 0, from.y + sign(dy));
+  return tile(from.x + sign(dx), from.y + sign(dy));
+}
+
+export function stepsBetween(from: Tile, to: Tile): number {
+  return Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
+}
 
 /**
  * Drill south-west anchors, shifted onto this room.

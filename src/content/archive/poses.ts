@@ -24,6 +24,8 @@ export const PLAYER_BLOCK = 424;
 export const SEQUENCES = {
   bork: { drum: 14542, oof: 14545, veryAngry: 14549, stomp: 14550, cycle: 14551, death: 14541 },
   smorks: { bomb: 14555 },
+  hooded: { idle: 14804 },
+  battery: { idle: 15024, death: 15025 },
   ezekiel: { melee: 14685, sword: 14687, stun: 14691, recover: 14693, heal: 14688, wave: 14694 },
   guardian: { ranged: 14751, mushroom: 14753, takeoff: 14748, beam: 14754, land: 14747, death: 14749 },
   moia: { ranged: 14785, relocate: 14788, chant: 14787 },
@@ -51,6 +53,8 @@ export const GRAPHICS = {
   p1Magic: 4229,
   p1Ranged: 4232,
   p3Void: 4297,
+  /** From the Smorks, animation 14555. Flight in the capture is 4.5 ticks. */
+  smorkBomb: 4440,
 } as const;
 
 /** Template regions from the digest. Chunk rotation is 0. Dreadnoth's 16728 is data only and is not loaded. */
@@ -247,6 +251,8 @@ export function deathSequence(npcId: number): number | null {
     case ARCHIVE.guardian.flyingNpcId:
     case ARCHIVE.guardian.groundedNpcId:
       return SEQUENCES.guardian.death;
+    case ARCHIVE.guardian.batteryNpcId:
+      return SEQUENCES.battery.death;
     case ARCHIVE.moia.binderNpcId:
       return SEQUENCES.binder.death;
     case ARCHIVE.xarth.npcId:

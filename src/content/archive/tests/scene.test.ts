@@ -1,9 +1,10 @@
 import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Settings, TileMarkerModel, Viewport, World } from "osrs-sdk";
-import type { Player } from "osrs-sdk";
+import type { Mob, Player } from "osrs-sdk";
 import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
 import { seed, tick } from "../../../sim/brands";
+import { BATTERY_TILES, HOODED_TILE, ROOMS } from "../layout";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -24,7 +25,70 @@ function fight(world: World, ticks: number): void {
   for (let step = 0; step < ticks; step += 1) world.tickWorld();
 }
 
+function npcIdOf(mob: Mob): number {
+  return "npcId" in mob && typeof mob.npcId === "number" ? mob.npcId : 0;
+}
+
 describe("raid rooms in 3D", () => {
+  it("pins the captured boss tiles", () => {
+    const bosses: readonly (readonly [RaidId, string, number, number, number])[] = [
+      ["bork", "Bork", ROOMS.bork.boss.x, ROOMS.bork.boss.y, ARCHIVE.bork.npcId],
+      ["ezekiel", "Ezekiel", ROOMS.ezekiel.boss.x, ROOMS.ezekiel.boss.y, ARCHIVE.ezekiel.npcId],
+      ["guardian", "Archive Guardian", ROOMS.guardian.boss.x, ROOMS.guardian.boss.y, ARCHIVE.guardian.flyingNpcId],
+      ["moia", "Moia", ROOMS.moia.boss.x, ROOMS.moia.boss.y, ARCHIVE.moia.npcId],
+      ["xarth", "Xarth", ROOMS.xarth.boss.x, ROOMS.xarth.boss.y, ARCHIVE.xarth.npcId],
+      ["dagonhai", "Dagon'hai trio", ROOMS.dagonhai.boss.x, ROOMS.dagonhai.boss.y, ARCHIVE.dagonhai.npcId],
+      ["ocellus-p1", "Ocellus", ROOMS["ocellus-p1"].boss.x, ROOMS["ocellus-p1"].boss.y, ARCHIVE.p1.npcId],
+      ["ocellus-p2", "The Blade", ROOMS["ocellus-p2"].boss.x, ROOMS["ocellus-p2"].boss.y, ARCHIVE.p2.npcId],
+      ["ocellus-p3", "Ocellus", ROOMS["ocellus-p3"].boss.x, ROOMS["ocellus-p3"].boss.y, ARCHIVE.p3.npcId],
+    ];
+    bosses.forEach(([id, name, x, y, npcId]) => {
+      const { region } = open(id, `?encounter=${id}&seed=1&invincible=on`);
+      const boss = [...region.mobs, ...region.newMobs].find((mob) => mob.mobName() === name);
+      if (!boss) throw new Error(`${name} was not in ${id}`);
+      expect({ x: boss.location.x, y: boss.location.y, npcId: npcIdOf(boss) }).toEqual({ x, y, npcId });
+    });
+  });
+
+  it("stands the Smorks on their captured tile and fires graphic 4440 from there", () => {
+    const { region, world } = open("bork", "?encounter=bork&seed=1&invincible=on");
+    expect(region.width).toBe(ROOMS.bork.width);
+    const smorks = [...region.mobs, ...region.newMobs].find((mob) => mob.mobName() === "Smorks");
+    if (!smorks) throw new Error("the Smorks were not in the room");
+    expect({ x: smorks.location.x, y: smorks.location.y, size: smorks.size, npcId: npcIdOf(smorks) }).toEqual({
+      x: ROOMS.bork.smork.x,
+      y: ROOMS.bork.smork.y,
+      size: ARCHIVE.bork.smorkSize,
+      npcId: ARCHIVE.bork.smorkNpcId,
+    });
+    expect(region.chat().some((line) => line.includes(String(GRAPHICS.smorkBomb)) && line.includes("4056"))).toBe(true);
+    fight(world, ARCHIVE.bork.bombInterval + 1);
+    const bomb = region.entities.find((entity) => entity.entityName() === `Projectile ${GRAPHICS.smorkBomb}`);
+    if (!bomb) throw new Error("the bomb graphic was not launched");
+    expect(bomb.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect({ x: bomb.location.x, y: bomb.location.y }).toEqual({ x: ROOMS.bork.smork.x, y: ROOMS.bork.smork.y });
+  });
+
+  it("places the Hooded Figure and the four batteries off the combat-add list", () => {
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    const figure = [...phase1.region.mobs, ...phase1.region.newMobs].find((mob) => mob.mobName() === "Hooded Figure");
+    if (!figure) throw new Error("the Hooded Figure was not in phase 1");
+    expect(figure.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect({ x: figure.location.x, y: figure.location.y, size: figure.size, npcId: npcIdOf(figure) }).toEqual({
+      x: HOODED_TILE.x,
+      y: HOODED_TILE.y,
+      size: ARCHIVE.p1.hoodedSize,
+      npcId: ARCHIVE.p1.hoodedNpcId,
+    });
+
+    const guardian = open("guardian", "?encounter=guardian&seed=1&invincible=on");
+    const batteries = [...guardian.region.mobs, ...guardian.region.newMobs].filter((mob) => mob.mobName() === "Guardian battery");
+    expect(batteries.map((mob) => ({ x: mob.location.x, y: mob.location.y, size: mob.size, npcId: npcIdOf(mob) }))).toEqual(
+      BATTERY_TILES.map((at) => ({ x: at.x, y: at.y, size: ARCHIVE.guardian.batterySize, npcId: ARCHIVE.guardian.batteryNpcId })),
+    );
+    batteries.forEach((battery) => expect(battery.get3dModel()).toBeInstanceOf(CacheRenderModel));
+  });
+
   it("draws the stand-in floor and Bork's ledger model", () => {
     const { region } = open("bork", "?encounter=bork&seed=1&invincible=on");
     expect(region.drawDefaultFloor()).toBe(true);

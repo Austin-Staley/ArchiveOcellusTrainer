@@ -2,6 +2,15 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.6",
+    notes: [
+      "The Smorks stand on the tile where every capture put them, and their bomb uses graphic 4440.",
+      "Phase 1 shows the Hooded Figure, and the Guardian room shows the four batteries, on the captured tiles.",
+      "The cauldron visits the six tiles from the one captured fight. That fight did not record the order.",
+      "Projectiles 4056, 4057 and 4269, the Blade and vine animations, Ocellus's death, and hitsplat type 11 stay stand-ins.",
+    ],
+  },
+  {
     version: "2026.10.26.5",
     notes: [
       "The Blade stands in the centre of its tile marker. The drawn sword starts above the model origin, and phase 2 lowers it onto that marker.",

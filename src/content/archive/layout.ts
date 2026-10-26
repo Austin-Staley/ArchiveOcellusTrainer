@@ -154,12 +154,24 @@ export const DAGON_PADS = {
   air: tile(5, 10),
 } as const;
 
-export const DAGON_TRAIL = [tile(8, 9), tile(9, 9), tile(10, 9), tile(11, 9), tile(11, 8), tile(11, 7)] as const;
+/**
+ * The six tiles the cauldron occupied in the one captured fight.
+ * Region 16215, plane 0. That fight did not record an order. This visit runs west to east. Unverified order.
+ */
+export const DAGON_TRAIL = [tile(5, 12), tile(6, 12), tile(6, 13), tile(7, 12), tile(8, 12), tile(8, 13)] as const;
+
+/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. */
+export const HOODED_TILE = tile(5, 20);
+
+/** Guardian batteries, region 16471 plane 0. The same four corners in every flying-room capture. */
+export const BATTERY_TILES = [tile(25, 3), tile(25, 16), tile(0, 3), tile(0, 16)] as const;
 
 export const CENSERS = [tile(1, 22), tile(22, 22), tile(1, 1), tile(22, 1)] as const;
 
 export const ROOMS = {
-  bork: { width: 15, height: 17, player: tile(9, 13), boss: tile(10, 12), bossSize: 4, smork: tile(6, 7) },
+  // The Smorks are local (30, 30), the only tile in 107 captures. The scene offset puts that tile at (14, 14).
+  // Their 3x3 reaches x 16, so the walk grid is 17 wide.
+  bork: { width: 17, height: 17, player: tile(9, 13), boss: tile(10, 12), bossSize: 4, smork: tile(14, 14) },
   ezekiel: { width: 15, height: 15, player: tile(7, 9), boss: tile(8, 8), bossSize: 3 },
   guardian: { width: 28, height: 28, player: tile(13, 9), boss: tile(11, 11), bossSize: 5 },
   moia: { width: 17, height: 17, player: tile(1, 1), boss: tile(0, 7), bossSize: 3 },

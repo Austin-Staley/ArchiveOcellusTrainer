@@ -26,6 +26,8 @@ export const ARCHIVE = {
     tempo: { full: 7, threeQuarter: 6, half: 5, low: 4 },
     /** Unverified. Practice stand-in for the measured 33–88 tick bomb range. */
     bombInterval: 33,
+    /** Unverified. Render digest 25 Oct 2026: projectile 4440 flies 4.5 ticks. The room shows 5. */
+    bombFlight: 5,
     prayed: 10,
     unprayed: 33,
     angryHit: 51,
@@ -57,6 +59,9 @@ export const ARCHIVE = {
   guardian: {
     flyingNpcId: 16659,
     groundedNpcId: 16660,
+    /** The live battery. The inert handler 16661 and the destroyed form 16663 share its corners and are not spawned. */
+    batteryNpcId: 16662,
+    batterySize: 2,
     shield: 550,
     hp: 1100,
     defence: 260,
@@ -163,6 +168,9 @@ export const ARCHIVE = {
   },
   p1: {
     npcId: 16674,
+    /** Present on one tile in every phase 1 capture. No attack animation was recorded. */
+    hoodedNpcId: 16672,
+    hoodedSize: 3,
     hp: 2500,
     defence: 215,
     defenceFloor: 129,

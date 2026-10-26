@@ -6,7 +6,7 @@ import { protectionOf } from "../../sim/sdk/EncounterBinding";
 import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
-import { CENSERS, ROOMS } from "./layout";
+import { BATTERY_TILES, CENSERS, HOODED_TILE, ROOMS } from "./layout";
 import { dress } from "./loadout";
 import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
@@ -20,7 +20,7 @@ class PracticeMob extends Mob {
   label = "Boss";
   tiles = 1;
   npcId = 0;
-  kind: "boss" | "add" | "censer" = "boss";
+  kind: "boss" | "add" | "censer" | "fixture" = "boss";
   /** The first cache model is the one on screen. Later builds must not replace its animation listener. */
   private hearListener = true;
 
@@ -268,7 +268,7 @@ type RaidRunState = Readonly<{ kind: "running" }> | Readonly<{ kind: "ended"; at
 
 type RaidRunView = Readonly<{ kind: "running"; seed: Seed }> | Readonly<{ kind: "ended"; seed: Seed; at: Tick; reason: RaidFinish }>;
 
-type Mounted = Readonly<{ player: Player; boss: PracticeMob; adds: readonly PracticeMob[]; censers: readonly PracticeMob[] }>;
+type Mounted = Readonly<{ player: Player; boss: PracticeMob; adds: readonly PracticeMob[]; censers: readonly PracticeMob[]; fixtures: readonly PracticeMob[] }>;
 
 function barFor(launch: RaidLaunch): Bar {
   const { id, options } = launch;
@@ -378,14 +378,16 @@ export class RaidRegion extends Region {
     boss.kind = "boss";
     const adds = this.spawnAdds();
     const censers = this.launch.id === "ocellus-p3" ? this.spawnCensers() : [];
+    const fixtures = this.spawnFixtures();
     this.addPlayer(player);
     this.addEntity(new Arena(this, { x: 0, y: 0 }, this.launch.id));
     this.addMob(boss);
     this.setBoss(boss);
     adds.forEach((add) => this.addMob(add));
     censers.forEach((censer) => this.addMob(censer));
+    fixtures.forEach((fixture) => this.addMob(fixture));
     this.wallIn();
-    this.mounted = { player, boss, adds, censers };
+    this.mounted = { player, boss, adds, censers, fixtures };
     return { player };
   }
 
@@ -470,6 +472,7 @@ export class RaidRegion extends Region {
     }
     this.mounted.adds.forEach((add) => this.applyBar(add, addBar(this.launch, add.label)));
     this.mounted.censers.forEach((censer, index) => this.applyBar(censer, { npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
+    this.mounted.fixtures.forEach((fixture) => this.applyBar(fixture, fixtureBar(fixture.label)));
     dress(this.mounted.player, this.launch.gear);
     this.memory = initialMemory(this.launch.id);
     this.clockTick = 0;
@@ -707,14 +710,15 @@ export class RaidRegion extends Region {
 
   private launchShots(events: readonly Stamp[]): void {
     if (!this.mounted) return;
-    const { boss, player } = this.mounted;
-    const from = tile(boss.location.x, boss.location.y);
-    const to = tile(player.location.x, player.location.y);
+    const to = tile(this.mounted.player.location.x, this.mounted.player.location.y);
     events.forEach((stamp) => {
       if (stamp.event.kind !== "attack") return;
       shotLooks(this.launch, stamp.event.name).forEach((look) => {
-        const shot = new Shot(this, { x: from.x, y: from.y });
-        shot.fly(from, to, look.ticks, look.paint, look.graphic, look.hold);
+        const actor = shotOrigin(this.mounted, look.from);
+        if (!actor) return;
+        const start = tile(actor.location.x, actor.location.y);
+        const shot = new Shot(this, { x: start.x, y: start.y });
+        shot.fly(start, to, look.ticks, look.paint, look.graphic, look.hold);
         this.addEntity(shot);
         this.shots.push(shot);
       });
@@ -752,7 +756,7 @@ export class RaidRegion extends Region {
   private describeShots(): void {
     switch (this.launch.id) {
       case "bork":
-        this.say("Projectiles 4056 and 4057 have no captured source, so they are not drawn.");
+        this.say(`The bomb is graphic ${GRAPHICS.smorkBomb} from the Smorks. Its captured flight is 4.5 ticks, shown as ${ARCHIVE.bork.bombFlight}. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
         return;
       case "ezekiel":
         return;
@@ -823,6 +827,26 @@ export class RaidRegion extends Region {
     return [];
   }
 
+  private spawnFixtures(): PracticeMob[] {
+    if (this.launch.id === "guardian") {
+      return BATTERY_TILES.map((at) => {
+        const battery = new PracticeMob(this, { x: at.x, y: at.y });
+        battery.kind = "fixture";
+        battery.label = "Guardian battery";
+        battery.fill({ npcId: ARCHIVE.guardian.batteryNpcId, hp: 1, defence: 0, name: "Guardian battery", size: ARCHIVE.guardian.batterySize });
+        return battery;
+      });
+    }
+    if (this.launch.id === "ocellus-p1") {
+      const figure = new PracticeMob(this, { x: HOODED_TILE.x, y: HOODED_TILE.y });
+      figure.kind = "fixture";
+      figure.label = "Hooded Figure";
+      figure.fill({ npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name: "Hooded Figure", size: ARCHIVE.p1.hoodedSize });
+      return [figure];
+    }
+    return [];
+  }
+
   private spawnCensers(): PracticeMob[] {
     return CENSERS.map((at, index) => {
       const censer = new PracticeMob(this, { x: at.x, y: at.y });
@@ -867,6 +891,12 @@ function landSplat(from: Unit, target: Unit, amount: number): void {
   target.incomingProjectiles.push(splat);
 }
 
+function fixtureBar(name: string): Bar {
+  if (name === "Hooded Figure") return { npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name, size: ARCHIVE.p1.hoodedSize };
+  if (name === "Guardian battery") return { npcId: ARCHIVE.guardian.batteryNpcId, hp: 1, defence: 0, name, size: ARCHIVE.guardian.batterySize };
+  return { npcId: 0, hp: 1, defence: 0, name, size: 1 };
+}
+
 function addBar(launch: RaidLaunch, name: string): Bar {
   if (name === "Smorks") return { npcId: ARCHIVE.bork.smorkNpcId, hp: ARCHIVE.bork.smorkHp, defence: launch.options.smorkDefence, name, size: ARCHIVE.bork.smorkSize };
   if (name === "Undead binder") return { npcId: ARCHIVE.moia.binderNpcId, hp: ARCHIVE.moia.binderHp, defence: 1, name, size: 1 };
@@ -880,13 +910,30 @@ const RANGED_SHOT = "#7ec8ff";
 const MAGIC_SHOT = "#c45bff";
 const TYPELESS_SHOT = "#e0a040";
 
-type ShotLook = Readonly<{ ticks: number; paint: string; graphic: number | null; hold: boolean }>;
+type ShotFrom = "boss" | "smorks";
+type ShotLook = Readonly<{ ticks: number; paint: string; graphic: number | null; hold: boolean; from: ShotFrom }>;
+
+function shotOrigin(mounted: Mounted | null, from: ShotFrom): PracticeMob | undefined {
+  if (!mounted) return undefined;
+  switch (from) {
+    case "boss":
+      return mounted.boss;
+    case "smorks":
+      return mounted.adds.find((add) => add.label === "Smorks");
+    default: {
+      const unhandled: never = from;
+      return unhandled;
+    }
+  }
+}
 
 function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
-  const travel = (ticks: number, paint: string, graphic: number | null): ShotLook => ({ ticks, paint, graphic, hold: false });
-  const held = (ticks: number, graphic: number): ShotLook => ({ ticks, paint: TYPELESS_SHOT, graphic, hold: true });
+  const travel = (ticks: number, paint: string, graphic: number | null, from: ShotFrom = "boss"): ShotLook => ({ ticks, paint, graphic, hold: false, from });
+  const held = (ticks: number, graphic: number): ShotLook => ({ ticks, paint: TYPELESS_SHOT, graphic, hold: true, from: "boss" });
   switch (launch.id) {
     case "bork":
+      if (name === "bomb-tell") return [travel(ARCHIVE.bork.bombFlight, TYPELESS_SHOT, GRAPHICS.smorkBomb, "smorks")];
+      return [];
     case "ezekiel":
       return [];
     case "guardian":
@@ -930,6 +977,8 @@ function modelledNpc(id: number): boolean {
   switch (id) {
     case ARCHIVE.bork.npcId:
     case ARCHIVE.bork.smorkNpcId:
+    case ARCHIVE.guardian.batteryNpcId:
+    case ARCHIVE.p1.hoodedNpcId:
     case ARCHIVE.ezekiel.npcId:
     case ARCHIVE.guardian.flyingNpcId:
     case ARCHIVE.guardian.groundedNpcId:

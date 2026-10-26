@@ -6,7 +6,7 @@ import { defaultOptions } from "../catalog";
 import type { RaidId } from "../catalog";
 import { patternOrder, project } from "../clock";
 import type { RaidInput } from "../clock";
-import { ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
+import { DAGON_TRAIL, ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
 import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
 
 const options = defaultOptions(seed(1));
@@ -117,6 +117,8 @@ describe("raid clocks", () => {
     const rows = names("dagonhai", 37);
     expect(rows.filter((row) => row.name === "channel").map((row) => row.text)).toEqual(["I'll feed the flames!", "I'll strengthen the bond!"]);
     expect(rows.filter((row) => row.name === "cauldron").map((row) => row.at)).toEqual([23, 25, 27, 29, 31, 33]);
+    const spots = project("dagonhai", options, 34, hold("dagonhai")).flatMap((stamp) => (stamp.event.kind === "mark" && stamp.event.text === "cauldron" ? stamp.event.tiles.map((at) => ({ x: at.x, y: at.y })) : []));
+    expect(spots).toEqual(DAGON_TRAIL.map((at) => ({ x: at.x, y: at.y })));
     const second = names("dagonhai", 73).filter((row) => row.name === "cauldron").map((row) => row.at);
     expect(second[0]).toBe(23);
     expect(second.at(-1)).toBe(73);

@@ -8,7 +8,7 @@ import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { CENSERS, ROOMS } from "./layout";
 import { dress } from "./loadout";
-import { GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
+import { BLADE_MODEL, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
 import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
 
@@ -82,6 +82,9 @@ class PracticeMob extends Mob {
   }
 
   override create3dModel(): Model {
+    // Monster 16676 is an uncoloured clickbox. The coloured sword is scenery model 62699.
+    // Its stand is pose 0, which hides the sword that does not sit on this tile. No extra yaw: the object is rotation 0.
+    if (this.npcId === ARCHIVE.p2.npcId) return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(BLADE_MODEL), { basisRotation: 0 });
     if (modelledNpc(this.npcId)) return CacheRenderModel.forRenderable(this, CacheRenderReferences.npc(this.npcId));
     return BasicModel.forRenderable(this);
   }

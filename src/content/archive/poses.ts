@@ -64,6 +64,16 @@ export const REGION_IDS = {
   dagonhai: 16215,
 } as const;
 
+/**
+ * Cache 2746, region 16472. Object 62706, The Blade, is the only blade placed on the map,
+ * at local (31, 41), the centre of monster 16676. Model 62699 holds both swords.
+ * Sequence 14873 is that object's one-frame stand, and it hides the sword that is not on this tile.
+ * The captures spawn 62707 and 62709 only in phase 2, and only for part of the fight.
+ */
+export const BLADE_SCENERY = 62706;
+export const BLADE_MODEL = 62699;
+export const BLADE_STAND = 14873;
+
 export type ArenaPlace = Readonly<{ region: number; offsetX: number; offsetY: number; elevation: number }>;
 
 /**

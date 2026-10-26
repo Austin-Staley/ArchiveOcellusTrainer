@@ -1,5 +1,5 @@
 import type { CacheAssets } from "osrs-sdk/asset-manifest";
-import { GRAPHICS, PLAYER_BLOCK, REGION_IDS, SEQUENCES } from "./content/archive/poses";
+import { BLADE_MODEL, BLADE_STAND, GRAPHICS, PLAYER_BLOCK, REGION_IDS, SEQUENCES } from "./content/archive/poses";
 import { ARCHIVE } from "./content/archive/timings";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
@@ -42,6 +42,7 @@ export const ARCHIVE_OCELLUS_ASSETS = {
   models: {
     brazier: { id: geometry.brazier.value.model, animations: { burning: geometry.brazier.value.burning } },
     voidHole: { id: floorHoles.look.model.value, animations: { idle: floorHoles.look.idle.value } },
+    theBlade: { id: BLADE_MODEL, animations: { stand: BLADE_STAND } },
   },
   items: Object.fromEntries(Object.entries(gear.items).map(([key, item]) => [key, { id: item.itemId.value }])),
   spotAnims: Object.fromEntries([

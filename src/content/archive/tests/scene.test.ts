@@ -67,7 +67,7 @@ describe("raid rooms in 3D", () => {
     const blade = [...phase2.region.mobs, ...phase2.region.newMobs].find((mob) => mob.mobName() === "The Blade");
     if (!blade) throw new Error("the Blade was not in the room");
     expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
-    expect({ x: blade.location.x, y: blade.location.y, npc: phase2.region.snapshot()?.boss.npcId }).toEqual({ x: 11, y: 11, npc: ARCHIVE.p2.npcId });
+    expect({ x: blade.location.x, y: blade.location.y, npc: phase2.region.snapshot()?.boss.npcId }).toEqual({ x: 11, y: 13, npc: ARCHIVE.p2.npcId });
     fight(phase2.world, 12);
     const volley = phase2.region.entities.find((entity) => entity.entityName() === "Stand-in projectile");
     if (!volley) throw new Error("the volley was not a stand-in");

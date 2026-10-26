@@ -166,6 +166,8 @@ export const ROOMS = {
   xarth: { width: 17, height: 17, player: tile(11, 2), boss: tile(7, 7), bossSize: 3 },
   dagonhai: { width: 20, height: 19, player: tile(6, 10), boss: tile(2, 9), bossSize: 2 },
   "ocellus-p1": { width: 25, height: 25, player: tile(8, 18), boss: tile(5, 17), bossSize: 3 },
-  "ocellus-p2": { width: 25, height: 25, player: tile(8, 16), boss: tile(11, 11), bossSize: 3 },
+  // The drawn 3x3 runs toward lower Y, so (11, 13) centres it on tile (12, 12): cache local (31, 41), The Blade.
+  // The opening tile is on that same column, so the default camera frames the sword.
+  "ocellus-p2": { width: 25, height: 25, player: tile(12, 16), boss: tile(11, 13), bossSize: 3 },
   "ocellus-p3": { width: 25, height: 25, player: tile(8, 19), boss: tile(5, 18), bossSize: 3 },
 } as const;

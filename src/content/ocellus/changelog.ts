@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.4",
+    notes: [
+      "Phase 2 shows one Blade, the sword on the boss tile. Phase 1 no longer draws the pair beside it.",
+      "The Blade's tile marker and health bar sit on that sword, and the opening view frames it.",
+    ],
+  },
+  {
     version: "2026.10.26.3",
     notes: [
       "Phase 2 draws The Blade in the colours stored on its scenery model.",

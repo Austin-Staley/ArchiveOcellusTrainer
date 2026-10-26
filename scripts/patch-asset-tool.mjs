@@ -11,7 +11,9 @@
  * floor is painted with it.
  * Monster 16676 is an uncoloured clickbox. Forcing its faces solid painted a
  * black slab over the coloured scenery, so that rewrite is removed if a
- * previous extract added it. The coloured Blade is scenery object 62706.
+ * previous extract added it. The coloured Blade is scenery model 62699.
+ * A standalone model uses actor light. Object 62706 stores ambient 70 and
+ * contrast 750, and that is the light the scenery sword was drawn with.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -177,6 +179,22 @@ if (!source.includes(bladeMarker)) {
   source = source.replace(previous, "");
   changed = true;
   console.log("patch-asset-tool: the Blade clickbox keeps its cache alphas");
+}
+
+const bladeLight = "model 62699 uses object 62706 light";
+if (source.includes(bladeLight)) {
+  console.log("patch-asset-tool: the Blade model already uses its scenery light");
+} else {
+  const previous = "        const modelPayload = await attachTextures(cache, payload(modelGroup));";
+  const next = `        // ${bladeLight}: ambient 70 and contrast 750, plus the object light base
+        const modelPayload = await attachTextures(cache, payload(modelGroup, void 0, void 0, modelId === 62699 ? { ...OBJECT_LIGHTING, ambient: 70 + 64, contrast: 750 + 768 } : void 0));`;
+  if (!source.includes(previous)) {
+    console.error("patch-asset-tool: the model payload line was not where this patch expects it");
+    process.exit(1);
+  }
+  source = source.replace(previous, next);
+  changed = true;
+  console.log("patch-asset-tool: the Blade model uses its scenery light");
 }
 
 if (changed) writeFileSync(target, source);

@@ -292,20 +292,54 @@ describe("raid clocks", () => {
     expect(pad?.event).toMatchObject({ kind: "pad", next: { x: 16, y: 8 } });
   });
 
-  it("follows the phase 3 auto offsets and the 13-tick collapse", () => {
-    const steps = ARCHIVE.p3.autos;
-    const offsets: number[] = [];
-    let cursor = 0;
-    for (const step of steps) {
-      offsets.push(cursor);
-      cursor += step.next;
-    }
-    expect(cursor).toBe(20);
-    const swung = names("ocellus-p3", 19).filter((row) => row.name === "melee" || row.name === "wave").map((row) => row.at);
-    expect(swung).toEqual(offsets);
+  it("follows the phase 3 chain and the 13-tick collapse", () => {
+    const rows = project("ocellus-p3", options, 33, hold("ocellus-p3"));
+    const swung = rows.flatMap((stamp) => (stamp.event.kind === "attack" && (stamp.event.name === "melee" || stamp.event.name === "wave" || stamp.event.name === "spin") ? [stamp.at] : []));
+    expect(swung.slice(0, 7)).toEqual([4, 7, 10, 14, 17, 20, 24]);
+    const slash = rows.find((stamp) => stamp.at === 11 && stamp.event.kind === "damage" && stamp.event.name === "wave");
+    expect(slash?.event).toMatchObject({ protectedAmount: ARCHIVE.p3.slashMax, unprotectedAmount: ARCHIVE.p3.slashMax });
+    const opening = rows.find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "spin-open");
+    expect(opening?.at).toBe(25);
+    expect(opening?.event).toMatchObject({ protectedAmount: 0, unprotectedAmount: ARCHIVE.p3.spinOpenMax });
+    const saw = rows.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "spin-wave");
+    expect(saw?.at).toBe(29);
+    const sawHit = rows.find((stamp) => stamp.at === 29 && stamp.event.kind === "damage" && stamp.event.name === "spin-wave");
+    expect(sawHit?.event).toMatchObject({ protectedAmount: ARCHIVE.p3.sawMax });
+    expect(rows.some((stamp) => stamp.at === 0 && stamp.event.kind === "phase" && stamp.event.name.startsWith("void-"))).toBe(false);
     const collapse = names("ocellus-p3", 13, hold("ocellus-p3", { bossHp: 3937 })).find((row) => row.name === "collapse");
     expect(collapse?.at).toBe(0);
     const hit = project("ocellus-p3", options, 13, hold("ocellus-p3", { bossHp: 3937 })).find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "collapse");
     expect(hit?.at).toBe(13);
+  });
+
+  it("lands the panic shot two ticks later and leaves the sim's void patch", () => {
+    const far = hold("ocellus-p3", { player: tile(0, 0), previous: tile(0, 0), prayer: "magic" });
+    const rows = project("ocellus-p3", options, 8, far);
+    expect(rows.some((stamp) => stamp.at === 4 && stamp.event.kind === "attack" && stamp.event.name === "void-shot")).toBe(true);
+    const landed = rows.find((stamp) => stamp.at === 6 && stamp.event.kind === "damage" && stamp.event.name === "void-shot");
+    expect(landed?.event).toMatchObject({ style: "magic", protectedAmount: 0, unprotectedAmount: ARCHIVE.p3.panicMax });
+    const patch = rows.find((stamp) => stamp.at === 7 && stamp.event.kind === "damage" && stamp.event.name === "void-patch");
+    expect(patch?.event).toMatchObject({ unprotectedAmount: ARCHIVE.p3.patchMax });
+  });
+
+  it("slams outside his footprint at U+29 and heals him from a siphon off the line", () => {
+    const rows = project("ocellus-p3", options, 90, hold("ocellus-p3"));
+    const untether = rows.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "untether");
+    expect(untether?.at).toBe(53);
+    const slam = rows.find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "slam");
+    expect(slam?.at).toBe(82);
+    expect(slam?.event).toMatchObject({ unprotectedAmount: ARCHIVE.p3.slamMax });
+    expect(rows.some((stamp) => stamp.event.kind === "damage" && stamp.event.name === "aftershock")).toBe(false);
+    const seeded = { ...options, seed: seed(2) };
+    const off = hold("ocellus-p3", { player: tile(0, 0), previous: tile(0, 0), bossHp: 3937 });
+    const healed = project("ocellus-p3", seeded, 24, off);
+    expect(healed.some((stamp) => stamp.at === 0 && stamp.event.kind === "phase" && stamp.event.name.startsWith("void-"))).toBe(false);
+    expect(healed.some((stamp) => stamp.at === 20 && stamp.event.kind === "phase" && stamp.event.name === "void-siphon")).toBe(true);
+    const heal = healed.find((stamp) => stamp.at === 24 && stamp.event.kind === "heal-boss");
+    if (!heal || heal.event.kind !== "heal-boss") throw new Error("the siphon did not heal him");
+    expect([ARCHIVE.p3.siphonHealLow, ARCHIVE.p3.siphonHealHigh]).toContain(heal.event.amount);
+    const onLine = project("ocellus-p3", seeded, 24, hold("ocellus-p3", { bossHp: 3937 }));
+    expect(onLine.some((stamp) => stamp.event.kind === "heal-boss")).toBe(false);
+    expect(onLine.some((stamp) => stamp.event.kind === "heal-player")).toBe(false);
   });
 });

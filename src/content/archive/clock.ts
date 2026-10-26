@@ -3,7 +3,6 @@ import { tick, tile } from "../../sim/brands";
 import type { IncomingStyle, Style } from "../../sim/combat";
 import type { Side } from "../../sim/tiles";
 import type { Corner } from "../ocellus/js/P1Types";
-import { P3_ROOM } from "./roomFacts";
 import type { RaidOptions } from "./catalog";
 import type { RaidId } from "./catalog";
 import {
@@ -48,6 +47,7 @@ import type { Quadrant } from "./layout";
 import { PORTAL_COLOURS, gapsFor, nextColour, volleyLabel } from "./portals";
 import type { PortalColour } from "./portals";
 import { SEQUENCES } from "./poses";
+import { stepP3 } from "./p3Chain";
 import { ARCHIVE } from "./timings";
 
 export type { RaidOptions } from "./catalog";
@@ -113,7 +113,39 @@ type P1Memory = Readonly<{
   walkSteps: number;
 }>;
 type P2Memory = Readonly<{ id: "ocellus-p2"; tiles: readonly Tile[] }>;
-type P3Memory = Readonly<{ id: "ocellus-p3"; collapsed: number; shout: number; quietUntil: number; diseased: boolean; rootedUntil: number; voidUntil: number; voidKind: string }>;
+export type P3Chain = "swing" | "slash";
+export type P3Other = "untether" | "insolence";
+export type P3RiftKind = "buff" | "basic" | "heal";
+export type P3Rift = Readonly<{ born: number; kind: P3RiftKind }>;
+export type P3Memory = Readonly<{
+  id: "ocellus-p3";
+  collapsed: number;
+  shout: number;
+  nextMove: number;
+  chain: P3Chain;
+  swingsLeft: number;
+  setsLeft: number;
+  spinTurn: boolean;
+  other: P3Other;
+  severUntil: number;
+  spinStart: number;
+  saws: number;
+  insolenceStart: number;
+  untetherStart: number;
+  spinsThisQuadrant: number;
+  vineOnNextMove: boolean;
+  vineRootAt: number;
+  specialDue: boolean;
+  slashLand: number;
+  panicLand: number;
+  riftStart: number;
+  riftSerial: number;
+  rifts: readonly P3Rift[];
+  siphonUntil: number;
+  nextSiphon: number;
+  patchFrom: number;
+  patchUntil: number;
+}>;
 
 export type RaidMemory = BorkMemory | EzekielMemory | GuardianMemory | MoiaMemory | XarthMemory | DagonMemory | P1Memory | P2Memory | P3Memory;
 
@@ -172,7 +204,35 @@ export function initialMemory(id: RaidId): RaidMemory {
     case "ocellus-p2":
       return { id, tiles: [] };
     case "ocellus-p3":
-      return { id, collapsed: 0, shout: -1, quietUntil: -1, diseased: false, rootedUntil: -1, voidUntil: -1, voidKind: "rift" };
+      return {
+        id,
+        collapsed: 0,
+        shout: -1,
+        nextMove: ARCHIVE.p3.firstMove,
+        chain: "swing",
+        swingsLeft: 2,
+        setsLeft: ARCHIVE.p3.setsPerSpecial,
+        spinTurn: true,
+        other: "untether",
+        severUntil: -1,
+        spinStart: -1,
+        saws: 0,
+        insolenceStart: -1,
+        untetherStart: -1,
+        spinsThisQuadrant: 0,
+        vineOnNextMove: false,
+        vineRootAt: -1,
+        specialDue: false,
+        slashLand: -1,
+        panicLand: -1,
+        riftStart: 0,
+        riftSerial: 0,
+        rifts: [],
+        siphonUntil: -1,
+        nextSiphon: -1,
+        patchFrom: -1,
+        patchUntil: -1,
+      };
     default: {
       const unhandled: never = id;
       return unhandled;
@@ -835,9 +895,11 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
   if (at === 0 && next.stage === "arrive") {
     const element = p1Roll(options.seed, "volleyElement", tick(0), 1) < 0.5 ? "fire" : "water";
     next = { ...next, element, heading: cornerOfLeg(options.seed, 0, null) };
+    events.push(phase("hooded"));
     events.push(phase("arrive"));
     events.push(chat("Now... ascension..."));
   }
+  if (at === 1 && next.stage === "arrive") events.push(phase("combat-form"));
   next = settleCracks(next, options, input, at, events);
   next = landVolleys(next, options, at, events);
   let openedWalk = false;
@@ -969,138 +1031,6 @@ function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: nu
   return { memory: { id: "ocellus-p2", tiles }, events };
 }
 
-function p3Attacks(): Readonly<{ offset: number; kind: "melee" | "wave" }[]> {
-  const steps = ARCHIVE.p3.autos;
-  const rows: { offset: number; kind: "melee" | "wave" }[] = [];
-  let cursor = 0;
-  for (const step of steps) {
-    switch (step.attack) {
-      case "melee":
-        rows.push({ offset: cursor, kind: "melee" });
-        break;
-      case "wave":
-        rows.push({ offset: cursor, kind: "wave" });
-        break;
-      default: {
-        const unhandled: never = step;
-        return unhandled;
-      }
-    }
-    cursor += step.next;
-  }
-  return rows;
-}
-
-function stepP3(memory: P3Memory, input: RaidInput, at: number): Readonly<{ memory: P3Memory; events: RaidEvent[] }> {
-  const rules = ARCHIVE.p3;
-  let next = memory;
-  const events: RaidEvent[] = [];
-  const doomed = rules.order[next.collapsed];
-  if (next.shout < 0 && doomed !== undefined && input.bossHp * 100 <= rules.hp * (rules.thresholds[next.collapsed] ?? 75)) {
-    const line = next.collapsed === rules.order.length - 1 ? "Obliteration..." : "Run... It matters not...";
-    events.push(attack("collapse", line));
-    events.push(chat(line));
-    next = { ...next, shout: at };
-  }
-  if (next.shout >= 0 && at === next.shout + rules.collapseDelay) {
-    if (doomed !== undefined && quadrantOf(input.player) === doomed) events.push(damage("collapse", "typeless", rules.collapseDamage, rules.collapseDamage));
-  }
-  if (next.shout >= 0 && at === next.shout + rules.stoneFall) {
-    const hops = [...HOP_TILES];
-    if (hops.some((spot) => sameTile(spot, input.player))) events.push(damage("stones", "typeless", rules.collapseDamage, rules.collapseDamage));
-    const kind = next.collapsed === 0 ? "siphon" : next.collapsed === 1 ? "augmenter" : "rift";
-    next = { ...next, collapsed: next.collapsed + 1, shout: -1, voidUntil: at + rules.voidCharge, voidKind: kind };
-    events.push(phase(`quadrant-${next.collapsed}`));
-    events.push(phase(`void-${kind}`));
-  }
-  if (at === rules.spinAt) next = { ...next, quietUntil: at + 12 };
-  if (at === rules.insolenceAt) next = { ...next, quietUntil: at + rules.insolenceWaves * rules.insolenceGap };
-  if (at === rules.untetherAt) next = { ...next, quietUntil: at + rules.eruption + 1 };
-  if (at === rules.vineAt) next = { ...next, quietUntil: at + rules.vineDelay };
-  if (at >= next.quietUntil) {
-    const row = p3Attacks().find((item) => item.offset === at % 20);
-    if (row && at % 20 === row.offset) {
-      if (row.kind === "melee") {
-        const reach = gapTo(input.player, ROOMS["ocellus-p3"].boss, ROOMS["ocellus-p3"].bossSize);
-        if (reach <= 2) {
-          events.push(attack("melee", "14842"));
-          events.push(damage("swing", "melee", P3_ROOM.swingProtectedMax, P3_ROOM.swingUnprotectedMax));
-        } else {
-          events.push(attack("void-shot", "14851"));
-          events.push(damage("void-shot", "typeless", rules.voidShot, rules.voidShot));
-        }
-      } else {
-        events.push(attack("wave", "14846"));
-        if (sameTile(input.player, input.previous)) events.push(damage("wave", "typeless", 45, 45));
-      }
-    }
-  }
-  if (at === rules.spinAt) {
-    events.push(attack("spin", "14869"));
-    events.push(chat("Turn Protect from Melee off, then back on for each saw."));
-  }
-  const waves = next.collapsed === 0 ? 1 : next.collapsed === 1 ? 2 : 3;
-  for (let i = 0; i < waves; i += 1) {
-    const when = rules.spinAt + (rules.spinWave[i] ?? 4);
-    if (at === when) {
-      const unprotected = next.diseased || input.prayer !== "melee";
-      events.push(attack("spin-wave", `${i + 1}`));
-      events.push(damage("spin-wave", "melee", unprotected ? rules.spinUnprayed : rules.spinPrayed, rules.spinUnprayed));
-    }
-    const punish = rules.spinAt + (i === 0 ? 1 : (rules.spinWave[i - 1] ?? 4) + 1);
-    if (at === punish && input.prayer === "melee") {
-      events.push(chat("You've been injured and can't use protection prayers."));
-      next = { ...next, diseased: true };
-    }
-  }
-  if (at === rules.insolenceAt) {
-    events.push(attack("insolence", "Insolence..."));
-    events.push(chat("Insolence..."));
-  }
-  for (let i = 0; i < rules.insolenceWaves; i += 1) {
-    if (at === rules.insolenceAt + i * rules.insolenceGap && sameTile(input.player, input.previous)) {
-      events.push(damage("insolence", "typeless", rules.insolenceDamage, rules.insolenceDamage));
-      events.push({ kind: "mark", tiles: [input.player], colour: "#8a5a3a", text: "field", ticks: 8 });
-    }
-  }
-  if (at === rules.untetherAt) {
-    events.push(attack("untether", "Untether..."));
-    events.push(chat("Untether... Step under him, and leave on the final glow."));
-    events.push(phase("airborne"));
-  }
-  for (const delay of rules.untetherWaves) {
-    if (at === rules.untetherAt + delay) events.push(damage("untether-wave", "magic", rules.magicPrayed, rules.magicUnprayed));
-  }
-  if (at === rules.untetherAt + rules.glowFirst) events.push(attack("glow", "1"));
-  if (at === rules.untetherAt + rules.glowFirst + rules.glows - 1) events.push(attack("glow", `${rules.glows}`));
-  if (at === rules.untetherAt + rules.eruption) {
-    const inside = gapTo(input.player, ROOMS["ocellus-p3"].boss, 3) === 0;
-    const beside = gapTo(input.player, ROOMS["ocellus-p3"].boss, 3) === 1;
-    if (!beside) events.push(damage(inside ? "inner-slam" : "eruption", "typeless", rules.eruptionDamage, rules.eruptionDamage));
-    events.push(phase("grounded"));
-  }
-  if (at === rules.vineAt) {
-    events.push(attack("vine", "The void... will take you..."));
-    events.push(chat("The void... will take you... A solo cannot cut their own vine."));
-    events.push(phase("rooted"));
-    next = { ...next, rootedUntil: at + rules.vineDelay };
-  }
-  if (at === next.rootedUntil) {
-    events.push(damage("vine", "typeless", rules.vineDamage, rules.vineDamage));
-    events.push(phase("free"));
-  }
-  if (at === 0) {
-    events.push(phase("void-rift"));
-    next = { ...next, voidUntil: rules.voidCharge, voidKind: "rift" };
-  }
-  if (at === next.voidUntil && input.addsAlive > 0) events.push(damage("void-burst", "typeless", rules.voidBurst, rules.voidBurst));
-  return { memory: next, events };
-}
-
-const HOP_TILES: readonly Tile[] = [
-  tile(2, 12), tile(5, 12), tile(8, 12), tile(16, 12), tile(19, 12), tile(22, 12),
-  tile(12, 2), tile(12, 5), tile(12, 8), tile(12, 16), tile(12, 19), tile(12, 22),
-];
 
 export function advance(memory: RaidMemory, options: RaidOptions, input: RaidInput, at: Tick): Readonly<{ memory: RaidMemory; events: readonly Stamp[] }> {
   const step = (() => {
@@ -1122,7 +1052,7 @@ export function advance(memory: RaidMemory, options: RaidOptions, input: RaidInp
       case "ocellus-p2":
         return stepP2(memory, options, input, at);
       case "ocellus-p3":
-        return stepP3(memory, input, at);
+        return stepP3(memory, options, input, at);
       default: {
         const unhandled: never = memory;
         return unhandled;

@@ -2,6 +2,22 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.18",
+    notes: [
+      "The phase 2 drill's model and floor graphics are in the asset bundle, so the page no longer logs missing assets.",
+      "Phase 1 and phase 3 chat no longer prints animation numbers or crack counters.",
+      "The phase 1 drill stands on the captured arena, with the scenery sword in the middle.",
+    ],
+  },
+  {
+    version: "2026.10.26.17",
+    notes: [
+      "Phase 1 wears the Hooded Figure for one tick, then Ocellus. The sword in the middle stays scenery. There is no blade npc in phase 1. The blast rolls 28 to 30.",
+      "Phase 3 follows the logged chain: two swings and a shadow slash, twice, then a special. A blocked crack still chips 3 to 5.",
+      "A siphon heals him 12 or 14 unless you stand on its line. The old 22 heal is disputed. The vine roots and does not time out.",
+    ],
+  },
+  {
     version: "2026.10.26.16",
     notes: [
       "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits.",

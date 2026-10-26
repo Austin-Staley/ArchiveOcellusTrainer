@@ -67,7 +67,7 @@ describe("raid rooms in 3D", () => {
       ["moia", "Moia", ROOMS.moia.boss.x, ROOMS.moia.boss.y, ARCHIVE.moia.npcId],
       ["xarth", "Xarth", ROOMS.xarth.boss.x, ROOMS.xarth.boss.y, ARCHIVE.xarth.npcId],
       ["dagonhai", "Dagon'hai trio", ROOMS.dagonhai.boss.x, ROOMS.dagonhai.boss.y, ARCHIVE.dagonhai.npcId],
-      ["ocellus-p1", "Ocellus", ROOMS["ocellus-p1"].boss.x, ROOMS["ocellus-p1"].boss.y, ARCHIVE.p1.npcId],
+      ["ocellus-p1", "Ocellus", ROOMS["ocellus-p1"].boss.x, ROOMS["ocellus-p1"].boss.y, ARCHIVE.p1.hoodedNpcId],
       ["ocellus-p2", "The Blade", ROOMS["ocellus-p2"].boss.x, ROOMS["ocellus-p2"].boss.y, ARCHIVE.p2.npcId],
       ["ocellus-p3", "Ocellus", ROOMS["ocellus-p3"].boss.x, ROOMS["ocellus-p3"].boss.y, ARCHIVE.p3.npcId],
     ];
@@ -101,7 +101,8 @@ describe("raid rooms in 3D", () => {
   it.each(RAID_IDS)("places exactly one boss in %s", (id) => {
     const { region } = open(id, `?encounter=${id}&seed=1&invincible=on`);
     const present = [...region.mobs, ...region.newMobs];
-    const bosses = present.filter((mob) => npcIdOf(mob) === bossNpc(id));
+    const wanted = id === "ocellus-p1" ? ARCHIVE.p1.hoodedNpcId : bossNpc(id);
+    const bosses = present.filter((mob) => npcIdOf(mob) === wanted);
     expect(bosses).toHaveLength(1);
     expect(region.primaryBoss).toBe(bosses[0]);
   });
@@ -137,6 +138,22 @@ describe("raid rooms in 3D", () => {
     })).toBe(false);
   });
 
+  it("does not say animation ids or crack counters in phase 1 or phase 3", () => {
+    const bare = (lines: readonly string[]) => lines.filter((line) => /^\d+$/.test(line) || line === "centre" || line === "magic" || line === "ranged");
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    fight(phase1.world, 2);
+    const opening = phase1.region.chat().some((line) => line === "Now... ascension...");
+    fight(phase1.world, 118);
+    const phase3 = open("ocellus-p3", "?encounter=ocellus-p3&seed=1&invincible=on");
+    fight(phase3.world, 12);
+    expect({
+      phase1: bare(phase1.region.chat()),
+      phase3: bare(phase3.region.chat()),
+      opening,
+      swing: phase3.region.chat().some((line) => line.includes("14842")),
+    }).toEqual({ phase1: [], phase3: [], opening: true, swing: false });
+  });
+
   it("draws one Ocellus in phase 1, and a missed tendril's heal of 2 lands on that body", () => {
     const { region, world, player } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
     const present = [...region.mobs, ...region.newMobs];
@@ -144,7 +161,17 @@ describe("raid rooms in 3D", () => {
       const id = npcIdOf(mob);
       return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId || id === ARCHIVE.p2.npcId || id === ARCHIVE.p2.formNpcId;
     });
-    expect(bodies.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+    expect(bodies.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.hoodedNpcId]);
+    fight(world, 1);
+    expect([...region.mobs, ...region.newMobs].filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+    }).map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.hoodedNpcId]);
+    fight(world, 1);
+    expect([...region.mobs, ...region.newMobs].filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+    }).map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
     const blade = region.entities.find((entity) => entity.entityName() === "The Blade");
     if (!blade) throw new Error("the phase 1 sword was not in the room");
     expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
@@ -269,14 +296,13 @@ describe("raid rooms in 3D", () => {
     expect(parseRaid(new URL("http://localhost/?gear=bow"), "bork", () => 1).rejected).toContain("gear=bow");
   });
 
-  it("draws the phase 3 censers as coloured boxes and the voids as ledger models", () => {
+  it("draws the phase 3 censers as coloured boxes and leaves quadrant 1 without a rift", () => {
     const { region, world } = open("ocellus-p3", "?encounter=ocellus-p3&seed=1&invincible=on");
     const present = [...region.mobs, ...region.newMobs];
     const censer = present.find((mob) => mob.mobName() === "Bandosian censer");
-    const rift = present.find((mob) => mob.mobName() === "Void rift");
-    if (!censer || !rift) throw new Error("the censer or the rift was not in the room");
+    if (!censer) throw new Error("the censer was not in the room");
     expect(censer.get3dModel()).toBeInstanceOf(BasicModel);
-    expect(rift.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect(present.some((mob) => mob.mobName() === "Void rift")).toBe(false);
     expect(region.chat().some((line) => line.includes("censers are coloured stand-ins"))).toBe(true);
     fight(world, 1);
     expect(region.snapshot()?.boss.npcId).toBe(ARCHIVE.p3.npcId);
@@ -288,7 +314,7 @@ describe("raid rooms in 3D", () => {
 
   it.each<[RaidId, number]>([
     ["xarth", 10],
-    ["ocellus-p3", 10],
+    ["ocellus-p3", 14],
   ])("records a death in %s on tick %i and keeps the player in the room", (id, at) => {
     const { region, world, player } = open(id, `?encounter=${id}&seed=7`);
     fight(world, at + 1);

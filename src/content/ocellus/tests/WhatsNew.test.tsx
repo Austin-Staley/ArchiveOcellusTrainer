@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.16",
+  version: "2026.10.26.18",
   date: "2026-10-26",
   notes: [
-    "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits.",
-    "Phase 1's safe-tile countdown and the red outline five ticks before an explosion sit in those controls, and in Settings when the sidebar is off.",
-    "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+    "The phase 2 drill's model and floor graphics are in the asset bundle, so the page no longer logs missing assets.",
+    "Phase 1 and phase 3 chat no longer prints animation numbers or crack counters.",
+    "The phase 1 drill stands on the captured arena, with the scenery sword in the middle.",
   ],
 };
 

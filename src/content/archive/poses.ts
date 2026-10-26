@@ -88,7 +88,9 @@ export function arenaFor(id: RaidId): ArenaPlace {
     case "ocellus-p1":
       return { region: REGION_IDS.ocellus, offsetX: -25, offsetY: -6, elevation: -OCELLUS_PLANE_DROP };
     case "ocellus-p2":
-      return { region: REGION_IDS.ocellus, offsetX: -19, offsetY: -12, elevation: -OCELLUS_PLANE_DROP };
+      // Object 62706, The Blade, is cache local (31, 41): the centre of monster 16676's 3x3, which is trainer (12, 12).
+      // The scene mirror flips local Y, so offsetY pins that centre on tile y 12. Pinning the south-west tile (30, 40) on (11, 11) left the model two tiles toward the camera.
+      return { region: REGION_IDS.ocellus, offsetX: -19, offsetY: -10, elevation: -OCELLUS_PLANE_DROP };
     case "ocellus-p3":
       return { region: REGION_IDS.ocellus, offsetX: -31, offsetY: -11, elevation: -OCELLUS_PLANE_DROP };
     default: {

@@ -9,8 +9,9 @@
  * colour in the secondary slot. The tool was dropping those tiles. The
  * secondary colour is the one the cache stores for that overlay, so the
  * floor is painted with it.
- * The Blade's cache model stores every face at alpha 254, which draws as
- * fully clear. The same mesh is stored solid so the model can be seen.
+ * Monster 16676 is an uncoloured clickbox. Forcing its faces solid painted a
+ * black slab over the coloured scenery, so that rewrite is removed if a
+ * previous extract added it. The coloured Blade is scenery object 62706.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -161,24 +162,21 @@ if (source.includes(dropMarker)) {
 }
 
 const bladeMarker = "blade 16676 stores a solid mesh";
-if (source.includes(bladeMarker)) {
-  console.log("patch-asset-tool: the Blade mesh is already stored solid");
+if (!source.includes(bladeMarker)) {
+  console.log("patch-asset-tool: the Blade clickbox keeps its cache alphas");
 } else {
-  const previous = `        npcPayload.poseMap = Object.fromEntries(sequenceIds.map((id2, index) => [index, id2]));
-        assets.push({ id: \`npc-\${npcAsset.id}\`, payload: npcPayload });`;
-  const next = `        npcPayload.poseMap = Object.fromEntries(sequenceIds.map((id2, index) => [index, id2]));
-        if (npcAsset.id === 16676 && npcPayload.alphas?.length && npcPayload.alphas.every((alpha) => alpha === 254)) {
+  const previous = `        if (npcAsset.id === 16676 && npcPayload.alphas?.length && npcPayload.alphas.every((alpha) => alpha === 254)) {
           // blade 16676 stores a solid mesh
           npcPayload.alphas = npcPayload.alphas.map(() => 0);
         }
-        assets.push({ id: \`npc-\${npcAsset.id}\`, payload: npcPayload });`;
+`;
   if (!source.includes(previous)) {
-    console.error("patch-asset-tool: the npc payload write was not where this patch expects it");
+    console.error("patch-asset-tool: the Blade alpha rewrite was not where this patch expects it");
     process.exit(1);
   }
-  source = source.replace(previous, next);
+  source = source.replace(previous, "");
   changed = true;
-  console.log("patch-asset-tool: the Blade mesh is stored solid");
+  console.log("patch-asset-tool: the Blade clickbox keeps its cache alphas");
 }
 
 if (changed) writeFileSync(target, source);

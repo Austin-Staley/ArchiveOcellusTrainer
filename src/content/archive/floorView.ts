@@ -3,6 +3,8 @@ import { CacheRenderInstancedModel, CacheRenderModel, CacheRenderReferences, Col
 import type { Location3, Model, Region, Renderable } from "osrs-sdk";
 import type { Tile } from "../../sim/brands";
 import type { Quadrant } from "./layout";
+import { ARCHIVE } from "./timings";
+import { OIL_MODEL } from "./poses";
 import { PORTAL_IDLE, PORTAL_ORANGE, PORTAL_PURPLE, portalLook, portalPlaces } from "./portals";
 import type { PortalArm } from "./portals";
 
@@ -51,9 +53,9 @@ class FloorSpotModel implements Model {
   async preload(): Promise<void> {}
 }
 
-/** One floor tile of a phase 1 crack or blast, on plane 1's walk floor. */
+/** One floor tile of a phase 1 crack or blast, or a Bork cannon graphic on plane 0. */
 export class FloorGraphic extends Entity {
-  kind: "crack" | "blast" = "crack";
+  kind: "crack" | "blast" | "spot" = "crack";
   life = 1;
   spotAnim = 0;
   delay = 0;
@@ -67,11 +69,33 @@ export class FloorGraphic extends Entity {
   }
 
   override entityName(): string {
-    return this.kind === "crack" ? `Crack ${this.spotAnim}` : `Blast ${this.spotAnim}`;
+    switch (this.kind) {
+      case "crack":
+        return `Crack ${this.spotAnim}`;
+      case "blast":
+        return `Blast ${this.spotAnim}`;
+      case "spot":
+        return `Spot ${this.spotAnim}`;
+      default: {
+        const unhandled: never = this.kind;
+        return unhandled;
+      }
+    }
   }
 
   override get color(): string {
-    return this.kind === "crack" ? "#3d8f4a" : "#c45b28";
+    switch (this.kind) {
+      case "crack":
+        return "#3d8f4a";
+      case "blast":
+        return "#c45b28";
+      case "spot":
+        return "#c47a28";
+      default: {
+        const unhandled: never = this.kind;
+        return unhandled;
+      }
+    }
   }
 
   override get collisionType(): CollisionType {
@@ -84,6 +108,10 @@ export class FloorGraphic extends Entity {
 
   override get drawOutline(): boolean {
     return false;
+  }
+
+  override get selectable(): boolean {
+    return this.kind !== "spot";
   }
 
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
@@ -111,8 +139,78 @@ export class FloorGraphic extends Entity {
     return true;
   }
 
+  /** A cannon spot sits on Bork's walk floor, plane 0. Cracks and blasts keep the phase 1 floor. */
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    if (this.kind !== "spot") return at;
+    return { x: at.x, y: at.y, z: 0 };
+  }
+
   protected override create3dModel(): Model {
     return new FloorSpotModel(this, () => ({ spotAnim: this.spotAnim, delay: this.delay, loops: this.loops }));
+  }
+}
+
+/** True when the model is a captured floor spotanim, not a coloured stand-in. */
+export function isFloorSpot(model: Model): boolean {
+  return model instanceof FloorSpotModel;
+}
+
+/** Ragged oil. Object 62544, model 62729. Walk-through, and it does not block a shot. */
+export class OilPatch extends Entity {
+  life = 1;
+
+  override get size(): number {
+    return 1;
+  }
+
+  override entityName(): string {
+    return `Oil ${ARCHIVE.bork.oil.objectId}`;
+  }
+
+  override get color(): string {
+    return "#6b4a1a";
+  }
+
+  override get collisionType(): CollisionType {
+    return CollisionType.NONE;
+  }
+
+  override get lineOfSight(): LineOfSightMask {
+    return LineOfSightMask.NONE;
+  }
+
+  override get selectable(): boolean {
+    return false;
+  }
+
+  override get drawOutline(): boolean {
+    return false;
+  }
+
+  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    void tickPercent;
+    const scale = Settings.tileSize;
+    context.fillStyle = this.color;
+    context.globalAlpha = 0.7;
+    context.fillRect(this.location.x * scale, this.location.y * scale, scale, scale);
+    context.globalAlpha = 1;
+  }
+
+  age(): boolean {
+    this.life -= 1;
+    if (this.life > 0) return false;
+    this.dying = 0;
+    return true;
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    return { x: at.x, y: at.y, z: 0 };
+  }
+
+  protected override create3dModel(): Model {
+    return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(OIL_MODEL));
   }
 }
 

@@ -74,6 +74,7 @@ export function archiveOcellusAssets(flags: BuildFlags) {
     models: {
       ...P4_ASSETS.models,
       theBlade: { id: BLADE_MODEL, animations: { stand: BLADE_STAND } },
+      raggedTile: { id: ARCHIVE.bork.oil.model },
       p2PortalInactive: { id: portalLooks.value.inactive.model, animations: { idle: portalLooks.value.inactive.idle } },
       p2PortalLit: { id: portalLooks.value.lit.model, animations: { idle: portalLooks.value.lit.idle } },
     },
@@ -81,6 +82,7 @@ export function archiveOcellusAssets(flags: BuildFlags) {
     spotAnims: Object.fromEntries([
       ...Object.entries(P4_ASSETS.spotAnims),
       ...Object.entries(GRAPHICS).map(([name, id]) => [name, { id }]),
+      ...ARCHIVE.bork.cannon.splats.map((id) => [`raidSmorkSplat${id}`, { id }] as const),
       ...p1SpotAnims,
       ...(p2 ? Object.entries(OCELLUS_P2.spotAnims).map(([name, spotAnim]) => [p2Key(name), { id: spotAnim.value }]) : []),
     ]),

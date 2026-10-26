@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.18",
+  version: "2026.10.26.19",
   date: "2026-10-26",
   notes: [
-    "The phase 2 drill's model and floor graphics are in the asset bundle, so the page no longer logs missing assets.",
-    "Phase 1 and phase 3 chat no longer prints animation numbers or crack counters.",
-    "The phase 1 drill stands on the captured arena, with the scenery sword in the middle.",
+    "Bork and the Smorks block a ranged or magic shot. The cannon oil on the floor does not.",
+    "The Smorks play animation 14554 for the cannon. Graphic 4045 flies 4 ticks, then fire and oil cover the 3×3.",
+    "Standing on the oil chips 6 or 7 a tick. The heavy cannonball stays the likely second special.",
   ],
 };
 

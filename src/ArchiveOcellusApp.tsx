@@ -47,6 +47,8 @@ declare global {
       snapshot(): VerificationProbeSnapshot;
       log(): FightLog | P3Log | P2Log | P1Log | ReturnType<RaidRegion["fightLog"]>;
       tileCentre(at: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> | null;
+      sight(): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null;
+      place(x: number, y: number): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null;
     }>;
   }
 }
@@ -102,6 +104,8 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: Drill["region
     },
     log: () => region.fightLog(),
     tileCentre: (at) => Viewport.viewport.projectTile(at, trainer.getSnapshot().world),
+    sight: () => (region instanceof RaidRegion ? region.attackSight() : null),
+    place: (x, y) => (region instanceof RaidRegion ? region.placePlayer(x, y) : null),
   });
 }
 
@@ -875,6 +879,14 @@ function P1Legend({ stand, outline }: Readonly<{ stand: boolean; outline: boolea
   );
 }
 
+function BorkLegend() {
+  return (
+    <ul id="bork_legend">
+      <li><span className="swatch oil" /> Cannon oil</li>
+    </ul>
+  );
+}
+
 /** The sidebar loads behind a test of the raw build variable, which webpack folds, so a build with ARCHIVE_FULL off contains none of it. */
 const loadSidebar = () => (process.env.ARCHIVE_FULL === "on" ? lazy(() => import("./menu/Sidebar")) : null);
 
@@ -907,6 +919,7 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
           <MovementBadge region={region} shown={showMovement} />
           {session.kind === "raid" && session.launch.id === "ocellus-p2" ? <PortalCallLabel region={session.region} /> : null}
           {p1 !== null ? <P1Legend stand={p1.stand} outline={p1.outline} /> : null}
+          {session.kind === "raid" && session.launch.id === "bork" ? <BorkLegend /> : null}
           <GameChat region={region} />
           {Sidebar === null && controls}
           <Credits makerInFooter={Sidebar === null} />

@@ -2,8 +2,8 @@ import type { Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import type { IncomingStyle, Style } from "../../sim/combat";
 import type { Side } from "../../sim/tiles";
-import { OCELLUS_P3 } from "../ocellus/js/OcellusTimings";
 import type { Corner } from "../ocellus/js/P1Types";
+import { P3_ROOM } from "./roomFacts";
 import type { RaidOptions } from "./catalog";
 import type { RaidId } from "./catalog";
 import {
@@ -1024,7 +1024,7 @@ function stepP3(memory: P3Memory, input: RaidInput, at: number): Readonly<{ memo
         const reach = gapTo(input.player, ROOMS["ocellus-p3"].boss, ROOMS["ocellus-p3"].bossSize);
         if (reach <= 2) {
           events.push(attack("melee", "14842"));
-          events.push(damage("swing", "melee", OCELLUS_P3.swing.protectedDamage.value.max, OCELLUS_P3.swing.unprotectedDamage.value.max));
+          events.push(damage("swing", "melee", P3_ROOM.swingProtectedMax, P3_ROOM.swingUnprotectedMax));
         } else {
           events.push(attack("void-shot", "14851"));
           events.push(damage("void-shot", "typeless", rules.voidShot, rules.voidShot));

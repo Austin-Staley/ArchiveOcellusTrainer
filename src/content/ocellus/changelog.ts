@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.16",
+    notes: [
+      "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits.",
+      "Phase 1's safe-tile countdown and the red outline five ticks before an explosion sit in those controls, and in Settings when the sidebar is off.",
+      "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+    ],
+  },
+  {
     version: "2026.10.26.15",
     notes: [
       "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",

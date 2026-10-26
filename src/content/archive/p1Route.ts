@@ -1,9 +1,9 @@
 import type { Seed, Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import type { Corner, CornerTurn } from "../ocellus/js/P1Types";
-import { OCELLUS_P1 } from "../ocellus/js/OcellusTimings";
 import type { Side } from "../../sim/tiles";
 import { sameTile } from "./layout";
+import { P1_ROUTE } from "./roomFacts";
 import { ARCHIVE } from "./timings";
 
 /**
@@ -51,7 +51,7 @@ function cornerAfter(from: Corner, turn: CornerTurn): Corner {
 export function cornerOfLeg(seed: Seed, leg: number, from: Corner | null): Corner {
   const draw = p1Roll(seed, "cornerRoute", tick(0), leg);
   if (from === null) return CORNERS[Math.floor(draw * CORNERS.length)] ?? CORNERS[0];
-  const weights = OCELLUS_P1.route.value;
+  const weights = P1_ROUTE.weights;
   const total = weights.anticlockwise + weights.clockwise + weights.across;
   const pick = draw * total;
   if (pick < weights.anticlockwise) return cornerAfter(from, "anticlockwise");
@@ -100,12 +100,15 @@ function shifted(at: Tile): Tile {
   return tile(at.x + P1_SHIFT.x, at.y + P1_SHIFT.y);
 }
 
-export const P1_START = shifted(OCELLUS_P1.room.start.value);
-export const P1_MIDDLE = shifted(OCELLUS_P1.room.middle.value);
+function anchor(at: Readonly<{ x: number; y: number }>): Tile {
+  return tile(at.x, at.y);
+}
+
+export const P1_START = shifted(anchor(P1_ROUTE.start));
+export const P1_MIDDLE = shifted(anchor(P1_ROUTE.middle));
 
 export function p1CornerTile(corner: Corner): Tile {
-  const named = OCELLUS_P1.room.corners.value[corner];
-  return shifted(named);
+  return shifted(anchor(P1_ROUTE.corners[corner]));
 }
 
 /** Chebyshev steps. A walk of n steps arrives on its tick n − 1, matching the logged one-tile-a-tick path. */
@@ -193,8 +196,8 @@ const ROOM = 25;
 
 /** A middle beat's six-tile diagonal, from the logged offsets off his south-west anchor. */
 export function beatTiles(anchor: Tile, side: Side, nth: 0 | 1): readonly Tile[] {
-  const spec = OCELLUS_P1.middle.beats.value.cracks[side][nth];
-  const length = OCELLUS_P1.middle.beats.value.length;
+  const spec = P1_ROUTE.beats.cracks[side][nth];
+  const length = P1_ROUTE.beats.length;
   const from = tile(anchor.x + spec.dx, anchor.y + spec.dy);
   const tiles: Tile[] = [];
   for (let step = 0; step < length; step += 1) {

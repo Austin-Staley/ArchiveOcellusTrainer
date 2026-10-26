@@ -29,4 +29,5 @@ prepare_reader
 npm ci --no-audit --no-fund
 scripts/install-beta-sdk.sh
 npm run assets -- --cache-dir "${CACHE_ROOT}/openrs2" --reader-path "${READER}"
-npm run build
+# IT-SPARE plays every phase. The sidebar and its Full fight (beta) entry ship with that build.
+ARCHIVE_P1="${ARCHIVE_P1:-on}" ARCHIVE_P2="${ARCHIVE_P2:-on}" ARCHIVE_P3="${ARCHIVE_P3:-on}" ARCHIVE_FULL=on npm run build

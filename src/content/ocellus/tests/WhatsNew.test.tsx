@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.15",
+  version: "2026.10.26.16",
   date: "2026-10-26",
   notes: [
-    "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",
-    "Vines open, close and explode on the logged ticks. Standing on one chips 3 to 5 and pays it back when you step off. The blast rolls 26 to 34.",
-    "A cyan tile counts 4, 3, 2, 1 before you need to move. A red outline marks the explosion five ticks early. Both can be turned off in Settings.",
+    "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits.",
+    "Phase 1's safe-tile countdown and the red outline five ticks before an explosion sit in those controls, and in Settings when the sidebar is off.",
+    "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
   ],
 };
 

@@ -1,5 +1,5 @@
 import type { Tile } from "../../../../sim/brands";
-import { OCELLUS_P1 } from "../OcellusTimings";
+import { OCELLUS_P1 } from "../OcellusTimingsP1";
 import type { Corner, P1Beat, P1Phase } from "../P1Types";
 import { CORNERS, sameTile, stepToward } from "./arena";
 

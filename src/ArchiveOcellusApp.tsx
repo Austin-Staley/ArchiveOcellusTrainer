@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, SoundCache, TrainerInstance, TrainerLoadingState, Viewport } from "osrs-sdk";
 import type { Item, SettingsState } from "osrs-sdk";
@@ -27,7 +27,8 @@ import type { ReleaseVersion } from "./releases";
 import { releaseDate } from "./releases";
 import { keepHoverTextOnCanvas } from "./hoverText";
 import { loadWebAnalytics, perfDataAllowed, setPerfDataAllowed, startPerfTelemetry } from "./telemetry/perfTelemetry";
-import { reportUnservedAssets } from "./assets";
+import { reportUnservedAssets } from "./servedAssets";
+import { CONTRIBUTOR, MAKER, MAKER_LINKS } from "./menu/credits";
 
 keepHoverTextOnCanvas();
 // Desktop browsers start the SDK's AudioContext suspended until a user gesture, and the SDK never resumes it.
@@ -39,12 +40,6 @@ window.addEventListener("unhandledrejection", (event) => {
 
 export const CREDIT_LINE =
   "Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex.";
-const MAKER = "Julian Dasilva / Moarhots";
-const MAKER_LINKS: readonly Readonly<{ label: string; href: string }>[] = [
-  { label: "GitHub", href: "https://github.com/Julian-Dasilva/ArchiveOcellusTrainer" },
-  { label: "@ShadowJdas", href: "https://x.com/ShadowJdas" },
-];
-const CONTRIBUTOR: Readonly<{ name: string; href: string }> = { name: "Alessandro Rodi", href: "https://github.com/alessandrorodi" };
 
 declare global {
   interface Window {
@@ -797,12 +792,12 @@ function RaidControls({ launch, region, flags, movement, p1 }: Readonly<{ launch
         </label>
         {p1 !== null && (
           <label>
-            Stand helper <input id="stand_helper" type="checkbox" checked={p1.stand} onChange={(event) => p1.setStand(event.target.checked)} />
+            Safe-tile countdown <input id="stand_helper" type="checkbox" checked={p1.stand} onChange={(event) => p1.setStand(event.target.checked)} />
           </label>
         )}
         {p1 !== null && (
           <label>
-            Explosion outline <input id="blast_outline" type="checkbox" checked={p1.outline} onChange={(event) => p1.setOutline(event.target.checked)} />
+            AoE outline <input id="blast_outline" type="checkbox" checked={p1.outline} onChange={(event) => p1.setOutline(event.target.checked)} />
           </label>
         )}
       </div>
@@ -812,10 +807,10 @@ function RaidControls({ launch, region, flags, movement, p1 }: Readonly<{ launch
   );
 }
 
-function Credits() {
+function Credits({ makerInFooter }: Readonly<{ makerInFooter: boolean }>) {
   return (
     <footer id="credits">
-      <p id="maker_credit">
+      {makerInFooter && <p id="maker_credit">
         Made by {MAKER}{" "}
         <span id="maker_links">
           {MAKER_LINKS.map((link, i) => (
@@ -830,10 +825,10 @@ function Credits() {
         <span id="contributor_credit">
           With help from{" "}
           <a href={CONTRIBUTOR.href} target="_blank" rel="noopener noreferrer">
-            {CONTRIBUTOR.name}
+            {CONTRIBUTOR.label}
           </a>
         </span>
-      </p>
+      </p>}
       <p id="credit_line">{CREDIT_LINE}</p>
       <p id="app_version">v{LATEST_RELEASE.version}</p>
     </footer>
@@ -880,11 +875,15 @@ function P1Legend({ stand, outline }: Readonly<{ stand: boolean; outline: boolea
   );
 }
 
+/** The sidebar loads behind a test of the raw build variable, which webpack folds, so a build with ARCHIVE_FULL off contains none of it. */
+const loadSidebar = () => (process.env.ARCHIVE_FULL === "on" ? lazy(() => import("./menu/Sidebar")) : null);
+
 function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
   const [showMovement, setShowMovement] = useState(false);
   const [standHelper, setStandHelper] = useState(true);
   const [blastOutline, setBlastOutline] = useState(true);
+  const [Sidebar] = useState(loadSidebar);
   const region = session.kind === "drill" ? session.drill.region : session.region;
   const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
   const p1: P1Helpers | null = session.kind === "raid" && session.launch.id === "ocellus-p1" ? { stand: standHelper, setStand: setStandHelper, outline: blastOutline, setOutline: setBlastOutline } : null;
@@ -896,6 +895,9 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
     session.region.standHelper = standHelper;
     session.region.blastOutline = blastOutline;
   }, [session, standHelper, blastOutline]);
+  const controls = session.kind === "drill"
+    ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} />
+    : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} p1={p1} />;
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
@@ -906,11 +908,16 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
           {session.kind === "raid" && session.launch.id === "ocellus-p2" ? <PortalCallLabel region={session.region} /> : null}
           {p1 !== null ? <P1Legend stand={p1.stand} outline={p1.outline} /> : null}
           <GameChat region={region} />
-          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} p1={p1} />}
-          <Credits />
+          {Sidebar === null && controls}
+          <Credits makerInFooter={Sidebar === null} />
         </div>
         {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}
       </GameOverlay>
+      {Sidebar !== null && (
+        <Suspense fallback={null}>
+          <Sidebar>{controls}</Sidebar>
+        </Suspense>
+      )}
     </TrainerApp>
   );
 }

@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
 import { seed, tick, tile } from "../../../sim/brands";
-import { cornerCrack } from "../cracks";
+import { crackCues } from "../cracks";
 import { BATTERY_TILES, ROOMS } from "../layout";
+import { bossMayStand } from "../movement";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -105,18 +106,63 @@ describe("raid rooms in 3D", () => {
     expect(region.primaryBoss).toBe(bosses[0]);
   });
 
-  it("draws one Ocellus in phase 1, and a missed tendril's 125 heal lands on that body", () => {
+  it("shows the red blast outline for the five ticks before it detonates, and hides both helpers when Settings is off", () => {
+    const { region, world } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    let seen = false;
+    for (let step = 0; step < 80 && !seen; step += 1) {
+      fight(world, 1);
+      seen = region.entities.some((entity) => entity.entityName() === "blast-outline");
+    }
+    expect(seen).toBe(true);
+    const outline = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "blast-outline");
+    const vine = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!outline || outline.event.kind !== "mark") throw new Error("the outline was not logged");
+    expect(vine).toBeUndefined();
+    const countdown = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "stand-4");
+    expect(countdown).toBeDefined();
+    fight(world, 4);
+    expect(region.entities.some((entity) => entity.entityName() === "blast-outline")).toBe(false);
+    fight(world, 1);
+    const detonated = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!detonated || detonated.event.kind !== "mark") throw new Error("the blast did not detonate");
+    expect(detonated.at).toBe(outline.at + ARCHIVE.p1.outlineLead);
+
+    const quiet = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    quiet.region.standHelper = false;
+    quiet.region.blastOutline = false;
+    fight(quiet.world, 80);
+    expect(quiet.region.entities.some((entity) => {
+      const name = entity.entityName() ?? "";
+      return name === "blast-outline" || name.startsWith("stand");
+    })).toBe(false);
+  });
+
+  it("draws one Ocellus in phase 1, and a missed tendril's heal of 2 lands on that body", () => {
     const { region, world, player } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
     const present = [...region.mobs, ...region.newMobs];
     const bodies = present.filter((mob) => {
       const id = npcIdOf(mob);
-      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId || id === ARCHIVE.p2.npcId || id === ARCHIVE.p2.formNpcId;
     });
     expect(bodies.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+    const blade = region.entities.find((entity) => entity.entityName() === "The Blade");
+    if (!blade) throw new Error("the phase 1 sword was not in the room");
+    expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect({ x: blade.location.x, y: blade.location.y, z: blade.getPerceivedLocation(0).z }).toEqual({ x: 5, y: 17, z: -BLADE_SEAT });
     player.setLocation({ x: 1, y: 1 });
-    fight(world, 6);
-    const healed = [...region.mobs, ...region.newMobs].filter((mob) => mob.incomingProjectiles.some((splat) => splat.damage === -ARCHIVE.p1.tendrilBossHeal));
-    expect(healed.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+    let sawHeal = false;
+    for (let step = 0; step < 80; step += 1) {
+      fight(world, 1);
+      const healed = [...region.mobs, ...region.newMobs].filter((mob) => mob.incomingProjectiles.some((splat) => splat.damage === -ARCHIVE.p1.tendrilBossHeal));
+      if (healed.length === 0) continue;
+      expect(healed.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+      sawHeal = true;
+    }
+    expect(sawHeal).toBe(true);
+    expect({ x: blade.location.x, y: blade.location.y }).toEqual({ x: 5, y: 17 });
+    const boss = region.snapshot()?.boss;
+    if (!boss) throw new Error("Ocellus was not in phase 1");
+    expect(bossMayStand("ocellus-p1", tile(boss.x, boss.y))).toBe(true);
   });
 
   it("places the four batteries off the combat-add list", () => {
@@ -274,13 +320,24 @@ describe("raid rooms in 3D", () => {
 
   it("draws the phase 1 cracks on the floor and the phase 2 portal grid", () => {
     const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
-    fight(phase1.world, 1);
-    const cracks = phase1.region.entities.filter((entity) => {
+    let cracks = phase1.region.entities.filter((entity) => {
       const name = entity.entityName();
       return name !== null && name.startsWith("Crack ");
     });
-    expect(cracks.map((entity) => ({ x: entity.location.x, y: entity.location.y }))).toEqual(cornerCrack(0, 0).map((at) => ({ x: at.x, y: at.y })));
-    expect(cracks[7]?.entityName()).toBe("Crack 4238");
+    for (let step = 0; step < 80 && cracks.length === 0; step += 1) {
+      fight(phase1.world, 1);
+      cracks = phase1.region.entities.filter((entity) => {
+        const name = entity.entityName();
+        return name !== null && name.startsWith("Crack ");
+      });
+    }
+    const opened = phase1.region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
+    if (!opened || opened.event.kind !== "mark") throw new Error("the first crack was not marked");
+    const cues = crackCues(opened.event.tiles);
+    expect(cracks.map((entity) => ({ x: entity.location.x, y: entity.location.y }))).toEqual(cues.map((cue) => ({ x: cue.at.x, y: cue.at.y })));
+    const far = cues[cues.length - 1];
+    if (far === undefined) throw new Error("the first crack had no far tile");
+    expect(cracks.find((entity) => entity.location.x === far.at.x && entity.location.y === far.at.y)?.entityName()).toBe(`Crack ${far.open}`);
 
     const phase2 = open("ocellus-p2", "?encounter=ocellus-p2&seed=1&invincible=on");
     fight(phase2.world, 3);

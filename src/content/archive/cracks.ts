@@ -96,9 +96,8 @@ function lineOf(tendril: Tendril, centre: Readonly<{ x: number; y: number }>, in
   }
 }
 
-/** Eight tiles from his face toward the middle. Index 0 is the crack on the charge tick. */
-export function cornerCrack(corner: number, index: number): readonly Tile[] {
-  const anchor = P1_CORNERS[corner % P1_CORNERS.length] ?? P1_CORNERS[0];
+/** Eight tiles from his face toward the middle. Index 0 is the crack on the charge tick. The line starts at the anchor he is actually standing on. */
+export function crackFrom(anchor: Tile, index: number): readonly Tile[] {
   const centre = { x: anchor.x + (BOSS_SIZE - 1) / 2, y: anchor.y - (BOSS_SIZE - 1) / 2 };
   const middle = { x: P1_CENTRE.x + (BOSS_SIZE - 1) / 2, y: P1_CENTRE.y - (BOSS_SIZE - 1) / 2 };
   const ix = sign(middle.x - centre.x) || 1;
@@ -113,6 +112,12 @@ export function cornerCrack(corner: number, index: number): readonly Tile[] {
     tiles.push(at);
   }
   return tiles;
+}
+
+/** The crack he would open from a captured corner. A clipped west corner uses crackFrom on the tile he actually reached. */
+export function cornerCrack(corner: number, index: number): readonly Tile[] {
+  const anchor = P1_CORNERS[corner % P1_CORNERS.length] ?? P1_CORNERS[0];
+  return crackFrom(anchor, index);
 }
 
 function growthOf(tiles: readonly Tile[]): Growth {

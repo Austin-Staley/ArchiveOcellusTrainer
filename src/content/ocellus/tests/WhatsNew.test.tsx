@@ -14,13 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.14",
+  version: "2026.10.26.15",
   date: "2026-10-26",
   notes: [
-    "Phase 1 draws one Ocellus. The Hooded Figure uses the same models, so that second body stays off the tile, and the 125 heal lands on the one boss.",
-    "The chat keeps the latest lines after the box fills.",
-    "Settings lists the upstream phase 1, phase 2 and phase 3 drills next to the rooms.",
-    "Phase 2 labels the current volley's colour and quadrant. A room with no seed draws a new random seed. Seed 5 opens red in the north-east.",
+    "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",
+    "Vines open, close and explode on the logged ticks. Standing on one chips 3 to 5 and pays it back when you step off. The blast rolls 26 to 34.",
+    "A cyan tile counts 4, 3, 2, 1 before you need to move. A red outline marks the explosion five ticks early. Both can be turned off in Settings.",
   ],
 };
 

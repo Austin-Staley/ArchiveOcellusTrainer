@@ -5,8 +5,10 @@ import { defaultOptions, parseRaid } from "../catalog";
 import type { RaidId } from "../catalog";
 import { portalOpening, project } from "../clock";
 import type { RaidInput } from "../clock";
-import { cornerCrack } from "../cracks";
-import { DAGON_TRAIL, ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
+import { blastRing, crackFrom } from "../cracks";
+import { distanceToBody } from "../../ocellus/js/p1/arena";
+import { DAGON_TRAIL, P1_CENTRE, ROOMS, WAVE_SKIP, beamHits } from "../layout";
+import { countdownStart, tileGap, vinePlace } from "../p1Route";
 import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
 
 const options = defaultOptions(seed(1));
@@ -22,6 +24,7 @@ function hold(id: RaidId, patch: Partial<RaidInput> = {}): (at: Tick) => RaidInp
     addsAlive: 1,
     prayer: "melee",
     previous: room.player,
+    running: true,
     ...patch,
   });
 }
@@ -124,22 +127,90 @@ describe("raid clocks", () => {
     expect(second.at(-1)).toBe(73);
   });
 
-  it("sends seven corner cracks two ticks apart, then the walk", () => {
-    const rows = names("ocellus-p1", 20);
-    expect(rows.filter((row) => row.name === "tendril").map((row) => row.at)).toEqual([0, 2, 4, 6, 8, 10, 12]);
-    expect(rows.filter((row) => row.name === "14809").map((row) => row.at)).toEqual([0, 8, 16]);
-    expect(rows.filter((row) => row.name === "14811").map((row) => row.at)).toEqual([4, 12, 20]);
-    expect(rows.find((row) => row.name === "slam")?.at).toBe(17);
-    const walked = project("ocellus-p1", options, 28, hold("ocellus-p1"));
-    const volley = walked.find((stamp) => stamp.event.kind === "attack" && (stamp.event.name === "4229" || stamp.event.name === "4232"));
-    const landed = walked.find((stamp) => stamp.event.kind === "damage" && stamp.event.name === "volley");
-    expect(volley?.at).toBe(21);
-    expect(landed?.at).toBe(23);
-    const opened = walked.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
+  it("opens seven corner cracks two ticks apart from the tile he is standing on, then blasts at C + 19", () => {
+    const rows = project("ocellus-p1", options, 80, hold("ocellus-p1"));
+    const tendrils = rows.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "tendril" && stamp.event.text !== "centre");
+    const first = tendrils[0];
+    if (first === undefined) throw new Error("the first crack did not open");
+    expect(tendrils.slice(0, 7).map((stamp) => stamp.at)).toEqual([0, 2, 4, 6, 8, 10, 12].map((offset) => first.at + offset));
+    const opened = rows.find((stamp) => stamp.at === first.at && stamp.event.kind === "mark" && stamp.event.text === "tendril");
+    if (!opened || opened.event.kind !== "mark") throw new Error("the first crack was not marked");
+    const moves = rows.filter((stamp) => stamp.event.kind === "boss-at" && stamp.at <= first.at);
+    const lastMove = moves[moves.length - 1];
+    const anchor = lastMove !== undefined && lastMove.event.kind === "boss-at" ? lastMove.event.tile : ROOMS["ocellus-p1"].boss;
+    expect(opened.event.tiles).toEqual(crackFrom(anchor, 0));
+    expect(opened.event.tiles).toHaveLength(ARCHIVE.p1.tendrilLength);
+    const outline = rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "blast-outline");
+    const blast = rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!outline || outline.event.kind !== "mark" || !blast || blast.event.kind !== "mark") throw new Error("the blast was not marked");
+    expect(outline.at).toBe(blast.at - ARCHIVE.p1.outlineLead);
+    expect(blast.at).toBe(first.at + ARCHIVE.p1.explodeAt + ARCHIVE.p1.blastAfter);
+    expect(outline.event.tiles).toEqual(blast.event.tiles);
+    expect(rows.some((stamp) => stamp.at === outline.at - 1 && stamp.event.kind === "mark" && stamp.event.text === "blast-outline")).toBe(false);
+  });
+
+  it("starts the stand countdown four ticks before the player has to move", () => {
+    expect(countdownStart(19, 0, 2)).toBe(15);
+    expect(countdownStart(19, 6, 2)).toBe(12);
+    expect(countdownStart(19, 6, 0)).toBe(15);
+    const player = ROOMS["ocellus-p1"].player;
+    const rows = project("ocellus-p1", options, 80, hold("ocellus-p1"));
+    const opened = rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
     if (!opened || opened.event.kind !== "mark") throw new Error("the first crack did not open");
-    expect(opened.at).toBe(0);
-    expect(opened.event.tiles).toEqual(cornerCrack(0, 0));
-    expect(opened.event.tiles).toHaveLength(8);
+    const stand = opened.event.tiles.reduce((best, at) => (tileGap(player, at) < tileGap(player, best) ? at : best), opened.event.tiles[0] ?? player);
+    const deadline = opened.at + ARCHIVE.p1.tendrilGreen;
+    const start = countdownStart(deadline, tileGap(player, stand), ARCHIVE.p1.runTiles);
+    const fours = rows.filter((stamp) => stamp.event.kind === "mark" && stamp.event.text === "stand-4" && stamp.event.tiles.some((at) => at.x === stand.x && at.y === stand.y));
+    expect(fours.map((stamp) => stamp.at)).toContain(start);
+    expect(fours.map((stamp) => stamp.at)).not.toContain(start - 1);
+  });
+
+  it("chips a player on a closing vine, refunds it off the vine, and blasts only inside the radius", () => {
+    const scout = project("ocellus-p1", options, 80, hold("ocellus-p1", { player: tile(1, 1), previous: tile(1, 1) }));
+    const opened = scout.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
+    const blast = scout.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!opened || opened.event.kind !== "mark" || !blast || blast.event.kind !== "mark") throw new Error("the vine cycle did not run");
+    const vine = opened.event.tiles;
+    const onVine = vine[0] ?? tile(1, 1);
+    const moves = scout.filter((stamp) => stamp.event.kind === "boss-at" && stamp.at <= blast.at);
+    const lastMove = moves[moves.length - 1];
+    const origin = lastMove !== undefined && lastMove.event.kind === "boss-at" ? lastMove.event.tile : ROOMS["ocellus-p1"].boss;
+    const beside = vine.flatMap((spot) => [tile(spot.x + 1, spot.y + 0), tile(spot.x - 1, spot.y + 0), tile(spot.x + 0, spot.y + 1), tile(spot.x + 0, spot.y - 1)]).find(
+      (at) => at.x >= 0 && at.y >= 0 && at.x < 25 && at.y < 25 && vinePlace(at, vine, origin, ARCHIVE.p1.blastRadius) === "beside-vine",
+    );
+    if (beside === undefined) throw new Error("no tile sits beside the vine and outside the blast");
+    expect(vinePlace(onVine, vine, origin, ARCHIVE.p1.blastRadius)).toBe("on-vine");
+    expect(vinePlace(beside, vine, origin, ARCHIVE.p1.blastRadius)).toBe("beside-vine");
+    expect(vinePlace(tile(1, 1), vine, origin, ARCHIVE.p1.blastRadius)).toBe("safe");
+    const closeAt = opened.at + ARCHIVE.p1.tendrilGreen;
+    const blocked = project("ocellus-p1", options, closeAt + 2, (at) => {
+      const standing = at === closeAt ? onVine : tile(1, 1);
+      return { ...hold("ocellus-p1", { player: standing, previous: standing })(at), player: standing, previous: standing };
+    });
+    const chip = blocked.find((stamp) => stamp.at === closeAt && stamp.event.kind === "damage" && stamp.event.name === "tendril-chip");
+    if (!chip || chip.event.kind !== "damage") throw new Error("standing on the vine did not chip");
+    expect(chip.event.unprotectedAmount).toBeGreaterThanOrEqual(ARCHIVE.p1.blockMin);
+    expect(chip.event.unprotectedAmount).toBeLessThanOrEqual(ARCHIVE.p1.blockMax);
+    const refund = blocked.find((stamp) => stamp.at === closeAt + 1 && stamp.event.kind === "heal-player");
+    expect(refund?.event).toMatchObject({ kind: "heal-player", amount: chip.event.unprotectedAmount });
+    const missed = project("ocellus-p1", options, closeAt, hold("ocellus-p1", { player: tile(1, 1), previous: tile(1, 1) }));
+    expect(missed.some((stamp) => stamp.at === closeAt && stamp.event.kind === "damage" && stamp.event.name === "tendril-chip")).toBe(false);
+    expect(missed.find((stamp) => stamp.at === closeAt && stamp.event.kind === "heal-boss")?.event).toMatchObject({ kind: "heal-boss", amount: ARCHIVE.p1.tendrilBossHeal });
+    const adjacent = project("ocellus-p1", options, closeAt, hold("ocellus-p1", { player: beside, previous: beside }));
+    expect(adjacent.some((stamp) => stamp.at === closeAt && stamp.event.kind === "damage" && stamp.event.name === "tendril-chip")).toBe(false);
+    const inside = blast.event.tiles[0] ?? tile(1, 1);
+    const outside = tile(1, 1);
+    expect(distanceToBody(origin, inside)).toBeGreaterThan(0);
+    expect(distanceToBody(origin, inside)).toBeLessThanOrEqual(ARCHIVE.p1.blastRadius);
+    expect(blast.event.tiles.some((at) => at.x === outside.x && at.y === outside.y)).toBe(false);
+    const blasted = project("ocellus-p1", options, blast.at, hold("ocellus-p1", { player: inside, previous: inside }));
+    const boom = blasted.find((stamp) => stamp.at === blast.at && stamp.event.kind === "damage" && stamp.event.name === "blast");
+    if (!boom || boom.event.kind !== "damage") throw new Error("standing in the blast did not hit");
+    expect(boom.event.unprotectedAmount).toBeGreaterThanOrEqual(ARCHIVE.p1.blastMin);
+    expect(boom.event.unprotectedAmount).toBeLessThanOrEqual(ARCHIVE.p1.blastMax);
+    const clear = project("ocellus-p1", options, blast.at, hold("ocellus-p1", { player: outside, previous: outside }));
+    expect(clear.some((stamp) => stamp.at === blast.at && stamp.event.kind === "damage" && stamp.event.name === "blast")).toBe(false);
+    expect(blastRing(P1_CENTRE).every((at) => distanceToBody(P1_CENTRE, at) <= ARCHIVE.p1.blastRadius && distanceToBody(P1_CENTRE, at) > 0)).toBe(true);
   });
 
   it("lights phase 2 at the logged round ticks and releases at 46, 88 and 124", () => {
@@ -159,29 +230,18 @@ describe("raid clocks", () => {
     expect(rows.some((stamp) => stamp.event.kind === "phase" && stamp.event.name === "complete" && stamp.at === 131)).toBe(true);
   });
 
-  it("runs four centre pairs and then the annihilation", () => {
-    const rows = project("ocellus-p1", options, 69, hold("ocellus-p1", { bossHp: 1600 }));
-    const attacks = rows.flatMap((stamp) => (stamp.event.kind === "attack" ? [stamp] : []));
-    expect(attacks.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "tendril")).toHaveLength(8);
-    expect(attacks.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "slam")).toHaveLength(4);
-    expect(attacks.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "14810")?.event).toMatchObject({ text: "Embrace... annihilation..." });
-    const shots = rows.filter((stamp) => stamp.event.kind === "damage" && stamp.event.name === "annihilation");
-    expect(shots).toHaveLength(8);
-    expect(shots.every((stamp) => stamp.at === 69)).toBe(true);
-  });
-
-  it("a fully blocked centre is one Death projectile", () => {
-    const blocked = project("ocellus-p1", options, 69, (at) => {
-      const local = at % 15;
-      const pair = Math.floor(at / 15);
-      const standing = local === 0 || local === 6 ? centreTendril(pair, local === 0 ? 0 : 1) : ROOMS["ocellus-p1"].player;
-      const base = hold("ocellus-p1", { bossHp: 1600 })(at);
-      return { ...base, player: standing, previous: standing };
-    });
-    const shout = blocked.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "14810");
-    const shots = blocked.filter((stamp) => stamp.event.kind === "damage" && stamp.event.name === "annihilation");
+  it("teleports to the middle at 66% and strikes once when the bar stays under 24", () => {
+    const rows = project("ocellus-p1", options, 80, hold("ocellus-p1", { bossHp: 1600 }));
+    const arrived = rows.find((stamp) => stamp.event.kind === "boss-at" && stamp.event.tile.x === P1_CENTRE.x && stamp.event.tile.y === P1_CENTRE.y);
+    expect(arrived?.at).toBe(ARCHIVE.p1.arrive + ARCHIVE.p1.teleportIn);
+    const shout = rows.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "14810");
+    const shots = rows.filter((stamp) => stamp.event.kind === "damage" && stamp.event.name === "strike");
     expect(shout?.event).toMatchObject({ text: "Death... awaits..." });
     expect(shots).toHaveLength(1);
+    const hit = shots[0];
+    if (!hit || hit.event.kind !== "damage") throw new Error("the strike did not land");
+    expect(hit.event.unprotectedAmount).toBeGreaterThanOrEqual(ARCHIVE.p1.strikeMin);
+    expect(hit.event.unprotectedAmount).toBeLessThanOrEqual(ARCHIVE.p1.strikeMax);
   });
 
   it("keeps the orange-on-orange pocket safe and the next purple tile hit", () => {

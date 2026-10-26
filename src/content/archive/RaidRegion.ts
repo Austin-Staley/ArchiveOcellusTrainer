@@ -9,7 +9,7 @@ import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { blastCuesOn, crackCues } from "./cracks";
 import { FloorGraphic, idlePortals, paintPortals, raisePortals } from "./floorView";
 import type { PortalGraphic } from "./floorView";
-import { BATTERY_TILES, CENSERS, ROOMS } from "./layout";
+import { BATTERY_TILES, CENSERS, P1_CENTRE, ROOMS } from "./layout";
 import type { Quadrant } from "./layout";
 import type { PortalColour } from "./portals";
 import { dress } from "./loadout";
@@ -170,10 +170,25 @@ class Mark extends Entity {
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
     void tickPercent;
     const scale = Settings.tileSize;
+    const x = this.location.x * scale;
+    const y = this.location.y * scale;
+    if (this.label === "blast-outline") {
+      context.strokeStyle = this.paint;
+      context.lineWidth = Math.max(2, Math.floor(scale / 8));
+      context.strokeRect(x + 1.5, y + 1.5, scale - 3, scale - 3);
+      return;
+    }
     context.fillStyle = this.paint;
     context.globalAlpha = 0.55;
-    context.fillRect(this.location.x * scale, this.location.y * scale, scale, scale);
+    context.fillRect(x, y, scale, scale);
     context.globalAlpha = 1;
+    if (!this.label.startsWith("stand-")) return;
+    const digit = this.label.slice("stand-".length);
+    context.fillStyle = "#06221c";
+    context.font = `bold ${Math.max(12, Math.floor(scale * 0.62))}px sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(digit, x + scale / 2, y + scale / 2);
   }
 
   override create3dModel(): Model {
@@ -278,6 +293,42 @@ class Shot extends Entity {
     context.beginPath();
     context.arc((at.x + this.size / 2) * scale, (at.y - this.size / 2) * scale, scale * 0.28, 0, Math.PI * 2);
     context.fill();
+  }
+}
+
+/**
+ * The coloured sword in phase 1. Fight log L3: scenery object 62706 stands at region local (31, 41)
+ * through the vines, and it despawns on the tick npc 16676 appears. That npc is the phase 2 sword,
+ * so phase 1 draws the scenery model and not a second Ocellus. The shared scene still omits 62706,
+ * because phase 2 also draws the sword on the boss.
+ * The anchor is the logged middle. A 3×3 hung toward lower Y centres the sword on trainer (6, 16),
+ * which is local (31, 41) under this room's offset.
+ */
+class BladeScenery extends Entity {
+  override get size(): number {
+    return 3;
+  }
+
+  override entityName(): string {
+    return "The Blade";
+  }
+
+  override get color(): string {
+    return "#c0c6d0";
+  }
+
+  override create3dModel(): Model {
+    return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(BLADE_MODEL), { basisRotation: 0 });
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    return { x: at.x, y: at.y, z: at.z - BLADE_SEAT };
+  }
+
+  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    void tickPercent;
+    void context;
   }
 }
 
@@ -393,6 +444,10 @@ export class RaidRegion extends Region {
   private memory: RaidMemory = initialMemory(this.launch.id);
   private clockTick: number | null = null;
   private mobility: Mobility = "stationary";
+  /** Cyan stand tile and its countdown. On unless Settings turns it off. */
+  standHelper = true;
+  /** Red outline of the tiles a vine explosion will hit. On unless Settings turns it off. */
+  blastOutline = true;
   private shownTick = 0;
   private readonly tint = new WalkTint(this, () => overlayTiles(this.launch.id));
   private rows: Stamp[] = [];
@@ -460,6 +515,7 @@ export class RaidRegion extends Region {
     const fixtures = this.spawnFixtures();
     this.addPlayer(player);
     this.addEntity(new Arena(this, { x: 0, y: 0 }, this.launch.id));
+    if (this.launch.id === "ocellus-p1") this.addEntity(new BladeScenery(this, { x: P1_CENTRE.x, y: P1_CENTRE.y }));
     this.addMob(boss);
     this.setBoss(boss);
     adds.forEach((add) => this.addMob(add));
@@ -498,6 +554,7 @@ export class RaidRegion extends Region {
       addsAlive: this.mounted.adds.filter((add) => add.currentStats.hitpoint > 0).length,
       prayer: protectionOf(player),
       previous: this.previous,
+      running: player.running,
     };
     const atTick = this.clockTick ?? 0;
     const step = advance(this.memory, this.launch.options, input, tick(atTick));
@@ -607,7 +664,7 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p1" || this.launch.id === "ocellus-p2" || this.launch.id === "ocellus-p3") {
       this.say(`Demonbane weapons deal ${Math.round(DEMONBANE_RESISTANCE * 100)}% less against Ocellus.`);
     }
-    if (this.launch.id === "ocellus-p1") this.say("Block the tendrils. At 66% and 25% he comes to the centre.");
+    if (this.launch.id === "ocellus-p1") this.say("Block the vines. The cyan tile is where to stand, and the red outline is the explosion.");
     if (this.launch.id === "ocellus-p2") this.say("Stand where the orange arms cross. The Blade passes on half its damage.");
     if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
     const notice = standInNotice(this.launch.id);
@@ -625,7 +682,7 @@ export class RaidRegion extends Region {
     switch (event.kind) {
       case "attack":
         this.playAttack(event.name);
-        if (event.name !== "repair") this.say(event.text);
+        if (event.name !== "repair" && event.text !== "") this.say(event.text);
         return;
       case "chat":
         this.say(event.text);
@@ -689,6 +746,8 @@ export class RaidRegion extends Region {
         this.showPortals(event);
         return;
       case "mark":
+        if ((event.text === "stand" || event.text.startsWith("stand-")) && !this.standHelper) return;
+        if (event.text === "blast-outline" && !this.blastOutline) return;
         if (event.text === "tendril" || event.text === "vine") {
           this.showFloor(event.text, event.tiles, event.ticks);
           return;
@@ -1153,9 +1212,11 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
       if (name === "throw") return [{ motion: wholeTickStandIn(ARCHIVE.dagonhai.bookFlight, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p1":
-      if (name === "4229") return one(drawn(GRAPHICS.p1Magic, MAGIC_SHOT));
-      if (name === "4232") return one(drawn(GRAPHICS.p1Ranged, RANGED_SHOT));
-      if (name === "14810") return [{ motion: wholeTickStandIn(ARCHIVE.p1.annihilationDelay, null), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "4229" || name === "last-4229") return one(drawn(GRAPHICS.p1Magic, MAGIC_SHOT));
+      if (name === "4232" || name === "last-4232") return one(drawn(GRAPHICS.p1Ranged, RANGED_SHOT));
+      if (name === "4260") return [{ motion: heldStandIn(2, GRAPHICS.p1Glow), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "4261") return [{ motion: heldStandIn(2, GRAPHICS.p1Explode), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "14810") return [{ motion: wholeTickStandIn(ARCHIVE.p1.strikeFlight, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p2":
       if (name === "volley") return one(drawn(GRAPHICS.p2Volley, TYPELESS_SHOT));

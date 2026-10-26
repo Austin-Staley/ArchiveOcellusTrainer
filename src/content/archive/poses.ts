@@ -30,7 +30,7 @@ export const SEQUENCES = {
   binder: { attack: 14791, death: 14792 },
   xarth: { magic: 14984, ranged: 14985, tell: 14992, blast: 14989, death: 14995 },
   dagon: { magic: 14597, ranged: 14593 },
-  p1: { magic: 14806, ranged: 14807, charge: 14809, slam: 14811, strike: 14810 },
+  p1: { magic: 14806, ranged: 14807, lastVolley: 14807, charge: 14809, slam: 14811, strike: 14810, teleportOut: 14812, teleportIn: 14813 },
   p3: { melee: 14842, wave: 14846, voidShot: 14851, spin: 14869 },
   rift: { spawn: 14896, death: 14897 },
   siphon: { spawn: 14900, death: 14901 },
@@ -50,6 +50,10 @@ export const GRAPHICS = {
   dagonMagic: 1459,
   p1Magic: 4229,
   p1Ranged: 4232,
+  /** Charge glow on him from C + 5, every 2 ticks until he explodes. Fights 3 to 8. */
+  p1Glow: 4260,
+  /** On him with the explode pose. 31 of 33 corners at C + 18. */
+  p1Explode: 4261,
   /**
    * Portal bolt. Fight logs L1–L8 name projectile 4269 as each lit portal's bolt.
    * The digest counted 314 of them and did not resolve a source.
@@ -219,9 +223,11 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
     case "ocellus-p1":
       switch (name) {
         case "4229":
-          return { role: "boss", sequence: SEQUENCES.p1.magic };
+        case "last-4229":
+          return { role: "boss", sequence: name.startsWith("last-") ? SEQUENCES.p1.lastVolley : SEQUENCES.p1.magic };
         case "4232":
-          return { role: "boss", sequence: SEQUENCES.p1.ranged };
+        case "last-4232":
+          return { role: "boss", sequence: name.startsWith("last-") ? SEQUENCES.p1.lastVolley : SEQUENCES.p1.ranged };
         case "14809":
           return { role: "boss", sequence: SEQUENCES.p1.charge };
         case "14811":
@@ -229,6 +235,10 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
           return { role: "boss", sequence: SEQUENCES.p1.slam };
         case "14810":
           return { role: "boss", sequence: SEQUENCES.p1.strike };
+        case "14812":
+          return { role: "boss", sequence: SEQUENCES.p1.teleportOut };
+        case "14813":
+          return { role: "boss", sequence: SEQUENCES.p1.teleportIn };
         default:
           return null;
       }

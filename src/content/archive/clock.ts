@@ -1,7 +1,12 @@
 import type { Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import type { IncomingStyle, Style } from "../../sim/combat";
+import type { Side } from "../../sim/tiles";
 import { OCELLUS_P3 } from "../ocellus/js/OcellusTimings";
+import type { Corner } from "../ocellus/js/P1Types";
+import { beatSide, cornerOfLeg } from "../ocellus/js/p1/schedule";
+import { distanceToBody, stepsBetween, stepToward } from "../ocellus/js/p1/arena";
+import { roll, rollInt } from "../ocellus/js/roll";
 import type { RaidOptions } from "./catalog";
 import type { RaidId } from "./catalog";
 import {
@@ -10,18 +15,31 @@ import {
   DAGON_TRAIL,
   MOIA_STATIONS,
   P1_CENTRE,
-  P1_CORNERS,
   PILLAR_SHADOWS,
   PORTAL_PAD,
   ROOMS,
   WAVE_SKIP,
   beamHits,
-  centreTendril,
   gapTo,
   quadrantOf,
   sameTile,
 } from "./layout";
-import { blastRing, cornerCrack } from "./cracks";
+import { blastRing, crackFrom } from "./cracks";
+import { bossMayStand } from "./movement";
+import {
+  OUTLINE_COLOUR,
+  P1_START,
+  STAND_COLOUR,
+  beatTiles,
+  closestTile,
+  countdownStart,
+  isVolleyElapsed,
+  moveTiles,
+  p1CornerTile,
+  safeTile,
+  tileGap,
+  walkSpan,
+} from "./p1Route";
 import type { Quadrant } from "./layout";
 import { PORTAL_COLOURS, gapsFor, nextColour, volleyLabel } from "./portals";
 import type { PortalColour } from "./portals";
@@ -38,6 +56,8 @@ export type RaidInput = Readonly<{
   addsAlive: number;
   prayer: Style | null;
   previous: Tile;
+  /** True while the player is running. A walk covers one tile a tick and a run covers two. */
+  running: boolean;
 }>;
 
 export type RaidEvent =
@@ -66,7 +86,28 @@ type GuardianMemory = Readonly<{ id: "guardian"; form: "flying" | "landing" | "g
 type MoiaMemory = Readonly<{ id: "moia"; phase: "p1" | "gone" | "p2"; reappear: number; nextChant: number; chants: number; station: number; hopped: number }>;
 type XarthMemory = Readonly<{ id: "xarth"; phase: "p1" | "p2" }>;
 type DagonMemory = Readonly<{ id: "dagonhai"; stunned: boolean }>;
-type P1Memory = Readonly<{ id: "ocellus-p1"; mode: "corner" | "walk" | "centre" | "blast"; since: number; corner: number; meter: number; centres: number; pair: number; owed: number; crack: Tile | null }>;
+type P1Stage = "arrive" | "walk" | "corner" | "middle";
+type LiveCrack = Readonly<{ tiles: readonly Tile[]; closesAt: number }>;
+type VolleyShot = Readonly<{ landsAt: number; magic: boolean }>;
+type P1Memory = Readonly<{
+  id: "ocellus-p1";
+  stage: P1Stage;
+  since: number;
+  heading: Corner;
+  stood: Corner | null;
+  anchor: Tile;
+  leg: number;
+  meter: number;
+  centres: number;
+  owed: number;
+  cracks: readonly LiveCrack[];
+  element: "fire" | "water";
+  inFlight: readonly VolleyShot[];
+  blastAt: number | null;
+  blastFrom: Tile | null;
+  strikeShots: number;
+  walkSteps: number;
+}>;
 type P2Memory = Readonly<{ id: "ocellus-p2"; tiles: readonly Tile[] }>;
 type P3Memory = Readonly<{ id: "ocellus-p3"; collapsed: number; shout: number; quietUntil: number; diseased: boolean; rootedUntil: number; voidUntil: number; voidKind: string }>;
 
@@ -105,7 +146,25 @@ export function initialMemory(id: RaidId): RaidMemory {
     case "dagonhai":
       return { id, stunned: false };
     case "ocellus-p1":
-      return { id, mode: "corner", since: 0, corner: 0, meter: 0, centres: 0, pair: 0, owed: 0, crack: null };
+      return {
+        id,
+        stage: "arrive",
+        since: 0,
+        heading: "north-east",
+        stood: null,
+        anchor: P1_START,
+        leg: 0,
+        meter: 0,
+        centres: 0,
+        owed: 0,
+        cracks: [],
+        element: "fire",
+        inFlight: [],
+        blastAt: null,
+        blastFrom: null,
+        strikeShots: 0,
+        walkSteps: 0,
+      };
     case "ocellus-p2":
       return { id, tiles: [] };
     case "ocellus-p3":
@@ -487,118 +546,338 @@ function spanRoll(runSeed: number, at: number, min: number, max: number): number
   return min + (mixed % width);
 }
 
+function keptOnPath(from: Tile, to: Tile): Tile {
+  const next = stepToward(from, to);
+  return bossMayStand("ocellus-p1", next) ? next : from;
+}
+
+function onTiles(tiles: readonly Tile[], at: Tile): boolean {
+  return tiles.some((spot) => sameTile(spot, at));
+}
+
+function settleCracks(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  const staying = memory.cracks.filter((crack) => crack.closesAt > at);
+  let owed = memory.owed;
+  if (owed > 0 && !staying.some((crack) => onTiles(crack.tiles, input.player))) {
+    events.push({ kind: "heal-player", amount: owed });
+    owed = 0;
+  }
+  const due = memory.cracks.filter((crack) => crack.closesAt === at);
+  let meter = memory.meter;
+  due.forEach((crack, draw) => {
+    if (onTiles(crack.tiles, input.player)) {
+      const chip = rollInt(options.seed, "blockDamage", tick(at), { min: rules.blockMin, max: rules.blockMax }, draw);
+      events.push(damage("tendril-chip", "typeless", chip, chip));
+      owed += chip;
+      return;
+    }
+    meter = Math.min(rules.meterMax, meter + rules.meterStep);
+    events.push({ kind: "heal-boss", amount: rules.tendrilBossHeal });
+  });
+  return { ...memory, cracks: staying, meter, owed };
+}
+
+function landVolleys(memory: P1Memory, options: RaidOptions, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  memory.inFlight.filter((shot) => shot.landsAt === at).forEach((shot) => {
+    const amount = rollInt(options.seed, "p1VolleyDamage", tick(at), { min: rules.volleyMin, max: rules.volleyMax }, shot.magic ? 0 : 1);
+    events.push(damage("volley", shot.magic ? "magic" : "ranged", 0, amount));
+  });
+  return { ...memory, inFlight: memory.inFlight.filter((shot) => shot.landsAt !== at) };
+}
+
+function castVolley(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  const switched = roll(options.seed, "volleyElement", tick(at), 0) < rules.switchChance;
+  const element = switched ? (memory.element === "fire" ? "water" : "fire") : memory.element;
+  const magic = element === "water";
+  const last = at - memory.since === memory.walkSteps - 1;
+  events.push(attack(`${last ? "last-" : ""}${magic ? "4229" : "4232"}`, magic ? "magic" : "ranged"));
+  const near = distanceToBody(memory.anchor, input.player) <= rules.volleyNearWithin;
+  const flight = near ? rules.volleyFlightNear : rules.volleyFlightFar;
+  return { ...memory, element, inFlight: [...memory.inFlight, { landsAt: at + flight, magic }] };
+}
+
+function openWalk(memory: P1Memory, at: number): P1Memory {
+  return { ...memory, stage: "walk", since: at, walkSteps: stepsBetween(memory.anchor, p1CornerTile(memory.heading)), blastAt: null };
+}
+
+function enterMiddle(memory: P1Memory, at: number, events: RaidEvent[]): P1Memory {
+  events.push(phase("centre"));
+  events.push(attack("14812", "14812"));
+  events.push(chat("Ocellus drops Protect from Melee and comes to the centre."));
+  return { ...memory, stage: "middle", since: at, centres: memory.centres + 1, blastAt: null, blastFrom: P1_CENTRE, walkSteps: 0 };
+}
+
+function enterCorner(memory: P1Memory, options: RaidOptions, at: number, events: RaidEvent[]): P1Memory {
+  const stood = memory.heading;
+  const rules = ARCHIVE.p1;
+  events.push(phase("corner"));
+  return {
+    ...memory,
+    stage: "corner",
+    since: at,
+    stood,
+    heading: cornerOfLeg(options.seed, memory.leg + 1, stood),
+    leg: memory.leg + 1,
+    walkSteps: 0,
+    blastFrom: memory.anchor,
+    blastAt: at + rules.explodeAt + rules.blastAfter,
+  };
+}
+
+function middleLength(): number {
+  const rules = ARCHIVE.p1;
+  const lastExplode = rules.beatsFirst + (rules.beatsCount - 1) * rules.beatsEvery + rules.beatExplode;
+  return lastExplode + rules.strikeToldAfter + rules.walkAfterTold;
+}
+
+function paintBlast(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  const when = memory.blastAt;
+  if (when === null) return memory;
+  const from = memory.blastFrom ?? memory.anchor;
+  if (at === when - rules.outlineLead) {
+    events.push({ kind: "mark", tiles: blastRing(from), colour: OUTLINE_COLOUR, text: "blast-outline", ticks: rules.outlineLead });
+  }
+  if (at !== when) return memory;
+  events.push({ kind: "mark", tiles: blastRing(from), colour: "#3d8f4a", text: "vine", ticks: 2 });
+  if (distanceToBody(from, input.player) <= rules.blastRadius) {
+    const hit = rollInt(options.seed, "blastDamage", tick(at), { min: rules.blastMin, max: rules.blastMax }, 0);
+    events.push(damage("blast", "typeless", hit, hit));
+  }
+  return { ...memory, blastAt: null };
+}
+
+function chargedAnchor(memory: P1Memory): Tile {
+  const target = p1CornerTile(memory.heading);
+  let at = memory.anchor;
+  const steps = memory.stage === "walk" ? memory.walkSteps : stepsBetween(at, target);
+  for (let step = 0; step < steps && !sameTile(at, target); step += 1) {
+    const next = keptOnPath(at, target);
+    if (sameTile(next, at)) break;
+    at = next;
+  }
+  return at;
+}
+
+function cornerOpensAt(memory: P1Memory): number | null {
+  if (memory.stage === "corner") return memory.since;
+  if (memory.stage === "walk") return memory.since + walkSpan(memory.walkSteps);
+  if (memory.stage === "arrive") return memory.since + ARCHIVE.p1.arrive + walkSpan(stepsBetween(memory.anchor, p1CornerTile(memory.heading)));
+  return null;
+}
+
+function upcomingCracks(memory: P1Memory, options: RaidOptions, at: number, bossHp: number): readonly LiveCrack[] {
+  const rules = ARCHIVE.p1;
+  const rows = [...memory.cracks];
+  const known = (closesAt: number) => rows.some((row) => row.closesAt === closesAt);
+  const goingToCorner = memory.stage === "corner" || ((memory.stage === "walk" || memory.stage === "arrive") && !p1CentreDue(bossHp, memory.centres));
+  const cornerStart = goingToCorner ? cornerOpensAt(memory) : null;
+  if (cornerStart !== null) {
+    const anchor = memory.stage === "corner" ? memory.anchor : chargedAnchor(memory);
+    for (let index = 0; index < rules.tendrilCount; index += 1) {
+      const closesAt = cornerStart + index * rules.tendrilGap + rules.tendrilGreen;
+      if (closesAt <= at || known(closesAt)) continue;
+      rows.push({ tiles: crackFrom(anchor, index), closesAt });
+    }
+  }
+  if (memory.stage === "middle") {
+    for (let nth = 0; nth < rules.beatsCount; nth += 1) {
+      const beatAt = memory.since + rules.beatsFirst + nth * rules.beatsEvery;
+      const side: Side = beatSide(options.seed, tick(memory.since), nth);
+      const pair = [
+        { after: rules.beatCloseFirst, which: 0 as const },
+        { after: rules.beatCloseSecond, which: 1 as const },
+      ];
+      pair.forEach(({ after, which }) => {
+        const closesAt = beatAt + after;
+        if (closesAt <= at || known(closesAt)) return;
+        rows.push({ tiles: beatTiles(P1_CENTRE, side, which), closesAt });
+      });
+    }
+  }
+  return rows;
+}
+
+function paintCountdown(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): void {
+  const rules = ARCHIVE.p1;
+  const speed = moveTiles(input.running);
+  const room = ROOMS["ocellus-p1"];
+  const soonest = upcomingCracks(memory, options, at, input.bossHp)
+    .filter((crack) => crack.closesAt > at)
+    .reduce<LiveCrack | null>((best, crack) => (best === null || crack.closesAt < best.closesAt ? crack : best), null);
+  const duties: { stand: Tile; deadline: number }[] = [];
+  if (soonest !== null) duties.push({ stand: closestTile(input.player, soonest.tiles), deadline: soonest.closesAt });
+  if (memory.blastAt !== null && memory.blastAt > at) {
+    const from = memory.blastFrom ?? memory.anchor;
+    duties.push({ stand: safeTile(input.player, from, rules.blastRadius, room.width, room.height), deadline: memory.blastAt });
+  }
+  duties.forEach(({ stand, deadline }) => {
+    const start = countdownStart(deadline, tileGap(input.player, stand), speed);
+    if (at < start || at >= deadline) return;
+    const place = at - start;
+    const text = place < rules.countdownLead ? `stand-${rules.countdownLead - place}` : "stand";
+    events.push({ kind: "mark", tiles: [stand], colour: STAND_COLOUR, text, ticks: 1 });
+  });
+}
+
+function stepWalk(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const elapsed = at - memory.since;
+  let next = memory;
+  const target = p1CornerTile(next.heading);
+  if (elapsed < next.walkSteps && !sameTile(next.anchor, target)) {
+    const stepped = keptOnPath(next.anchor, target);
+    if (!sameTile(stepped, next.anchor)) {
+      events.push(bossAt(stepped));
+      next = { ...next, anchor: stepped };
+    }
+  }
+  if (isVolleyElapsed(elapsed, next.walkSteps)) next = castVolley(next, options, input, at, events);
+  return next;
+}
+
+function stepCorner(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  const elapsed = at - memory.since;
+  let next = memory;
+  if (elapsed === 0) events.push(attack("14809", "14809"));
+  if (elapsed % rules.tendrilGap === 0 && elapsed / rules.tendrilGap < rules.tendrilCount) {
+    const index = elapsed / rules.tendrilGap;
+    const tiles = crackFrom(next.anchor, index);
+    events.push(attack("tendril", `${index + 1}`));
+    events.push({ kind: "mark", tiles, colour: "#67d36a", text: "tendril", ticks: rules.tendrilGreen });
+    next = { ...next, cracks: [...next.cracks, { tiles, closesAt: at + rules.tendrilGreen }] };
+  }
+  if (elapsed >= rules.tendrilGreen && elapsed < rules.explodeAt && (elapsed - rules.tendrilGreen) % rules.tendrilGap === 0) events.push(attack("4260", ""));
+  if (elapsed === rules.tauntAt) {
+    const texts = ["Pointless...", "You... fail...", "Unworthy..."] as const;
+    const line = texts[Math.floor(roll(options.seed, "taunt", tick(at), 0) * texts.length)] ?? texts[0];
+    events.push(chat(line));
+  }
+  if (elapsed === rules.explodeAt) {
+    events.push(attack("14811", "14811"));
+    events.push(attack("4261", ""));
+  }
+  next = paintBlast(next, options, input, at, events);
+  paintCountdown(next, options, input, at, events);
+  return next;
+}
+
+function stepMiddle(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number, events: RaidEvent[]): P1Memory {
+  const rules = ARCHIVE.p1;
+  const elapsed = at - memory.since;
+  let next = memory;
+  if (elapsed === rules.teleportIn) {
+    events.push(attack("14813", "14813"));
+    events.push(bossAt(P1_CENTRE));
+    next = { ...next, anchor: P1_CENTRE, blastFrom: P1_CENTRE };
+  }
+  for (let nth = 0; nth < rules.beatsCount; nth += 1) {
+    const start = rules.beatsFirst + nth * rules.beatsEvery;
+    if (elapsed === start) {
+      const side = beatSide(options.seed, tick(next.since), nth);
+      const first = beatTiles(next.anchor, side, 0);
+      const second = beatTiles(next.anchor, side, 1);
+      events.push(attack("14809", "14809"));
+      events.push(attack("tendril", "centre"));
+      events.push({ kind: "mark", tiles: first, colour: "#67d36a", text: "tendril", ticks: rules.beatCloseFirst });
+      events.push({ kind: "mark", tiles: second, colour: "#67d36a", text: "tendril", ticks: rules.beatCloseSecond });
+      next = {
+        ...next,
+        cracks: [
+          ...next.cracks,
+          { tiles: first, closesAt: at + rules.beatCloseFirst },
+          { tiles: second, closesAt: at + rules.beatCloseSecond },
+        ],
+        blastFrom: next.anchor,
+        blastAt: at + rules.beatExplode + rules.blastAfter,
+      };
+    }
+    if (elapsed === start + rules.beatCloseFirst || elapsed === start + rules.beatCloseSecond) events.push(attack("4260", ""));
+    if (elapsed === start + rules.beatExplode) {
+      events.push(attack("14811", "14811"));
+      events.push(attack("4261", ""));
+    }
+  }
+  const lastExplode = rules.beatsFirst + (rules.beatsCount - 1) * rules.beatsEvery + rules.beatExplode;
+  const told = lastExplode + rules.strikeToldAfter;
+  if (elapsed === told) {
+    const shots = 1 + Math.floor(next.meter / rules.meterPerExtra);
+    const text = shots > 1 ? "Embrace... annihilation..." : "Death... awaits...";
+    events.push(chat(text));
+    next = { ...next, strikeShots: shots, meter: 0 };
+  }
+  if (elapsed === told + rules.strikeCastAfter) {
+    const text = next.strikeShots > 1 ? "Embrace... annihilation..." : "Death... awaits...";
+    events.push(attack("14810", text));
+  }
+  if (elapsed === told + rules.strikeCastAfter + rules.strikeFlight) {
+    for (let shot = 0; shot < next.strikeShots; shot += 1) {
+      const hit = rollInt(options.seed, "strikeDamage", tick(at), { min: rules.strikeMin, max: rules.strikeMax }, shot);
+      events.push(damage("strike", "typeless", hit, hit));
+    }
+  }
+  next = paintBlast(next, options, input, at, events);
+  paintCountdown(next, options, input, at, events);
+  return next;
+}
+
 function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: number): Readonly<{ memory: P1Memory; events: RaidEvent[] }> {
   const rules = ARCHIVE.p1;
-  let next = memory;
   const events: RaidEvent[] = [];
-  if (next.crack !== null && !sameTile(input.player, next.crack) && next.owed > 0) {
-    events.push({ kind: "heal-player", amount: next.owed });
-    next = { ...next, owed: 0, crack: null };
+  let next = memory;
+  if (at === 0 && next.stage === "arrive") {
+    const element = roll(options.seed, "volleyElement", tick(0), 1) < 0.5 ? "fire" : "water";
+    next = { ...next, element, heading: cornerOfLeg(options.seed, 0, null) };
+    events.push(phase("arrive"));
+    events.push(chat("Now... ascension..."));
   }
-  if (next.mode === "corner" && at === next.since && p1CentreDue(input.bossHp, next.centres)) {
-    next = { ...next, mode: "centre", since: at, pair: 0, centres: next.centres + 1 };
-    events.push(phase("centre"));
-    events.push(bossAt(P1_CENTRE));
-    events.push(chat("Ocellus drops Protect from Melee and comes to the centre."));
+  next = settleCracks(next, options, input, at, events);
+  next = landVolleys(next, options, at, events);
+  let openedWalk = false;
+  if (next.stage === "arrive" && at === next.since + rules.arrive) {
+    next = openWalk(next, at);
+    openedWalk = true;
+  } else if (next.stage === "walk" && at - next.since === walkSpan(next.walkSteps)) {
+    next = enterCorner(next, options, at, events);
+  } else if (next.stage === "corner" && at - next.since === rules.cornerLength) {
+    next = openWalk(next, at);
+    openedWalk = true;
+  } else if (next.stage === "middle" && at - next.since === middleLength()) {
+    next = openWalk(next, at);
+    openedWalk = true;
   }
-  if (next.mode === "corner") {
-    const elapsed = at - next.since;
-    if (elapsed === 0) {
-      events.push(phase("corner"));
-      events.push(bossAt(P1_CORNERS[next.corner] ?? P1_CORNERS[0]));
-    }
-    if (elapsed % rules.chargeVisual === 0) events.push(attack("14809", "14809"));
-    if (elapsed % rules.chargeVisual === rules.chargeVisual / 2) events.push(attack("14811", "14811"));
-    if (elapsed % rules.tendrilGap === 0 && elapsed / rules.tendrilGap < rules.tendrilCount) {
-      const index = elapsed / rules.tendrilGap;
-      events.push(attack("tendril", `${index + 1}`));
-      events.push({ kind: "mark", tiles: cornerCrack(next.corner, index), colour: "#67d36a", text: "tendril", ticks: rules.tendrilGreen });
-    }
-    if (elapsed >= rules.tendrilGreen && (elapsed - rules.tendrilGreen) % rules.tendrilGap === 0) {
-      const index = (elapsed - rules.tendrilGreen) / rules.tendrilGap;
-      if (index < rules.tendrilCount) {
-        const tiles = cornerCrack(next.corner, index);
-        const stood = tiles.find((spot) => sameTile(input.player, spot));
-        events.push(attack("green", `${index + 1}`));
-        if (stood !== undefined) {
-          const chip = spanRoll(options.seed, at, rules.blockMin, rules.blockMax);
-          events.push(damage("tendril-chip", "typeless", chip, chip));
-          next = { ...next, owed: next.owed + chip, crack: stood };
-        } else {
-          next = { ...next, meter: next.meter + rules.meterStep };
-          events.push({ kind: "heal-boss", amount: rules.tendrilBossHeal });
-        }
-      }
-    }
-    if (elapsed === (rules.tendrilCount - 1) * rules.tendrilGap + rules.tendrilGreen) {
-      const boss = P1_CORNERS[next.corner] ?? P1_CORNERS[0];
-      events.push(attack("slam", "14811"));
-      events.push({ kind: "mark", tiles: blastRing(boss), colour: "#3d8f4a", text: "vine", ticks: 6 });
-    }
-    if (elapsed === (rules.tendrilCount - 1) * rules.tendrilGap + rules.tendrilGreen + rules.slamDelay) {
-      const boss = P1_CORNERS[next.corner] ?? P1_CORNERS[0];
-      if (gapTo(input.player, boss, 3) <= rules.slamReach) events.push(damage("slam", "typeless", rules.slamDamage, rules.slamDamage));
-      next = { ...next, mode: "walk", since: at + 1, corner: (next.corner + 1) % P1_CORNERS.length };
-    }
-  } else if (next.mode === "walk") {
-    const elapsed = at - next.since;
-    if (elapsed === 0) {
-      events.push(phase("protect-melee"));
-      events.push(chat("Protect from Melee while he walks."));
-    }
-    if (elapsed % rules.volleyInterval === 0 && elapsed < rules.walk) {
-      const magic = (next.corner + elapsed / rules.volleyInterval) % 2 === 0;
-      events.push(attack(magic ? "4229" : "4232", magic ? "magic" : "ranged"));
-    }
-    if (elapsed >= rules.volleyFlight && (elapsed - rules.volleyFlight) % rules.volleyInterval === 0 && elapsed - rules.volleyFlight < rules.walk) {
-      const magic = (next.corner + (elapsed - rules.volleyFlight) / rules.volleyInterval) % 2 === 0;
-      events.push(damage("volley", magic ? "magic" : "ranged", 0, spanRoll(options.seed, at, rules.volleyMin, rules.volleyMax)));
-    }
-    if (elapsed === rules.walk) next = { ...next, mode: "corner", since: at };
-  } else if (next.mode === "centre") {
-    const elapsed = at - next.since;
-    const local = elapsed % rules.pairLength;
-    if (local === 0 || local === rules.centreGap) {
-      const which: 0 | 1 = local === 0 ? 0 : 1;
-      const spot = centreTendril(Math.floor(elapsed / rules.pairLength), which);
-      events.push(attack("tendril", "centre"));
-      events.push({ kind: "mark", tiles: [spot], colour: "#67d36a", text: "tendril", ticks: rules.tendrilGreen });
-      if (sameTile(input.player, spot)) {
-        const chip = spanRoll(options.seed, at, rules.blockMin, rules.blockMax);
-        events.push(damage("tendril-chip", "typeless", chip, chip));
-        next = { ...next, owed: next.owed + chip, crack: spot };
-      }
-      else {
-        next = { ...next, meter: next.meter + rules.meterStep };
-        events.push({ kind: "heal-boss", amount: rules.tendrilBossHeal });
-      }
-    }
-    if (local === rules.centreGap + rules.tendrilGreen) {
-      events.push(attack("slam", "14811"));
-      events.push({ kind: "mark", tiles: blastRing(P1_CENTRE), colour: "#3d8f4a", text: "vine", ticks: 6 });
-    }
-    if (local === rules.centreGap + rules.tendrilGreen + rules.slamDelay) {
-      if (gapTo(input.player, P1_CENTRE, 3) <= rules.slamReach) events.push(damage("slam", "typeless", rules.slamDamage, rules.slamDamage));
-      if (Math.floor(elapsed / rules.pairLength) === rules.centrePairs - 1) next = { ...next, mode: "blast", since: at + 1 };
-    }
-  } else {
-    const elapsed = at - next.since;
-    if (elapsed === 0) {
-      const high = next.meter >= rules.lowMeter;
-      const text = high ? "Embrace... annihilation..." : "Death... awaits...";
-      events.push(attack("14810", text));
-      events.push(chat(text));
-    }
-    if (elapsed === rules.annihilationDelay) {
-      const stacks = Math.max(1, Math.floor(next.meter / rules.lowMeter));
-      for (let projectile = 0; projectile < stacks; projectile += 1) {
-        events.push(damage("annihilation", "typeless", rules.annihilationLow, rules.annihilationLow));
-      }
-      next = { ...next, mode: "corner", since: at + 1, meter: 0 };
+  if (next.stage === "walk" && isVolleyElapsed(at - next.since, next.walkSteps) && p1CentreDue(input.bossHp, next.centres)) {
+    next = enterMiddle(next, at, events);
+    openedWalk = false;
+  } else if (openedWalk) {
+    events.push(phase("protect-melee"));
+    events.push(chat("Protect from Melee while he walks."));
+  }
+  switch (next.stage) {
+    case "arrive":
+      paintCountdown(next, options, input, at, events);
+      break;
+    case "walk":
+      next = stepWalk(next, options, input, at, events);
+      paintCountdown(next, options, input, at, events);
+      break;
+    case "corner":
+      next = stepCorner(next, options, input, at, events);
+      break;
+    case "middle":
+      next = stepMiddle(next, options, input, at, events);
+      break;
+    default: {
+      const unhandled: never = next.stage;
+      return unhandled;
     }
   }
   return { memory: next, events };
 }
+
 
 const QUADRANTS = ["NW", "NE", "SE", "SW"] as const;
 

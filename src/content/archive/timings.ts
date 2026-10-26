@@ -174,16 +174,17 @@ export const ARCHIVE = {
     hp: 2500,
     defence: 215,
     defenceFloor: 129,
+    bossSize: 3,
     volleyInterval: 5,
     /**
-     * Unverified. Render digest 25 Oct 2026, 32 phase 1 files.
-     * Animation 14809 repeats most often every 8 ticks (174 gaps). 14811 does too (168 gaps).
-     * Other gaps are common, so 8 is the mode, not every sample.
-     * Disputed with the crack interval below: the animation beat stays 8.
+     * Logs L1, L2, L3, L6 to L8. A volley lands 3 ticks later within 4 of his 3×3, and 4 ticks later beyond that.
+     * The digest's flight mode of about 2 counts the graphic, not this landing.
      */
-    chargeVisual: 8,
-    /** Unverified. Render digest 25 Oct 2026: the volley lands about 2 ticks after the attack. The room uses 2. */
-    volleyFlight: 2,
+    volleyNearWithin: 4,
+    volleyFlightNear: 3,
+    volleyFlightFar: 4,
+    /** 14 switches in 65 captured volleys. The first element is an even roll. */
+    switchChance: 14 / 65,
     /**
      * Disputed. The room used to deal 12 through the matching prayer and 42 without.
      * Fight logs L1, L2 and L6 to L8: 246 of 246 matching prayers dealt 0, and 18 misses were 0 to 27.
@@ -193,32 +194,72 @@ export const ARCHIVE = {
     volleyMax: 27,
     tendrilCount: 7,
     /**
-     * Disputed. The digest's charge animation repeats every 8 ticks (see chargeVisual).
-     * Fight logs L6 to L8: 85 of 85 corner cracks open on the charge tick and every 2 ticks after.
-     * The cracks use 2. The animation keeps the 8-tick mode.
+     * Disputed with the digest. Animation 14809 and 14811 repeat most often every 8 ticks (174 and 168 gaps, 32 files).
+     * Fight logs L6 to L8: 85 of 85 corner cracks open on the charge tick and every 2 ticks after. The cracks use 2.
      */
     tendrilGap: 2,
-    /** The centre pair's second crack. The corner cracks use tendrilGap. The logs' middle beats are every 8, which this pair script does not play. */
-    centreGap: 6,
+    /** Logs L6 to L8: 85 of 85 corner cracks are 8 tiles. The captures' 9 is one longer. */
+    tendrilLength: 8,
+    /** Logs L6 to L8: each crack closes 5 ticks after it opens. */
     tendrilGreen: 5,
-    /** Disputed. A flat chip of 4 was the stand-in. Logs L6 to L8: 330 blocks of 3 to 5, refunded on stepping off. */
+    /** Logs L6 to L8: 330 blocks of 3 to 5, refunded on the first tick the player stands on no open crack. */
     blockMin: 3,
     blockMax: 5,
-    /** Unverified. One missed tendril's meter step, so the annihilation formula can run. */
-    meterStep: 16,
-    /** Unverified. About 5% of the solo hitpoints, from the tendril heal-the-boss note. */
-    tendrilBossHeal: 125,
-    slamDelay: 3,
-    slamReach: 2,
-    /** Wiki cap. The ledger saw 25–40 on the same blast. */
-    slamDamage: 35,
-    centrePairs: 4,
-    pairLength: 15,
-    lowMeter: 16,
-    annihilationLow: 18,
-    annihilationDelay: 9,
-    /** Unverified. Corner-to-corner walk, not one captured number. */
-    walk: 10,
+    /** A missed crack charges the bar by 2 of 96. Captures, phase 1 meter. */
+    meterStep: 2,
+    meterMax: 96,
+    /**
+     * Disputed. The room used to heal 125, about 5% of 2,500. The captures heal 2 for a crack nobody stands on.
+     */
+    tendrilBossHeal: 2,
+    /** One of three lines at C + 15 in 31 of 34 corners. Which line is a seeded pick. */
+    tauntAt: 15,
+    /** Logs L1 to L8: the explode pose and spotanim 4261 at C + 18 in 31 of 33 corners. */
+    explodeAt: 18,
+    /** Logs L6 to L8: floor spotanims 4262 to 4265 one tick after the explode pose, at C + 19 and B + 7. */
+    blastAfter: 1,
+    /** Within 2 of his 3×3. 37 tiles at a captured corner and 40 in the middle. */
+    blastRadius: 2,
+    /**
+     * Disputed. Twelve logged hits are 26 to 34. The wiki cap is 35. The captures give 28 to 30.
+     * The room rolls the logged range.
+     */
+    blastMin: 26,
+    blastMax: 34,
+    /** The corner stage lasts this many ticks: the next walk's first volley is at C + 21, so the corner is offsets 0 to 20. */
+    cornerLength: 21,
+    /** On a volley tick that is also his arrival, he charges this many ticks later. 6 after 19 such poses. */
+    chargeAfterArrival: 6,
+    /** A walk that arrives between volleys plays the end pose for this many ticks, then the corner starts. */
+    walkEndPose: 1,
+    /** The opening line, then the first walk at A + 4. Six fights logged from the shout. */
+    arrive: 4,
+    /** Hidden after the teleport out, standing in the middle at M + 4. 15 of 15. */
+    teleportIn: 4,
+    beatsFirst: 8,
+    beatsEvery: 8,
+    beatsCount: 4,
+    beatExplode: 6,
+    /** The two cracks of a beat close 4 and 6 ticks after it opens. */
+    beatCloseFirst: 4,
+    beatCloseSecond: 6,
+    /** The strike is told 2 ticks after the last explode, cast 2 later, and lands 1 after the cast. */
+    strikeToldAfter: 2,
+    strikeCastAfter: 2,
+    strikeFlight: 1,
+    strikeMin: 17,
+    strikeMax: 19,
+    /** One extra shot per 24 of the bar. The captures' engine; the logs never show the second shot. */
+    meterPerExtra: 24,
+    /** The next walk starts 9 ticks after the strike is told, M + 49, in 11 of 11. */
+    walkAfterTold: 9,
+    /** The red outline appears this many ticks before a blast and stays until that blast. */
+    outlineLead: 5,
+    /** The stand countdown draws 4, then 3, then 2, then 1, each one tick, and the 4 is this many ticks before he should start moving. */
+    countdownLead: 4,
+    /** A running player covers two tiles a tick. A walking player covers one. Control-click walks. */
+    runTiles: 2,
+    walkTiles: 1,
     shieldPercent: [66, 25],
   },
   p2: {
@@ -353,7 +394,7 @@ export function standInNotice(id: RaidId): string {
     case "dagonhai":
       return `The book every ${ARCHIVE.dagonhai.bookInterval} ticks is one fight's gap, kept as an unsourced practice stand-in.`;
     case "ocellus-p1":
-      return `Corner walks are ${ARCHIVE.p1.walk} ticks, the meter step is ${ARCHIVE.p1.meterStep}, and a missed crack heals him ${ARCHIVE.p1.tendrilBossHeal}. Those three counts are unsourced practice stand-ins. A blocked crack costs 3 to 5 and returns it when you step off. The slam deals ${ARCHIVE.p1.slamDamage}, the published cap; the fight logs saw 26 to 34 and the captures 25 to 40.`;
+      return `The west corners in the captures sit on column -1, outside this room, so he charges on the last tile of that path still inside it. A missed crack heals him ${ARCHIVE.p1.tendrilBossHeal}. The blast rolls ${ARCHIVE.p1.blastMin} to ${ARCHIVE.p1.blastMax}.`;
     case "ocellus-p2":
       return `Missing the orange pad deals ${ARCHIVE.p2.padMiss}, an unsourced practice stand-in for a heavy hit.`;
     case "ocellus-p3":

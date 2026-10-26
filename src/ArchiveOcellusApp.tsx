@@ -747,7 +747,9 @@ function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; regi
 
 type MovementToggle = Readonly<{ shown: boolean; setShown: (on: boolean) => void }>;
 
-function RaidControls({ launch, region, flags, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; flags: BuildFlags; movement: MovementToggle }>) {
+type P1Helpers = Readonly<{ stand: boolean; setStand: (on: boolean) => void; outline: boolean; setOutline: (on: boolean) => void }>;
+
+function RaidControls({ launch, region, flags, movement, p1 }: Readonly<{ launch: RaidLaunch; region: RaidRegion; flags: BuildFlags; movement: MovementToggle; p1: P1Helpers | null }>) {
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   return (
@@ -793,6 +795,16 @@ function RaidControls({ launch, region, flags, movement }: Readonly<{ launch: Ra
         <label>
           Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
+        {p1 !== null && (
+          <label>
+            Stand helper <input id="stand_helper" type="checkbox" checked={p1.stand} onChange={(event) => p1.setStand(event.target.checked)} />
+          </label>
+        )}
+        {p1 !== null && (
+          <label>
+            Explosion outline <input id="blast_outline" type="checkbox" checked={p1.outline} onChange={(event) => p1.setOutline(event.target.checked)} />
+          </label>
+        )}
       </div>
       <button id="settings" type="button" aria-expanded={view !== "closed"} onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>⚙ Settings</button>
       <button id="restart" type="submit">Restart</button>
@@ -858,14 +870,32 @@ function MovementBadge({ region, shown }: Readonly<{ region: object; shown: bool
   return <p id="movement_badge">{text}</p>;
 }
 
+function P1Legend({ stand, outline }: Readonly<{ stand: boolean; outline: boolean }>) {
+  if (!stand && !outline) return null;
+  return (
+    <ul id="p1_legend">
+      {stand ? <li><span className="swatch stand" /> Stand here</li> : null}
+      {outline ? <li><span className="swatch outline" /> Explosion</li> : null}
+    </ul>
+  );
+}
+
 function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
   const [showMovement, setShowMovement] = useState(false);
+  const [standHelper, setStandHelper] = useState(true);
+  const [blastOutline, setBlastOutline] = useState(true);
   const region = session.kind === "drill" ? session.drill.region : session.region;
   const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
+  const p1: P1Helpers | null = session.kind === "raid" && session.launch.id === "ocellus-p1" ? { stand: standHelper, setStand: setStandHelper, outline: blastOutline, setOutline: setBlastOutline } : null;
   useEffect(() => {
     movementDebug(region)?.showBossMovement(showMovement);
   }, [region, showMovement]);
+  useEffect(() => {
+    if (session.kind !== "raid") return;
+    session.region.standHelper = standHelper;
+    session.region.blastOutline = blastOutline;
+  }, [session, standHelper, blastOutline]);
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
@@ -874,8 +904,9 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
         <div id="hud_corner">
           <MovementBadge region={region} shown={showMovement} />
           {session.kind === "raid" && session.launch.id === "ocellus-p2" ? <PortalCallLabel region={session.region} /> : null}
+          {p1 !== null ? <P1Legend stand={p1.stand} outline={p1.outline} /> : null}
           <GameChat region={region} />
-          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} />}
+          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} p1={p1} />}
           <Credits />
         </div>
         {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}

@@ -1,5 +1,5 @@
 import { BasicModel, CacheRenderModel, CacheRenderReferences, CacheRenderSceneModel, CollisionType, Entity, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Projectile, Region, Settings, TileMarkerModel, TwistedBow } from "osrs-sdk";
-import type { Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
+import type { Location, Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
 import type { Seed, Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import { protectionOf } from "../../sim/sdk/EncounterBinding";
@@ -7,7 +7,7 @@ import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { blastCuesOn, crackCues } from "./cracks";
-import { FloorGraphic, idlePortals, paintPortals, raisePortals } from "./floorView";
+import { FloorGraphic, OilPatch, idlePortals, paintPortals, raisePortals } from "./floorView";
 import type { PortalGraphic } from "./floorView";
 import { BATTERY_TILES, CENSERS, P1_CENTRE, ROOMS } from "./layout";
 import type { Quadrant } from "./layout";
@@ -21,8 +21,21 @@ import { WalkTint } from "../movementDebug";
 import { acceptAddStep, acceptBossStep, actorName, addMobility, bossMobility, cauldronMayStand, overlayTiles } from "./movement";
 import { flightProgress, graphicAnchor, heldStandIn, movementPoseIndex, shotByGraphic, shotMotion, visualLifeTicks, wholeTickStandIn, clientProjectileHeight } from "./visualSync";
 import type { ShotMotion } from "./visualSync";
+import { FootprintSight, attackReaches } from "./sight";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
+
+class RaidPlayer extends Player {
+  /** A ranged or magic shot uses the client's ray. The target's own footprint stays open, and every other body blocks. */
+  override setHasLOS(): void {
+    const target = this.aggro;
+    if (target instanceof PracticeMob) {
+      this.hasLOS = attackReaches(this.region, this.location.x, this.location.y, target, this.attackRange, target.sight);
+      return;
+    }
+    super.setHasLOS();
+  }
+}
 
 class PracticeMob extends Mob {
   blocks = false;
@@ -41,6 +54,14 @@ class PracticeMob extends Mob {
     this.stepping = true;
   }
 
+  /** The footprint mask the client's ray reads. Null on a body that does not block a shot. */
+  sight: FootprintSight | null = null;
+
+  override setLocation(location: Location): void {
+    super.setLocation(location);
+    if (this.sight) this.sight.location = { x: this.location.x, y: this.location.y };
+  }
+
   settlePose(): void {
     this.stepping = false;
   }
@@ -50,7 +71,7 @@ class PracticeMob extends Mob {
   }
 
   override get collisionType(): CollisionType {
-    return this.blocks ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
+    return this.blocks && this.currentStats.hitpoint > 0 ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
   }
 
   override get lineOfSight(): LineOfSightMask {
@@ -145,6 +166,7 @@ class PracticeMob extends Mob {
     this.stats = stats;
     this.currentStats = { ...stats };
     this.tiles = bar.size;
+    if (this.sight) this.sight.tiles = bar.size;
     this.label = bar.name;
     return previous !== 0 && previous !== bar.npcId;
   }
@@ -462,6 +484,7 @@ export class RaidRegion extends Region {
   private marks: Mark[] = [];
   private shots: Shot[] = [];
   private floor: FloorGraphic[] = [];
+  private oils: OilPatch[] = [];
   private portals: readonly PortalGraphic[] = [];
   private run: RaidRunState = { kind: "running" };
   /** Damage The Blade is holding. The bar drops only when a release pays half of it. */
@@ -507,7 +530,7 @@ export class RaidRegion extends Region {
 
   initialiseRegion(): { player: Player } {
     const room = ROOMS[this.launch.id];
-    const player = new Player(this, { x: room.player.x, y: room.player.y });
+    const player = new RaidPlayer(this, { x: room.player.x, y: room.player.y });
     const boss = new PracticeMob(this, { x: room.boss.x, y: room.boss.y });
     boss.kind = "boss";
     const adds = this.spawnAdds();
@@ -521,6 +544,13 @@ export class RaidRegion extends Region {
     adds.forEach((add) => this.addMob(add));
     censers.forEach((censer) => this.addMob(censer));
     fixtures.forEach((fixture) => this.addMob(fixture));
+    if (this.launch.id === "bork") {
+      boss.blocks = true;
+      this.plantSight(boss);
+      adds.forEach((add) => {
+        if (add.blocks) this.plantSight(add);
+      });
+    }
     this.wallIn();
     this.mounted = { player, boss, adds, censers, fixtures };
     return { player };
@@ -761,11 +791,82 @@ export class RaidRegion extends Region {
           this.marks.push(mark);
         });
         return;
+      case "ground":
+        this.showGround(event);
+        return;
       default: {
         const unhandled: never = event;
         return unhandled;
       }
     }
+  }
+
+  private showGround(event: Extract<RaidEvent, { kind: "ground" }>): void {
+    const placeSpot = (at: Tile) => {
+      const graphic = new FloorGraphic(this, { x: at.x, y: at.y });
+      graphic.kind = "spot";
+      graphic.spotAnim = event.graphic;
+      graphic.delay = 0;
+      graphic.loops = false;
+      graphic.life = event.ticks;
+      this.addEntity(graphic);
+      this.floor.push(graphic);
+    };
+    switch (event.role) {
+      case "oil":
+        event.tiles.forEach((at) => {
+          const oil = new OilPatch(this, { x: at.x, y: at.y });
+          oil.life = event.ticks;
+          this.addEntity(oil);
+          this.oils.push(oil);
+        });
+        return;
+      case "marker":
+      case "fire":
+      case "splat":
+      case "impact":
+        event.tiles.forEach(placeSpot);
+        return;
+      default: {
+        const unhandled: never = event.role;
+        return unhandled;
+      }
+    }
+  }
+
+  private plantSight(mob: PracticeMob): void {
+    const sight = new FootprintSight(this, { x: mob.location.x, y: mob.location.y });
+    sight.tiles = mob.size;
+    mob.sight = sight;
+    this.entities.unshift(sight);
+  }
+
+  /** The Smorks' mask comes off when they fall. 188 of 188 captures clear it on that despawn. */
+  private releaseFallenSight(): void {
+    this.mounted?.adds.forEach((add) => {
+      if (!add.sight || add.sight.open || add.currentStats.hitpoint > 0) return;
+      add.sight.open = true;
+      this.clearTileCollisionFlags(add.location.x, add.location.y, add.size);
+    });
+  }
+
+  attackSight(): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null {
+    if (!this.mounted) return null;
+    const { player, boss } = this.mounted;
+    const smorks = this.mounted.adds.find((add) => add.label === "Smorks");
+    if (!smorks) return null;
+    const range = player.attackRange;
+    return {
+      range,
+      bork: attackReaches(this, player.location.x, player.location.y, boss, range, boss.sight),
+      smorks: attackReaches(this, player.location.x, player.location.y, smorks, range, smorks.sight),
+    };
+  }
+
+  placePlayer(x: number, y: number): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null {
+    if (!this.mounted) return null;
+    this.mounted.player.setLocation({ x, y });
+    return this.attackSight();
   }
 
   private enterPhase(name: string): void {
@@ -906,6 +1007,11 @@ export class RaidRegion extends Region {
       if (graphic.age()) this.removeEntity(graphic);
     });
     this.floor = this.floor.filter((graphic) => graphic.dying !== 0);
+    this.oils.forEach((oil) => {
+      if (oil.age()) this.removeEntity(oil);
+    });
+    this.oils = this.oils.filter((oil) => oil.dying !== 0);
+    this.releaseFallenSight();
   }
 
   /** Phase 1 cracks and the slam's floor blast, on the walk floor. */
@@ -1011,7 +1117,7 @@ export class RaidRegion extends Region {
   private describeShots(): void {
     switch (this.launch.id) {
       case "bork":
-        this.say(`The bomb is graphic ${GRAPHICS.smorkBomb} from the Smorks. It waits 1 tick, then flies 4.5. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
+        this.say(`The napalm is graphic ${GRAPHICS.smorkNapalm}. It flies 4 ticks, then oil object ${ARCHIVE.bork.oil.objectId} covers the 3×3. The heavy cannonball is graphic ${GRAPHICS.smorkBomb}. It waits 1 tick, then flies 4.5. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
         return;
       case "ezekiel":
         return;
@@ -1184,6 +1290,7 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
   switch (launch.id) {
     case "bork":
       if (name === "bomb-tell") return one(drawn(GRAPHICS.smorkBomb, TYPELESS_SHOT, "smorks"));
+      if (name === "napalm") return one(drawn(GRAPHICS.smorkNapalm, TYPELESS_SHOT, "smorks"));
       return [];
     case "ezekiel":
       return [];

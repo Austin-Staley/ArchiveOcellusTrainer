@@ -21,7 +21,7 @@ export const PLAYER_BLOCK = 424;
 
 export const SEQUENCES = {
   bork: { drum: 14542, oof: 14545, veryAngry: 14549, stomp: 14550, cycle: 14551, death: 14541 },
-  smorks: { bomb: 14555 },
+  smorks: { cannon: ARCHIVE.bork.cannon.anim, bomb: ARCHIVE.bork.cannon.heavyAnim },
   hooded: { idle: 14804 },
   battery: { idle: 15024, death: 15025 },
   ezekiel: { melee: 14685, sword: 14687, stun: 14691, recover: 14693, heal: 14688, wave: 14694 },
@@ -66,7 +66,19 @@ export const GRAPHICS = {
   p3Spin: 4325,
   /** From the Smorks, animation 14555. Flight in the capture is 4.5 ticks. */
   smorkBomb: 4440,
+  /** Incendiary cannonball, animation 14554. Flight in the capture is 4 ticks. */
+  smorkNapalm: ARCHIVE.bork.cannon.projectile,
+  smorkMarker: ARCHIVE.bork.cannon.marker,
+  smorkFire: ARCHIVE.bork.cannon.fire,
+  smorkHeavyMarker: ARCHIVE.bork.cannon.heavyMarker,
+  smorkHeavySpot: ARCHIVE.bork.cannon.heavySpot,
+  smorkHeavyFlash: ARCHIVE.bork.cannon.heavyFlash,
 } as const;
+
+/** Ragged oil tile. Cache object 62544 uses this model. It does not block a step or a shot. */
+export const OIL_MODEL = ARCHIVE.bork.oil.model;
+
+export const SMORK_SPLATS = ARCHIVE.bork.cannon.splats;
 
 /** Template regions from the digest. Chunk rotation is 0. Dreadnoth's 16728 is data only and is not loaded. */
 export const REGION_IDS = {
@@ -148,6 +160,8 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
           return { role: "boss", sequence: SEQUENCES.bork.stomp };
         case "14551":
           return { role: "boss", sequence: SEQUENCES.bork.cycle };
+        case "napalm":
+          return { role: "smorks", sequence: SEQUENCES.smorks.cannon };
         case "bomb-tell":
           return { role: "smorks", sequence: SEQUENCES.smorks.bomb };
         default:

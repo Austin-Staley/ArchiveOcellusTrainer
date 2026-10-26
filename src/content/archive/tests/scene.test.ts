@@ -1,4 +1,4 @@
-import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Settings, TileMarkerModel, Viewport, World } from "osrs-sdk";
+import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Pathing, Settings, TileMarkerModel, Viewport, World } from "osrs-sdk";
 import type { Mob, Player } from "osrs-sdk";
 import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
@@ -7,6 +7,7 @@ import { seed, tick, tile } from "../../../sim/brands";
 import { crackCues } from "../cracks";
 import { BATTERY_TILES, ROOMS } from "../layout";
 import { bossMayStand } from "../movement";
+import { isFloorSpot } from "../floorView";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -96,6 +97,60 @@ describe("raid rooms in 3D", () => {
     if (!bomb) throw new Error("the bomb graphic was not launched");
     expect(bomb.get3dModel()).toBeInstanceOf(CacheRenderModel);
     expect({ x: bomb.location.x, y: bomb.location.y }).toEqual({ x: ROOMS.bork.smork.x, y: ROOMS.bork.smork.y });
+  });
+
+  it("draws the napalm impact and the oil, and the oil does not block a step", () => {
+    const { region, world, player } = open("bork", "?encounter=bork&seed=1&invincible=on");
+    fight(world, 1);
+    const napalm = region.entities.find((entity) => entity.entityName() === `Projectile ${GRAPHICS.smorkNapalm}`);
+    if (!napalm) throw new Error("the napalm graphic was not launched");
+    expect(napalm.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    fight(world, ARCHIVE.bork.cannon.flight);
+    const oils = region.entities.filter((entity) => entity.entityName() === `Oil ${ARCHIVE.bork.oil.objectId}`);
+    const fires = region.entities.filter((entity) => entity.entityName() === `Spot ${GRAPHICS.smorkFire}`);
+    expect(oils).toHaveLength(9);
+    expect(fires).toHaveLength(9);
+    expect(oils[0]?.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    const fire = fires[0]?.get3dModel();
+    if (!fire) throw new Error("the fire graphic had no model");
+    expect(isFloorSpot(fire)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, player.location.x - 1, player.location.y, 1, true)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.smork.x, ROOMS.bork.smork.y, 1, true)).toBe(false);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.boss.x, ROOMS.bork.boss.y, 1, true)).toBe(false);
+    const smorks = [...region.mobs, ...region.newMobs].find((mob) => mob.mobName() === "Smorks");
+    if (!smorks) throw new Error("the Smorks were not in the room");
+    smorks.currentStats.hitpoint = 0;
+    fight(world, 1);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.smork.x, ROOMS.bork.smork.y, 1, true)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.boss.x, ROOMS.bork.boss.y, 1, true)).toBe(false);
+  });
+
+  it("blocks a ranged shot through Bork or the Smorks, and allows the same shot once the body steps aside", () => {
+    const { region, player } = open("bork", "?encounter=bork&seed=1&invincible=on");
+    const present = [...region.mobs, ...region.newMobs];
+    const bork = present.find((mob) => mob.mobName() === "Bork");
+    const smorks = present.find((mob) => mob.mobName() === "Smorks");
+    if (!bork || !smorks) throw new Error("Bork and the Smorks were not in the room");
+    expect(player.attackRange).toBeGreaterThan(1);
+    player.setLocation({ x: 11, y: 4 });
+    bork.setLocation({ x: 10, y: 14 });
+    smorks.setLocation({ x: 10, y: 8 });
+    player.setAggro(bork);
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(false);
+    smorks.setLocation({ x: 2, y: 2 });
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(true);
+    player.setLocation({ x: 11, y: 16 });
+    bork.setLocation({ x: 10, y: 14 });
+    smorks.setLocation({ x: 11, y: 8 });
+    player.setAggro(smorks);
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(false);
+    bork.setLocation({ x: 2, y: 2 });
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(true);
+    void region;
   });
 
   it.each(RAID_IDS)("places exactly one boss in %s", (id) => {

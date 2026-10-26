@@ -13,6 +13,16 @@ import type { RaidId } from "./catalog";
 /** Ocellus reduces demonbane weapon damage by this share. Unverified. Wiki strategies, 25 Oct 2026. */
 export const DEMONBANE_RESISTANCE = 0.2;
 
+/**
+ * One tick on the ragged tile. Disputed: the wiki and the dossier say 6–7, and the reference does not grade it as a hazard.
+ * The mix only picks which end of that pair. It is not a captured formula.
+ */
+export function oilChip(seed: number, at: number): number {
+  const width = ARCHIVE.bork.oil.max - ARCHIVE.bork.oil.min + 1;
+  const mix = Math.imul(seed ^ at, 0x45d9f3b) >>> 0;
+  return ARCHIVE.bork.oil.min + (mix % width);
+}
+
 export const ARCHIVE = {
   bork: {
     npcId: 16640,
@@ -24,14 +34,60 @@ export const ARCHIVE = {
     smorkSize: 3,
     /** Unverified. Wiki drum callouts; ledger gaps 7/6/5/4. */
     tempo: { full: 7, threeQuarter: 6, half: 5, low: 4 },
-    /** Unverified. Practice stand-in for the measured 33–88 tick bomb range. */
+    /**
+     * Unverified. Practice stand-in inside the measured 33–88 tick range.
+     * The digest repeat-gap mode is 76 (26 samples), with 82, 75 and 68 at 22 each.
+     * That spread is Disputed, so the room keeps 33.
+     */
     bombInterval: 33,
     /** Unverified. The old whole-tick stand-in. The drawn graphic waits 1 tick and flies 4.5. No hitsplat used this number. */
     bombFlight: 5,
     prayed: 10,
     unprayed: 33,
     angryHit: 51,
-    chain: { oof: 5, veryAngry: 19, stomp: 21, hit: 22, after: 27, resume: 38 },
+    /** Smash is the wiki tank line, Likely: about 29 ticks after "Oof." The logged stun chain is unchanged. */
+    chain: { oof: 5, veryAngry: 19, stomp: 21, hit: 22, after: 27, resume: 38, smash: 34 },
+    /**
+     * Incendiary cannon and the heavy cannonball. Render digest, 25 Oct 2026.
+     * Animation 14554 plays 2,751 times. Its repeat-gap mode is the drum tempo, and the role is low confidence.
+     * Projectile 4045 is 688 of those plays, flight exactly 4.0, launch delay 0 on 461 and 1 on 136.
+     * 2,751 / 688 is 4.00, so the room fires 4045 on every fourth drum. That ratio is Likely and Disputed against a 7-slot cycle.
+     * The aimed tile is the player's tile. The capture did not resolve the landing tile, so that aim is a stand-in.
+     * Ground graphic 4046 has 6,148 spawns against 688 shots, about 8.94 each, so the fire uses a 3×3.
+     * That shape is Likely and Disputed against the reference, which leaves the area unknown.
+     * Splats 4047–4050 are about two each and have no tile map, so they sit on the aimed tile only.
+     * The heavy cannonball, animation 14555 and projectile 4440, stays Likely as the second special.
+     * Spots 4043 and 4044 have no captured tile lifetime. Three ticks is the animation length, and that lifetime is a stand-in.
+     */
+    cannon: {
+      anim: 14554,
+      projectile: 4045,
+      flight: 4,
+      every: 4,
+      marker: 1447,
+      markerLife: 4,
+      fire: 4046,
+      fireLife: 3,
+      splats: [4047, 4048, 4049, 4050] as const,
+      splatLife: 2,
+      radius: 1,
+      heavyAnim: 14555,
+      heavySpot: 4043,
+      heavyFlash: 4044,
+      heavySpotLife: 3,
+      heavyMarker: 1448,
+      heavyMarkerLife: 5,
+      /** Launch delay 1 plus flight 4.5. This is the first whole tick after the ball arrives. */
+      heavyImpact: 6,
+    },
+    /**
+     * Ragged tile. Cache 2746: object 62544, model 62729, 1×1, interact type 0, projectiles pass.
+     * 6,033 spawns. Lifetime mode 199 equals the sample max and the median is 127, so 199 is a cap.
+     * The room removes the tile at that cap. The true length is Disputed.
+     * Standing on it is 6–7 a tick in the wiki and the dossier. The reference leaves the hazard unknown, so the damage is Disputed.
+     * 6,033 oil spawns against 688 shots is about 8.77, the same 3×3 as the fire, and that shape is Disputed the same way.
+     */
+    oil: { objectId: 62544, model: 62729, life: 199, min: 6, max: 7 },
   },
   ezekiel: {
     npcId: 16652,

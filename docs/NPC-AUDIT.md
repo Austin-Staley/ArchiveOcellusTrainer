@@ -20,12 +20,21 @@ Region 16727, plane 0. Offset (-16, -19).
 | Smorks 16641 | model | npc 16641, idle 14553, no walk | npc 16641 | npc 16641 | matched |
 | Smorks 16641 | movement | does not move | stands | stands | matched |
 | Smorks 16641 | bomb animation | 14555, "Big bomb! Bork watch out!" | 14555 on bomb-tell | 14555 on bomb-tell | matched |
-| Smorks 16641 | bomb projectile | 4440 from 16641, flight 4.5, launch-to-hit unresolved, usually anim+1 | not drawn | graphic 4440 from the Smorks' centre, waits 1 tick, flies 4.5 | fixed |
-| Smorks 16641 | auto 14554 / projectile 4045 | role low confidence, flight 4 | not drawn | not drawn | stand-in |
-| Smorks 16641 | bomb cadence | 33–88 ticks, no single gap | every 33 | every 33 | stand-in |
+| Smorks 16641 | bomb projectile | 4440 from 16641, flight 4.5, launch-to-hit unresolved, usually anim+1. 535 shots. The dossier keeps this as Likely the second special | not drawn | graphic 4440 from the Smorks' centre, waits 1 tick, flies 4.5. Still Likely the second special | fixed; Likely |
+| Smorks 16641 | cannon 14554 / projectile 4045 | 2,751 plays, duration column 3 ticks, repeat-gap mode 7. Role low confidence. 4045 on 688, flight exactly 4.0, launch delay 0 on 461 and 1 on 136. 2,751 / 688 is 4.00 | not drawn | animation 14554 and graphic 4045 on every fourth drum, flight 4, plane 0 | Disputed |
+| Smorks 16641 | cannon tiles | fire 4046 ×6,148, life mode 3 (about 8.94 per shot). Splats 4047 ×1,508, 4048 ×1,476, 4049 ×1,552, 4050 ×1,500, life mode 2, no tile map. Marker 1447 ×688, life mode 4 | not drawn | a 3×3 of 4046 for 3 ticks, the four splats on the aimed tile for 2, marker 1447 for 4. The aimed tile is the player's tile | Disputed |
+| Smorks 16641 | heavy spots | marker 1448 ×535, life mode 5. Spots 4043 and 4044 are named on the attack and have no tile lifetime | not drawn | 1448 for 5 ticks on the aimed tile. 4043 and 4044 last 3 ticks there, the animation length | stand-in |
+| Smorks 16641 | bomb cadence | 33–88 ticks, no single gap. Repeat-gap mode 76 (26 samples), with 82, 75 and 68 at 22 each | every 33 | every 33 | stand-in |
+| Smorks 16641 | line of sight and steps | runtime 0x20100 on the 3×3 while alive, removed on despawn, 188 of 188. The template object does not block a shot | a shot and a step both passed the body | the client's ray stops on the 3×3 while hitpoints remain, and that tile opens when they fall. A step stops on the footprint | fixed |
+| Bork 16640 | line of sight and steps | the 188-episode flag row names the Smorks' 3×3. His 4×4 was not in that row | a shot passed through him. A step already stopped | the same ray stops on the 4×4. A step still stops | stand-in |
+| Cannon oil 62544 | object | cache object 62544, model 62729, 1×1, interact type 0, projectiles pass. 6,033 spawns. Life mode 199, median 127, max 199. 6,033 / 688 is about 8.77 | not drawn | model 62729 on the same 3×3, plane 0, removed at 199 ticks. A step and a shot both cross it. The legend names it | Disputed |
+| Cannon oil 62544 | effect | wiki and dossier 6–7 a tick, plus burn splat 74 and bleed splat 67. The reference leaves the hazard unknown. Baiting 4045 onto Bork is 25–30, n=345 | none | 6 or 7 typeless a tick on a player who stands in the pool. Burn, bleed, and the bait hit on Bork are not a second number | Disputed |
+| Bork 16640 | tank line | wiki "Bork smash [player] now.", about 29 ticks after "Oof." Stepping back two tiles is the lure | not said | "Bork smash you now." at Oof + 29. The player is not moved | Likely |
 | Bork handler 16642 | tile | one junk tile, no idle | not spawned | not spawned | stand-in |
 
-The drum ring is centred on the Smorks, so it moves with them to (14, 14). The angry-chain safe rectangle is still the old practice box. That rectangle was not a captured path.
+The drum ring is centred on the Smorks, so it moves with them to (14, 14). The angry-chain safe rectangle is still the old practice box. That rectangle was not a captured path. The stomp's safe side of the Smorks is a server ray in the reference (D-09). This room's safe rectangle is still that old box.
+
+Every fourth drum is **Likely** from 688 projectiles against 2,751 plays of 14554, and **Disputed** against a 7-slot reading (shot, shot, napalm, gap, shot, shot, big bomb). The 3×3 is **Likely** from 6,148 fire graphics and 6,033 oil spawns, and **Disputed** against the reference, which leaves the area unknown. The player's tile is a stand-in for the unresolved landing tile (U-29). Splats have no tile map, so they sit on that same tile. Spots 4043 and 4044 have no captured tile life, so 3 ticks is a stand-in. The bomb gap of 33 stays inside 33–88. The mode-76 cluster is a thin spread, so it does not replace 33. "Bork smash you now." uses "you" for the one player in the room. The two-tile step back stays advice.
 
 ## Archive Guardian
 
@@ -333,7 +342,7 @@ A 3×3 launches from the footprint centre, `south-west + size / 2`, not from the
 | Smorks bomb | 14555 | 4440 from 16641 | 0 | 535 | 4.5 ticks, 135 cycles | unresolved | 1 tick on 485, also 2 on 38 and 3 on 7 | travel 5 from the south-west tile, from the attack tick, height 1.2 | waits 30 cycles, flies 135, from the 3×3 centre, height 1.2, slope 0 | captured |
 | Bork 4056 | none resolved | 4056, source unresolved | 0 | the row was not kept | 3 | 3 | none | not drawn | not drawn | stand-in |
 | Bork 4057 | none resolved | 4057, source unresolved | 0 | the row was not kept | 3 | 3 | none | not drawn | not drawn | stand-in |
-| Smorks auto | low confidence | 4045 from 16641 | 0 | 688 | 4 | unresolved | 0 on 461 | not drawn | not drawn | stand-in |
+| Smorks cannon | 14554, low confidence on the plays that do not fire | 4045 from 16641 | 0 | 688 | 4.0 ticks, 120 cycles | unresolved | 0 on 461, also 1 on 136 | not drawn | waits 0, flies 120, from the 3×3 centre, plane 0, height 1.2, slope 0 | Disputed |
 | Guardian ranged | 14751 | 4201 from 16659 | 0 | 6,314 | mode 2.27, 68 cycles | 2 ticks on 5,341 | 2 ticks on 4,122 | flies 4 ticks from the attack, south-west corner, height 1.2 | waits 60, flies 60, from the centre. The 8-cycle gap against 2.27 is not applied, so the graphic meets the +4 splat | captured |
 | Moia ranged | 14785 | 4214 | 0 | 343 | 0.67 ticks, drawn as 20 cycles | 0 on 329 | 1 tick on 75 of 78 timed launches, not used | forced to 1 tick | 20 cycles from the attack tick. The splat stays on that tick | captured |
 | Moia relocate | 14788 | 4213 | 0 | 70 | 5.5 | 4 on 39, then 5 on 20 | not a clean pair with 14788 | flies 4 ticks | flies 120 cycles, so it meets the splat. The 5.5-tick flight is the disagreement | Disputed |

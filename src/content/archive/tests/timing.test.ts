@@ -8,7 +8,7 @@ import type { RaidInput } from "../clock";
 import { blastRing, crackFrom } from "../cracks";
 import { DAGON_TRAIL, P1_CENTRE, ROOMS, WAVE_SKIP, beamHits } from "../layout";
 import { countdownStart, distanceToBody, tileGap, vinePlace } from "../p1Route";
-import { ARCHIVE, DEMONBANE_RESISTANCE } from "../timings";
+import { ARCHIVE, DEMONBANE_RESISTANCE, oilChip } from "../timings";
 
 const options = defaultOptions(seed(1));
 
@@ -52,6 +52,47 @@ describe("raid clocks", () => {
     expect(at("14550")).toBe(54);
     expect(at("14551")).toBe(60);
     expect(at("drum-resume")).toBe(71);
+  });
+
+  it("fires the incendiary cannon on every fourth drum and oils the 3×3 four ticks later", () => {
+    const rows = project("bork", options, 28, hold("bork"));
+    const napalm = rows.filter((stamp) => stamp.event.kind === "attack" && stamp.event.name === "napalm").map((stamp) => stamp.at);
+    expect(napalm).toEqual([0, 28]);
+    const oil = rows.find((stamp) => stamp.event.kind === "ground" && stamp.event.role === "oil");
+    if (!oil || oil.event.kind !== "ground") throw new Error("the oil did not spawn");
+    expect(oil.at).toBe(ARCHIVE.bork.cannon.flight);
+    expect(oil.event.graphic).toBe(ARCHIVE.bork.oil.objectId);
+    expect(oil.event.ticks).toBe(ARCHIVE.bork.oil.life);
+    expect(oil.event.tiles).toHaveLength(9);
+    const fire = rows.find((stamp) => stamp.event.kind === "ground" && stamp.event.role === "fire");
+    if (!fire || fire.event.kind !== "ground") throw new Error("the fire graphic did not land");
+    expect(fire.event.tiles).toEqual(oil.event.tiles);
+    const start = ROOMS.bork.player;
+    const away = tile(1, 1);
+    const stayed = project("bork", options, 4, hold("bork")).find((stamp) => stamp.at === 4 && stamp.event.kind === "damage" && stamp.event.name === "oil");
+    if (!stayed || stayed.event.kind !== "damage") throw new Error("standing on the oil did not hit");
+    expect(stayed.event.unprotectedAmount).toBe(oilChip(options.seed, 4));
+    expect(stayed.event.unprotectedAmount).toBeGreaterThanOrEqual(ARCHIVE.bork.oil.min);
+    expect(stayed.event.unprotectedAmount).toBeLessThanOrEqual(ARCHIVE.bork.oil.max);
+    const clear = project("bork", options, 4, (at) => {
+      const player = at === 0 ? start : tile(start.x + 0, start.y + 3);
+      return { ...hold("bork")(at), player, previous: player };
+    });
+    expect(clear.some((stamp) => stamp.event.kind === "damage" && stamp.event.name === "oil")).toBe(false);
+    const stepped = project("bork", options, 203, (at) => {
+      const player = at > 0 && at % 28 === 0 ? away : start;
+      return { ...hold("bork")(at), player, previous: player };
+    });
+    expect(stepped.some((stamp) => stamp.at === 202 && stamp.event.kind === "damage" && stamp.event.name === "oil")).toBe(true);
+    expect(stepped.some((stamp) => stamp.at === 203 && stamp.event.kind === "damage" && stamp.event.name === "oil" && stamp.event.unprotectedAmount > 0)).toBe(false);
+  });
+
+  it("says the tank line 29 ticks after Oof", () => {
+    const rows = project("bork", options, 71, hold("bork"));
+    const oof = rows.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "oof");
+    const smash = rows.find((stamp) => stamp.event.kind === "chat" && stamp.event.text === "Bork smash you now.");
+    if (!oof || !smash) throw new Error("the tank line was not scheduled");
+    expect(smash.at - oof.at).toBe(29);
   });
 
   it("lands the guardian 3 ticks after the shield breaks and sends vines from landing + 5", () => {

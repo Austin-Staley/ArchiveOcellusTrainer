@@ -48,7 +48,7 @@ import type { Quadrant } from "./layout";
 import { PORTAL_COLOURS, gapsFor, nextColour, volleyLabel } from "./portals";
 import type { PortalColour } from "./portals";
 import { SEQUENCES } from "./poses";
-import { ARCHIVE } from "./timings";
+import { ARCHIVE, oilChip } from "./timings";
 
 export type { RaidOptions } from "./catalog";
 
@@ -68,6 +68,7 @@ export type RaidEvent =
   | Readonly<{ kind: "attack"; name: string; text: string }>
   | Readonly<{ kind: "damage"; name: string; style: IncomingStyle; protectedAmount: number; unprotectedAmount: number }>
   | Readonly<{ kind: "mark"; tiles: readonly Tile[]; colour: string; text: string; ticks: number }>
+  | Readonly<{ kind: "ground"; role: "marker" | "fire" | "splat" | "impact" | "oil"; graphic: number; tiles: readonly Tile[]; ticks: number }>
   | Readonly<{ kind: "boss-at"; tile: Tile }>
   | Readonly<{ kind: "add-at"; index: number; tile: Tile }>
   | Readonly<{ kind: "phase"; name: string }>
@@ -84,7 +85,8 @@ export type Stamp = Readonly<{ at: Tick; event: RaidEvent }>;
 
 type Scheduled = Readonly<{ at: number; event: RaidEvent }>;
 
-type BorkMemory = Readonly<{ id: "bork"; nextDrum: number; suppressUntil: number; nextBomb: number; chainTell: number | null; pending: readonly Scheduled[]; wiped: boolean }>;
+type OilPool = Readonly<{ tiles: readonly Tile[]; from: number; until: number }>;
+type BorkMemory = Readonly<{ id: "bork"; nextDrum: number; suppressUntil: number; nextBomb: number; chainTell: number | null; pending: readonly Scheduled[]; wiped: boolean; drums: number; oils: readonly OilPool[] }>;
 type EzekielMemory = Readonly<{ id: "ezekiel"; enraged: boolean; marked: Tile; wave: number }>;
 type GuardianMemory = Readonly<{ id: "guardian"; form: "flying" | "landing" | "grounded" | "takeoff"; landAt: number; takeoffAt: number; nextAuto: number; nextMushroom: number; nextBeam: number; enraged: boolean; nextVine: number; vineStop: number; groundings: number; pending: readonly Scheduled[] }>;
 type MoiaMemory = Readonly<{ id: "moia"; phase: "p1" | "gone" | "p2"; reappear: number; nextChant: number; chants: number; station: number; hopped: number }>;
@@ -122,6 +124,7 @@ const damage = (name: string, style: IncomingStyle, protectedAmount: number, unp
 const chat = (text: string): RaidEvent => ({ kind: "chat", text });
 const phase = (name: string): RaidEvent => ({ kind: "phase", name });
 const bossAt = (at: Tile): RaidEvent => ({ kind: "boss-at", tile: at });
+const ground = (role: Extract<RaidEvent, { kind: "ground" }>["role"], graphic: number, tiles: readonly Tile[], ticks: number): RaidEvent => ({ kind: "ground", role, graphic, tiles, ticks });
 
 function keep(pending: readonly Scheduled[], at: number): readonly Scheduled[] {
   return pending.filter((item) => item.at > at);
@@ -138,7 +141,7 @@ function later(pending: readonly Scheduled[], at: number, event: RaidEvent, when
 export function initialMemory(id: RaidId): RaidMemory {
   switch (id) {
     case "bork":
-      return { id, nextDrum: 0, suppressUntil: 0, nextBomb: ARCHIVE.bork.bombInterval, chainTell: null, pending: [], wiped: false };
+      return { id, nextDrum: 0, suppressUntil: 0, nextBomb: ARCHIVE.bork.bombInterval, chainTell: null, pending: [], wiped: false, drums: 0, oils: [] };
     case "ezekiel":
       return { id, enraged: false, marked: ROOMS.ezekiel.player, wave: 0 };
     case "guardian":
@@ -199,9 +202,24 @@ function drumHit(input: RaidInput, ring: boolean, tempo: number): RaidEvent | nu
   return damage("drum", "melee", hard ? ARCHIVE.bork.unprayed : amount, ARCHIVE.bork.unprayed);
 }
 
-function stepBork(memory: BorkMemory, input: RaidInput, at: number): Readonly<{ memory: BorkMemory; events: RaidEvent[] }> {
+function splashOf(at: Tile): readonly Tile[] {
+  const radius = ARCHIVE.bork.cannon.radius;
+  const tiles: Tile[] = [];
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) tiles.push(tile(at.x + dx, at.y + dy));
+  }
+  return tiles;
+}
+
+function stepBork(memory: BorkMemory, options: RaidOptions, input: RaidInput, at: number): Readonly<{ memory: BorkMemory; events: RaidEvent[] }> {
   let next = memory;
   const events = now(memory.pending, at);
+  const oils = next.oils.filter((pool) => at < pool.until);
+  if (oils.some((pool) => at >= pool.from && onTiles(pool.tiles, input.player))) {
+    const chip = oilChip(options.seed, at);
+    events.push(damage("oil", "typeless", chip, chip));
+  }
+  next = { ...next, oils };
   if (next.chainTell !== null && at >= next.chainTell + ARCHIVE.bork.chain.resume) next = { ...next, chainTell: null };
   if (at === next.nextDrum) {
     const tempo = smorkTempo(input);
@@ -211,7 +229,21 @@ function stepBork(memory: BorkMemory, input: RaidInput, at: number): Readonly<{ 
       const hit = drumHit(input, false, tempo);
       if (hit) events.push(hit);
       const ring = drumHit(input, true, tempo);
-      next = { ...next, nextDrum: at + tempo, pending: ring ? later(next.pending, at, ring, at + 2) : keep(next.pending, at) };
+      const cannon = ARCHIVE.bork.cannon;
+      let pending = ring ? later(next.pending, at, ring, at + 2) : keep(next.pending, at);
+      let pools = next.oils;
+      if (next.drums % cannon.every === 0) {
+        const aim = input.player;
+        const land = at + cannon.flight;
+        const area = splashOf(aim);
+        events.push(attack("napalm", "Fireeeeeeeeee!"));
+        events.push(ground("marker", cannon.marker, [aim], cannon.markerLife));
+        pending = later(pending, at, ground("fire", cannon.fire, area, cannon.fireLife), land);
+        for (const graphic of cannon.splats) pending = later(pending, at, ground("splat", graphic, [aim], cannon.splatLife), land);
+        pending = later(pending, at, ground("oil", ARCHIVE.bork.oil.objectId, area, ARCHIVE.bork.oil.life), land);
+        pools = [...pools, { tiles: area, from: land, until: land + ARCHIVE.bork.oil.life }];
+      }
+      next = { ...next, drums: next.drums + 1, nextDrum: at + tempo, pending, oils: pools };
     }
   } else next = { ...next, pending: keep(next.pending, at) };
   if (at === next.nextBomb) {
@@ -219,7 +251,10 @@ function stepBork(memory: BorkMemory, input: RaidInput, at: number): Readonly<{ 
     else {
       const tell = at;
       const chain = ARCHIVE.bork.chain;
+      const cannon = ARCHIVE.bork.cannon;
+      const aim = input.player;
       events.push(attack("bomb-tell", "Big bomb! Bork watch out!"));
+      events.push(ground("marker", cannon.heavyMarker, [aim], cannon.heavyMarkerLife));
       const shadow = input.player.x <= 4 && input.player.y >= 7 && input.player.y <= 9;
       const pending = [
         ...next.pending,
@@ -228,7 +263,10 @@ function stepBork(memory: BorkMemory, input: RaidInput, at: number): Readonly<{ 
         { at: tell + chain.stomp, event: attack("14550", "14550") },
         { at: tell + chain.hit, event: damage("angry", "typeless", shadow ? 0 : ARCHIVE.bork.angryHit, shadow ? 0 : ARCHIVE.bork.angryHit) },
         { at: tell + chain.after, event: attack("14551", "14551") },
+        { at: tell + chain.smash, event: chat("Bork smash you now.") },
         { at: tell + chain.resume, event: attack("drum-resume", "14542") },
+        { at: tell + cannon.heavyImpact, event: ground("impact", cannon.heavySpot, [aim], cannon.heavySpotLife) },
+        { at: tell + cannon.heavyImpact, event: ground("impact", cannon.heavyFlash, [aim], cannon.heavySpotLife) },
       ];
       next = { ...next, chainTell: tell, suppressUntil: tell + chain.resume, nextBomb: tell + ARCHIVE.bork.bombInterval, pending };
     }
@@ -1106,7 +1144,7 @@ export function advance(memory: RaidMemory, options: RaidOptions, input: RaidInp
   const step = (() => {
     switch (memory.id) {
       case "bork":
-        return stepBork(memory, input, at);
+        return stepBork(memory, options, input, at);
       case "ezekiel":
         return stepEzekiel(memory, options, input, at);
       case "guardian":

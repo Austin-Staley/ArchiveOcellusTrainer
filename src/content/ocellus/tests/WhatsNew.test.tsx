@@ -14,12 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.15",
+  version: "2026.10.26.16",
   date: "2026-10-26",
   notes: [
-    "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",
-    "Vines open, close and explode on the logged ticks. Standing on one chips 3 to 5 and pays it back when you step off. The blast rolls 26 to 34.",
-    "A cyan tile counts 4, 3, 2, 1 before you need to move. A red outline marks the explosion five ticks early. Both can be turned off in Settings.",
+    "Bork and the Smorks block a ranged or magic shot. The cannon oil on the floor does not.",
+    "The Smorks play animation 14554 for the cannon. Graphic 4045 flies 4 ticks, then fire and oil cover the 3×3.",
+    "Standing on the oil chips 6 or 7 a tick. The heavy cannonball stays the likely second special.",
   ],
 };
 

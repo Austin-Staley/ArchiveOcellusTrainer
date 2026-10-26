@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.16",
+    notes: [
+      "Bork and the Smorks block a ranged or magic shot. The cannon oil on the floor does not.",
+      "The Smorks play animation 14554 for the cannon. Graphic 4045 flies 4 ticks, then fire and oil cover the 3×3.",
+      "Standing on the oil chips 6 or 7 a tick. The heavy cannonball stays the likely second special.",
+    ],
+  },
+  {
     version: "2026.10.26.15",
     notes: [
       "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",

@@ -101,7 +101,7 @@ export const BOSS_WALK: Readonly<Record<RaidId, BossWalk>> = {
     status: "disputed",
     exact: null,
     bound: { minX: -1, minY: 11, maxX: 11, maxY: 23 },
-    note: "32 fights, 2,167 samples. The mode (5, 17) has 129. The four corner clusters are (-1, 23), (-1, 11), (11, 23) and (11, 11), the same stops as the phase 1 drill in that drill's grid. This room's old corner hops sit outside the box, so they are refused and he holds (5, 17). The drill walks the logged path.",
+    note: "32 fights, 2,167 samples. The mode (5, 17) has 129 and is the middle. The four corner clusters are (-1, 23), (-1, 11), (11, 23) and (11, 11), the drill corners shifted by (-9, +3). He walks the logged straight-then-diagonal path between those stops. An anchor at x -1 is outside the room, so a west corner stops on the last tile of that path still inside it.",
   },
   "ocellus-p2": {
     actor: "The Blade",
@@ -210,12 +210,13 @@ export function bossMobility(memory: RaidMemory, at: number): Mobility {
   switch (memory.id) {
     case "moia":
       return moiaMobility(memory, at);
+    case "ocellus-p1":
+      return p1Mobility(memory, at);
     case "bork":
     case "ezekiel":
     case "guardian":
     case "xarth":
     case "dagonhai":
-    case "ocellus-p1":
     case "ocellus-p2":
     case "ocellus-p3":
       return "stationary";
@@ -224,6 +225,15 @@ export function bossMobility(memory: RaidMemory, at: number): Mobility {
       return unhandled;
     }
   }
+}
+
+function p1Mobility(memory: Extract<RaidMemory, { id: "ocellus-p1" }>, at: number): Mobility {
+  if (memory.stage === "middle" && at - memory.since === ARCHIVE.p1.teleportIn) return "mobile";
+  if (memory.stage !== "walk") return "stationary";
+  const elapsed = at - memory.since;
+  // The anchor is already the tile he stepped onto. The arrival tick is still a step, so it stays mobile.
+  if (elapsed < 0 || elapsed >= memory.walkSteps) return "stationary";
+  return "mobile";
 }
 
 function moiaMobility(memory: Extract<RaidMemory, { id: "moia" }>, at: number): Mobility {

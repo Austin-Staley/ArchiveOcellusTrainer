@@ -1,11 +1,13 @@
-import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Settings, TileMarkerModel, Viewport, World } from "osrs-sdk";
+import { BasicModel, CacheRenderModel, CacheRenderSceneModel, Pathing, Settings, TileMarkerModel, Viewport, World } from "osrs-sdk";
 import type { Mob, Player } from "osrs-sdk";
 import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
 import { seed, tick, tile } from "../../../sim/brands";
-import { cornerCrack } from "../cracks";
-import { BATTERY_TILES, HOODED_TILE, ROOMS } from "../layout";
+import { crackCues } from "../cracks";
+import { BATTERY_TILES, ROOMS } from "../layout";
+import { bossMayStand } from "../movement";
+import { isFloorSpot } from "../floorView";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -30,6 +32,33 @@ function npcIdOf(mob: Mob): number {
   return "npcId" in mob && typeof mob.npcId === "number" ? mob.npcId : 0;
 }
 
+function bossNpc(id: RaidId): number {
+  switch (id) {
+    case "bork":
+      return ARCHIVE.bork.npcId;
+    case "ezekiel":
+      return ARCHIVE.ezekiel.npcId;
+    case "guardian":
+      return ARCHIVE.guardian.flyingNpcId;
+    case "moia":
+      return ARCHIVE.moia.npcId;
+    case "xarth":
+      return ARCHIVE.xarth.npcId;
+    case "dagonhai":
+      return ARCHIVE.dagonhai.npcId;
+    case "ocellus-p1":
+      return ARCHIVE.p1.npcId;
+    case "ocellus-p2":
+      return ARCHIVE.p2.npcId;
+    case "ocellus-p3":
+      return ARCHIVE.p3.npcId;
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}
+
 describe("raid rooms in 3D", () => {
   it("pins the captured boss tiles", () => {
     const bosses: readonly (readonly [RaidId, string, number, number, number])[] = [
@@ -39,7 +68,7 @@ describe("raid rooms in 3D", () => {
       ["moia", "Moia", ROOMS.moia.boss.x, ROOMS.moia.boss.y, ARCHIVE.moia.npcId],
       ["xarth", "Xarth", ROOMS.xarth.boss.x, ROOMS.xarth.boss.y, ARCHIVE.xarth.npcId],
       ["dagonhai", "Dagon'hai trio", ROOMS.dagonhai.boss.x, ROOMS.dagonhai.boss.y, ARCHIVE.dagonhai.npcId],
-      ["ocellus-p1", "Ocellus", ROOMS["ocellus-p1"].boss.x, ROOMS["ocellus-p1"].boss.y, ARCHIVE.p1.npcId],
+      ["ocellus-p1", "Ocellus", ROOMS["ocellus-p1"].boss.x, ROOMS["ocellus-p1"].boss.y, ARCHIVE.p1.hoodedNpcId],
       ["ocellus-p2", "The Blade", ROOMS["ocellus-p2"].boss.x, ROOMS["ocellus-p2"].boss.y, ARCHIVE.p2.npcId],
       ["ocellus-p3", "Ocellus", ROOMS["ocellus-p3"].boss.x, ROOMS["ocellus-p3"].boss.y, ARCHIVE.p3.npcId],
     ];
@@ -70,18 +99,155 @@ describe("raid rooms in 3D", () => {
     expect({ x: bomb.location.x, y: bomb.location.y }).toEqual({ x: ROOMS.bork.smork.x, y: ROOMS.bork.smork.y });
   });
 
-  it("places the Hooded Figure and the four batteries off the combat-add list", () => {
-    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
-    const figure = [...phase1.region.mobs, ...phase1.region.newMobs].find((mob) => mob.mobName() === "Hooded Figure");
-    if (!figure) throw new Error("the Hooded Figure was not in phase 1");
-    expect(figure.get3dModel()).toBeInstanceOf(CacheRenderModel);
-    expect({ x: figure.location.x, y: figure.location.y, size: figure.size, npcId: npcIdOf(figure) }).toEqual({
-      x: HOODED_TILE.x,
-      y: HOODED_TILE.y,
-      size: ARCHIVE.p1.hoodedSize,
-      npcId: ARCHIVE.p1.hoodedNpcId,
-    });
+  it("draws the napalm impact and the oil, and the oil does not block a step", () => {
+    const { region, world, player } = open("bork", "?encounter=bork&seed=1&invincible=on");
+    fight(world, 1);
+    const napalm = region.entities.find((entity) => entity.entityName() === `Projectile ${GRAPHICS.smorkNapalm}`);
+    if (!napalm) throw new Error("the napalm graphic was not launched");
+    expect(napalm.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    fight(world, ARCHIVE.bork.cannon.flight);
+    const oils = region.entities.filter((entity) => entity.entityName() === `Oil ${ARCHIVE.bork.oil.objectId}`);
+    const fires = region.entities.filter((entity) => entity.entityName() === `Spot ${GRAPHICS.smorkFire}`);
+    expect(oils).toHaveLength(9);
+    expect(fires).toHaveLength(9);
+    expect(oils[0]?.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    const fire = fires[0]?.get3dModel();
+    if (!fire) throw new Error("the fire graphic had no model");
+    expect(isFloorSpot(fire)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, player.location.x - 1, player.location.y, 1, true)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.smork.x, ROOMS.bork.smork.y, 1, true)).toBe(false);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.boss.x, ROOMS.bork.boss.y, 1, true)).toBe(false);
+    const smorks = [...region.mobs, ...region.newMobs].find((mob) => mob.mobName() === "Smorks");
+    if (!smorks) throw new Error("the Smorks were not in the room");
+    smorks.currentStats.hitpoint = 0;
+    fight(world, 1);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.smork.x, ROOMS.bork.smork.y, 1, true)).toBe(true);
+    expect(Pathing.canTileBePathedTo(region, ROOMS.bork.boss.x, ROOMS.bork.boss.y, 1, true)).toBe(false);
+  });
 
+  it("blocks a ranged shot through Bork or the Smorks, and allows the same shot once the body steps aside", () => {
+    const { region, player } = open("bork", "?encounter=bork&seed=1&invincible=on");
+    const present = [...region.mobs, ...region.newMobs];
+    const bork = present.find((mob) => mob.mobName() === "Bork");
+    const smorks = present.find((mob) => mob.mobName() === "Smorks");
+    if (!bork || !smorks) throw new Error("Bork and the Smorks were not in the room");
+    expect(player.attackRange).toBeGreaterThan(1);
+    player.setLocation({ x: 11, y: 4 });
+    bork.setLocation({ x: 10, y: 14 });
+    smorks.setLocation({ x: 10, y: 8 });
+    player.setAggro(bork);
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(false);
+    smorks.setLocation({ x: 2, y: 2 });
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(true);
+    player.setLocation({ x: 11, y: 16 });
+    bork.setLocation({ x: 10, y: 14 });
+    smorks.setLocation({ x: 11, y: 8 });
+    player.setAggro(smorks);
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(false);
+    bork.setLocation({ x: 2, y: 2 });
+    player.setHasLOS();
+    expect(player.hasLOS).toBe(true);
+    void region;
+  });
+
+  it.each(RAID_IDS)("places exactly one boss in %s", (id) => {
+    const { region } = open(id, `?encounter=${id}&seed=1&invincible=on`);
+    const present = [...region.mobs, ...region.newMobs];
+    const wanted = id === "ocellus-p1" ? ARCHIVE.p1.hoodedNpcId : bossNpc(id);
+    const bosses = present.filter((mob) => npcIdOf(mob) === wanted);
+    expect(bosses).toHaveLength(1);
+    expect(region.primaryBoss).toBe(bosses[0]);
+  });
+
+  it("shows the red blast outline for the five ticks before it detonates, and hides both helpers when Settings is off", () => {
+    const { region, world } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    let seen = false;
+    for (let step = 0; step < 80 && !seen; step += 1) {
+      fight(world, 1);
+      seen = region.entities.some((entity) => entity.entityName() === "blast-outline");
+    }
+    expect(seen).toBe(true);
+    const outline = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "blast-outline");
+    const vine = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!outline || outline.event.kind !== "mark") throw new Error("the outline was not logged");
+    expect(vine).toBeUndefined();
+    const countdown = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "stand-4");
+    expect(countdown).toBeDefined();
+    fight(world, 4);
+    expect(region.entities.some((entity) => entity.entityName() === "blast-outline")).toBe(false);
+    fight(world, 1);
+    const detonated = region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "vine");
+    if (!detonated || detonated.event.kind !== "mark") throw new Error("the blast did not detonate");
+    expect(detonated.at).toBe(outline.at + ARCHIVE.p1.outlineLead);
+
+    const quiet = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    quiet.region.standHelper = false;
+    quiet.region.blastOutline = false;
+    fight(quiet.world, 80);
+    expect(quiet.region.entities.some((entity) => {
+      const name = entity.entityName() ?? "";
+      return name === "blast-outline" || name.startsWith("stand");
+    })).toBe(false);
+  });
+
+  it("does not say animation ids or crack counters in phase 1 or phase 3", () => {
+    const bare = (lines: readonly string[]) => lines.filter((line) => /^\d+$/.test(line) || line === "centre" || line === "magic" || line === "ranged");
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    fight(phase1.world, 2);
+    const opening = phase1.region.chat().some((line) => line === "Now... ascension...");
+    fight(phase1.world, 118);
+    const phase3 = open("ocellus-p3", "?encounter=ocellus-p3&seed=1&invincible=on");
+    fight(phase3.world, 12);
+    expect({
+      phase1: bare(phase1.region.chat()),
+      phase3: bare(phase3.region.chat()),
+      opening,
+      swing: phase3.region.chat().some((line) => line.includes("14842")),
+    }).toEqual({ phase1: [], phase3: [], opening: true, swing: false });
+  });
+
+  it("draws one Ocellus in phase 1, and a missed tendril's heal of 2 lands on that body", () => {
+    const { region, world, player } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    const present = [...region.mobs, ...region.newMobs];
+    const bodies = present.filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId || id === ARCHIVE.p2.npcId || id === ARCHIVE.p2.formNpcId;
+    });
+    expect(bodies.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.hoodedNpcId]);
+    fight(world, 1);
+    expect([...region.mobs, ...region.newMobs].filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+    }).map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.hoodedNpcId]);
+    fight(world, 1);
+    expect([...region.mobs, ...region.newMobs].filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+    }).map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+    const blade = region.entities.find((entity) => entity.entityName() === "The Blade");
+    if (!blade) throw new Error("the phase 1 sword was not in the room");
+    expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect({ x: blade.location.x, y: blade.location.y, z: blade.getPerceivedLocation(0).z }).toEqual({ x: 5, y: 17, z: -BLADE_SEAT });
+    player.setLocation({ x: 1, y: 1 });
+    let sawHeal = false;
+    for (let step = 0; step < 80; step += 1) {
+      fight(world, 1);
+      const healed = [...region.mobs, ...region.newMobs].filter((mob) => mob.incomingProjectiles.some((splat) => splat.damage === -ARCHIVE.p1.tendrilBossHeal));
+      if (healed.length === 0) continue;
+      expect(healed.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+      sawHeal = true;
+    }
+    expect(sawHeal).toBe(true);
+    expect({ x: blade.location.x, y: blade.location.y }).toEqual({ x: 5, y: 17 });
+    const boss = region.snapshot()?.boss;
+    if (!boss) throw new Error("Ocellus was not in phase 1");
+    expect(bossMayStand("ocellus-p1", tile(boss.x, boss.y))).toBe(true);
+  });
+
+  it("places the four batteries off the combat-add list", () => {
     const guardian = open("guardian", "?encounter=guardian&seed=1&invincible=on");
     const batteries = [...guardian.region.mobs, ...guardian.region.newMobs].filter((mob) => mob.mobName() === "Guardian battery");
     expect(batteries.map((mob) => ({ x: mob.location.x, y: mob.location.y, size: mob.size, npcId: npcIdOf(mob) }))).toEqual(
@@ -185,14 +351,13 @@ describe("raid rooms in 3D", () => {
     expect(parseRaid(new URL("http://localhost/?gear=bow"), "bork", () => 1).rejected).toContain("gear=bow");
   });
 
-  it("draws the phase 3 censers as coloured boxes and the voids as ledger models", () => {
+  it("draws the phase 3 censers as coloured boxes and leaves quadrant 1 without a rift", () => {
     const { region, world } = open("ocellus-p3", "?encounter=ocellus-p3&seed=1&invincible=on");
     const present = [...region.mobs, ...region.newMobs];
     const censer = present.find((mob) => mob.mobName() === "Bandosian censer");
-    const rift = present.find((mob) => mob.mobName() === "Void rift");
-    if (!censer || !rift) throw new Error("the censer or the rift was not in the room");
+    if (!censer) throw new Error("the censer was not in the room");
     expect(censer.get3dModel()).toBeInstanceOf(BasicModel);
-    expect(rift.get3dModel()).toBeInstanceOf(CacheRenderModel);
+    expect(present.some((mob) => mob.mobName() === "Void rift")).toBe(false);
     expect(region.chat().some((line) => line.includes("censers are coloured stand-ins"))).toBe(true);
     fight(world, 1);
     expect(region.snapshot()?.boss.npcId).toBe(ARCHIVE.p3.npcId);
@@ -204,7 +369,7 @@ describe("raid rooms in 3D", () => {
 
   it.each<[RaidId, number]>([
     ["xarth", 10],
-    ["ocellus-p3", 10],
+    ["ocellus-p3", 14],
   ])("records a death in %s on tick %i and keeps the player in the room", (id, at) => {
     const { region, world, player } = open(id, `?encounter=${id}&seed=7`);
     fight(world, at + 1);
@@ -236,13 +401,24 @@ describe("raid rooms in 3D", () => {
 
   it("draws the phase 1 cracks on the floor and the phase 2 portal grid", () => {
     const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
-    fight(phase1.world, 1);
-    const cracks = phase1.region.entities.filter((entity) => {
+    let cracks = phase1.region.entities.filter((entity) => {
       const name = entity.entityName();
       return name !== null && name.startsWith("Crack ");
     });
-    expect(cracks.map((entity) => ({ x: entity.location.x, y: entity.location.y }))).toEqual(cornerCrack(0, 0).map((at) => ({ x: at.x, y: at.y })));
-    expect(cracks[7]?.entityName()).toBe("Crack 4238");
+    for (let step = 0; step < 80 && cracks.length === 0; step += 1) {
+      fight(phase1.world, 1);
+      cracks = phase1.region.entities.filter((entity) => {
+        const name = entity.entityName();
+        return name !== null && name.startsWith("Crack ");
+      });
+    }
+    const opened = phase1.region.fightLog().rows.find((stamp) => stamp.event.kind === "mark" && stamp.event.text === "tendril");
+    if (!opened || opened.event.kind !== "mark") throw new Error("the first crack was not marked");
+    const cues = crackCues(opened.event.tiles);
+    expect(cracks.map((entity) => ({ x: entity.location.x, y: entity.location.y }))).toEqual(cues.map((cue) => ({ x: cue.at.x, y: cue.at.y })));
+    const far = cues[cues.length - 1];
+    if (far === undefined) throw new Error("the first crack had no far tile");
+    expect(cracks.find((entity) => entity.location.x === far.at.x && entity.location.y === far.at.y)?.entityName()).toBe(`Crack ${far.open}`);
 
     const phase2 = open("ocellus-p2", "?encounter=ocellus-p2&seed=1&invincible=on");
     fight(phase2.world, 3);
@@ -257,6 +433,18 @@ describe("raid rooms in 3D", () => {
     const gap = phase2.region.entities.filter((entity) => entity.entityName() === "Portal orange north 1");
     expect(purple).toHaveLength(1);
     expect(gap).toHaveLength(1);
+    expect(phase2.region.portalCall()).toEqual({ colour: "orange", quadrant: "NE" });
+  });
+
+  it("keeps speaking after the chat window is full, and seed 5 opens red in the north-east", () => {
+    const seeded = open("ocellus-p2", "?encounter=ocellus-p2&seed=5&invincible=on");
+    fight(seeded.world, 22);
+    const lines = seeded.region.chat();
+    expect(lines).toHaveLength(8);
+    expect(seeded.region.chatMark()).toBeGreaterThan(8);
+    expect(lines[lines.length - 1]).toContain("red");
+    expect(lines[lines.length - 1]).toContain("NE");
+    expect(seeded.region.portalCall()).toEqual({ colour: "red", quadrant: "NE" });
   });
 
   it("holds The Blade on its scenery tile while the player moves", () => {

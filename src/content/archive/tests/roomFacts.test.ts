@@ -1,4 +1,4 @@
-import { P1_ROOM, P2_ROOM, P3_ROOM } from "../roomFacts";
+import { P1_ROOM, P1_ROUTE, P2_ROOM, P3_ROOM } from "../roomFacts";
 import { OCELLUS_P1 } from "../../ocellus/js/OcellusTimingsP1";
 import { OCELLUS_P2 } from "../../ocellus/js/OcellusTimingsP2";
 import { OCELLUS_P3 } from "../../ocellus/js/OcellusTimingsP3";
@@ -27,6 +27,17 @@ describe("encounter room facts", () => {
       },
       crackTiming: crackTiming.value,
       floorExplosions: floorExplosions.value,
+    });
+  });
+
+  test("the phase 1 route the room walks is the phase 1 recipe", () => {
+    const beats = OCELLUS_P1.middle.beats.value;
+    expect(P1_ROUTE).toEqual({
+      weights: OCELLUS_P1.route.value,
+      start: OCELLUS_P1.room.start.value,
+      middle: OCELLUS_P1.room.middle.value,
+      corners: OCELLUS_P1.room.corners.value,
+      beats: { length: beats.length, cracks: beats.cracks },
     });
   });
 

@@ -66,8 +66,15 @@ export const WAVE_SKIP: Readonly<Record<Quadrant, Readonly<{ outer: Tile; inner:
   SW: { outer: tile(6, 6), inner: tile(8, 8) },
 };
 
-export const P1_CORNERS = [tile(5, 17), tile(17, 17), tile(17, 5), tile(5, 5)] as const;
-export const P1_CENTRE = tile(11, 11);
+/**
+ * Logged phase 1 stops in this room. The drill anchors shift by (−9, +3):
+ * the middle (14, 14) lands on the capture mode (5, 17), the start (14, 17) on (5, 20),
+ * and the corners on the four capture clusters. The west pair is x −1, which the room clips.
+ * Order is north-east, south-east, south-west, north-west, the drill's corner cycle.
+ */
+export const P1_START = tile(5, 20);
+export const P1_CENTRE = tile(5, 17);
+export const P1_CORNERS = [tile(11, 11), tile(11, 23), tile(-1, 23), tile(-1, 11)] as const;
 
 /** Seven cracks stepping toward that corner. Unverified. The line points at him. */
 export function cornerTendril(corner: number, index: number): Tile {
@@ -160,7 +167,7 @@ export const DAGON_PADS = {
  */
 export const DAGON_TRAIL = [tile(5, 12), tile(6, 12), tile(6, 13), tile(7, 12), tile(8, 12), tile(8, 13)] as const;
 
-/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. */
+/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. His models match Ocellus 16674, so the encounter room records the tile and does not place a second body. */
 export const HOODED_TILE = tile(5, 20);
 
 /** Guardian batteries, region 16471 plane 0. The same four corners in every flying-room capture. */
@@ -177,7 +184,8 @@ export const ROOMS = {
   moia: { width: 17, height: 17, player: tile(1, 1), boss: tile(0, 7), bossSize: 3 },
   xarth: { width: 17, height: 17, player: tile(11, 2), boss: tile(7, 7), bossSize: 3 },
   dagonhai: { width: 20, height: 19, player: tile(6, 10), boss: tile(2, 9), bossSize: 2 },
-  "ocellus-p1": { width: 25, height: 25, player: tile(8, 18), boss: tile(5, 17), bossSize: 3 },
+  // He starts on the logged start, the same trainer tile as the Hooded Figure. The mode (5, 17) is the middle.
+  "ocellus-p1": { width: 25, height: 25, player: tile(8, 18), boss: P1_START, bossSize: 3 },
   // The drawn 3x3 runs toward lower Y, so (11, 13) centres it on tile (12, 12): cache local (31, 41), The Blade.
   // The opening tile is on that same column, so the default camera frames the sword.
   "ocellus-p2": { width: 25, height: 25, player: tile(12, 16), boss: tile(11, 13), bossSize: 3 },

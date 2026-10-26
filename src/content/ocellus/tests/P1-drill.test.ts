@@ -1,8 +1,9 @@
-import { Mob } from "osrs-sdk";
+import { CacheRenderModel, CacheRenderSceneModel, Mob } from "osrs-sdk";
 import type { HitReceipt } from "../../../sim/combat";
 import type { At } from "./drill";
 import { footprintCentre } from "./p3drill";
 import { startP1Drill } from "./p1drill";
+import { BLADE_SEAT } from "../../archive/poses";
 
 const loadTimings = () => vi.importActual<typeof import("../js/OcellusTimings")>("../js/OcellusTimings");
 
@@ -15,6 +16,19 @@ const receipt = (requested: number, beforeHp: number, prayer: "magic" | "ranged"
 const tile = ({ x, y }: At) => [x, y];
 
 describe("P1 drill", () => {
+  test("the floor is region 16472, and the scenery sword stands on the middle", async () => {
+    const drill = await startP1Drill({ seed: 1 });
+    const arena = drill.region.entities.find((entity) => entity.entityName() === "Region 16472");
+    const blade = drill.region.entities.find((entity) => entity.entityName() === "The Blade");
+    const placed = {
+      arena: arena?.get3dModel() instanceof CacheRenderSceneModel,
+      blade: blade === undefined ? null : { model: blade.get3dModel() instanceof CacheRenderModel, x: blade.location.x, y: blade.location.y, z: blade.getPerceivedLocation(0).z },
+      floor: drill.region.drawDefaultFloor(),
+    };
+    drill.dispose();
+    expect(placed).toEqual({ arena: true, blade: { model: true, x: 14, y: 14, z: -BLADE_SEAT }, floor: true });
+  });
+
   test("from the start he walks one tile a tick, straight then diagonally, to his first corner, volleying every 5 ticks from P1 tick 4 under Protect from Melee, and charges the tick after his end pose", async () => {
     const drill = await startP1Drill({ seed: 1 });
     drill.tickTo(55);

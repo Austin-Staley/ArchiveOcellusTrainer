@@ -1,5 +1,5 @@
 import { BasicModel, CacheRenderModel, CacheRenderReferences, CacheRenderSceneModel, CollisionType, Entity, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Projectile, Region, Settings, TileMarkerModel, TwistedBow } from "osrs-sdk";
-import type { Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
+import type { Location, Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
 import type { Seed, Tick, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import { protectionOf } from "../../sim/sdk/EncounterBinding";
@@ -7,9 +7,11 @@ import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { blastCuesOn, crackCues } from "./cracks";
-import { FloorGraphic, idlePortals, paintPortals, raisePortals } from "./floorView";
+import { FloorGraphic, OilPatch, idlePortals, paintPortals, raisePortals } from "./floorView";
 import type { PortalGraphic } from "./floorView";
-import { BATTERY_TILES, CENSERS, HOODED_TILE, ROOMS } from "./layout";
+import { BATTERY_TILES, CENSERS, P1_CENTRE, ROOMS } from "./layout";
+import type { Quadrant } from "./layout";
+import type { PortalColour } from "./portals";
 import { dress } from "./loadout";
 import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
@@ -19,8 +21,21 @@ import { WalkTint } from "../movementDebug";
 import { acceptAddStep, acceptBossStep, actorName, addMobility, bossMobility, cauldronMayStand, overlayTiles } from "./movement";
 import { flightProgress, graphicAnchor, heldStandIn, movementPoseIndex, shotByGraphic, shotMotion, visualLifeTicks, wholeTickStandIn, clientProjectileHeight } from "./visualSync";
 import type { ShotMotion } from "./visualSync";
+import { FootprintSight, attackReaches } from "./sight";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
+
+class RaidPlayer extends Player {
+  /** A ranged or magic shot uses the client's ray. The target's own footprint stays open, and every other body blocks. */
+  override setHasLOS(): void {
+    const target = this.aggro;
+    if (target instanceof PracticeMob) {
+      this.hasLOS = attackReaches(this.region, this.location.x, this.location.y, target, this.attackRange, target.sight);
+      return;
+    }
+    super.setHasLOS();
+  }
+}
 
 class PracticeMob extends Mob {
   blocks = false;
@@ -39,6 +54,14 @@ class PracticeMob extends Mob {
     this.stepping = true;
   }
 
+  /** The footprint mask the client's ray reads. Null on a body that does not block a shot. */
+  sight: FootprintSight | null = null;
+
+  override setLocation(location: Location): void {
+    super.setLocation(location);
+    if (this.sight) this.sight.location = { x: this.location.x, y: this.location.y };
+  }
+
   settlePose(): void {
     this.stepping = false;
   }
@@ -48,7 +71,7 @@ class PracticeMob extends Mob {
   }
 
   override get collisionType(): CollisionType {
-    return this.blocks ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
+    return this.blocks && this.currentStats.hitpoint > 0 ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
   }
 
   override get lineOfSight(): LineOfSightMask {
@@ -143,6 +166,7 @@ class PracticeMob extends Mob {
     this.stats = stats;
     this.currentStats = { ...stats };
     this.tiles = bar.size;
+    if (this.sight) this.sight.tiles = bar.size;
     this.label = bar.name;
     return previous !== 0 && previous !== bar.npcId;
   }
@@ -168,10 +192,25 @@ class Mark extends Entity {
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
     void tickPercent;
     const scale = Settings.tileSize;
+    const x = this.location.x * scale;
+    const y = this.location.y * scale;
+    if (this.label === "blast-outline") {
+      context.strokeStyle = this.paint;
+      context.lineWidth = Math.max(2, Math.floor(scale / 8));
+      context.strokeRect(x + 1.5, y + 1.5, scale - 3, scale - 3);
+      return;
+    }
     context.fillStyle = this.paint;
     context.globalAlpha = 0.55;
-    context.fillRect(this.location.x * scale, this.location.y * scale, scale, scale);
+    context.fillRect(x, y, scale, scale);
     context.globalAlpha = 1;
+    if (!this.label.startsWith("stand-")) return;
+    const digit = this.label.slice("stand-".length);
+    context.fillStyle = "#06221c";
+    context.font = `bold ${Math.max(12, Math.floor(scale * 0.62))}px sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(digit, x + scale / 2, y + scale / 2);
   }
 
   override create3dModel(): Model {
@@ -279,6 +318,42 @@ class Shot extends Entity {
   }
 }
 
+/**
+ * The coloured sword in phase 1. Fight log L3: scenery object 62706 stands at region local (31, 41)
+ * through the vines, and it despawns on the tick npc 16676 appears. That npc is the phase 2 sword,
+ * so phase 1 draws the scenery model and not a second Ocellus. The shared scene still omits 62706,
+ * because phase 2 also draws the sword on the boss.
+ * The anchor is the logged middle. A 3×3 hung toward lower Y centres the sword on trainer (6, 16),
+ * which is local (31, 41) under this room's offset.
+ */
+class BladeScenery extends Entity {
+  override get size(): number {
+    return 3;
+  }
+
+  override entityName(): string {
+    return "The Blade";
+  }
+
+  override get color(): string {
+    return "#c0c6d0";
+  }
+
+  override create3dModel(): Model {
+    return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(BLADE_MODEL), { basisRotation: 0 });
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    return { x: at.x, y: at.y, z: at.z - BLADE_SEAT };
+  }
+
+  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    void tickPercent;
+    void context;
+  }
+}
+
 /** The captured map, slid so the boss tile of the template sits on this room's boss tile. */
 class Arena extends Entity {
   constructor(
@@ -320,6 +395,11 @@ type RaidFinish = "death" | "complete";
 type RaidRunState = Readonly<{ kind: "running" }> | Readonly<{ kind: "ended"; at: Tick; reason: RaidFinish }>;
 
 type RaidRunView = Readonly<{ kind: "running"; seed: Seed }> | Readonly<{ kind: "ended"; seed: Seed; at: Tick; reason: RaidFinish }>;
+
+type ChatLine = Readonly<{ id: number; text: string }>;
+
+/** The sequence colour and quadrant of the volley currently on the grid. */
+export type PortalCall = Readonly<{ colour: PortalColour; quadrant: Quadrant }>;
 
 type Mounted = Readonly<{ player: Player; boss: PracticeMob; adds: readonly PracticeMob[]; censers: readonly PracticeMob[]; fixtures: readonly PracticeMob[] }>;
 
@@ -380,16 +460,31 @@ function floorFor(launch: RaidLaunch): number {
 
 const CENSOR_NAMES = ["Bandosian censer", "Armadylean censer", "Zarosian censer", "Saradomin censer"] as const;
 
+/**
+ * An attack's text is an animation id, a crack counter, or a one-word style label unless the captures record a line.
+ * Those are not said. A recorded line has a space in it. The fight log still keeps the ids.
+ */
+function spokenAttack(name: string, text: string): string | null {
+  if (name === "repair" || name === "tendril" || !text.includes(" ") || /^\d+$/.test(text)) return null;
+  return text;
+}
+
 export class RaidRegion extends Region {
   invincible = false;
   private mounted: Mounted | null = null;
   private memory: RaidMemory = initialMemory(this.launch.id);
   private clockTick: number | null = null;
   private mobility: Mobility = "stationary";
+  /** Cyan stand tile and its countdown. On unless Settings turns it off. */
+  standHelper = true;
+  /** Red outline of the tiles a vine explosion will hit. On unless Settings turns it off. */
+  blastOutline = true;
   private shownTick = 0;
   private readonly tint = new WalkTint(this, () => overlayTiles(this.launch.id));
   private rows: Stamp[] = [];
-  private lines: string[] = [];
+  private lines: ChatLine[] = [];
+  private nextChatId = 1;
+  private litCall: PortalCall | null = null;
   private previous: Tile = ROOMS[this.launch.id].player;
   private realHp = 0;
   private form: "flying" | "grounded" = this.launch.id === "guardian" ? "flying" : "grounded";
@@ -398,6 +493,7 @@ export class RaidRegion extends Region {
   private marks: Mark[] = [];
   private shots: Shot[] = [];
   private floor: FloorGraphic[] = [];
+  private oils: OilPatch[] = [];
   private portals: readonly PortalGraphic[] = [];
   private run: RaidRunState = { kind: "running" };
   /** Damage The Blade is holding. The bar drops only when a release pays half of it. */
@@ -443,7 +539,7 @@ export class RaidRegion extends Region {
 
   initialiseRegion(): { player: Player } {
     const room = ROOMS[this.launch.id];
-    const player = new Player(this, { x: room.player.x, y: room.player.y });
+    const player = new RaidPlayer(this, { x: room.player.x, y: room.player.y });
     const boss = new PracticeMob(this, { x: room.boss.x, y: room.boss.y });
     boss.kind = "boss";
     const adds = this.spawnAdds();
@@ -451,11 +547,22 @@ export class RaidRegion extends Region {
     const fixtures = this.spawnFixtures();
     this.addPlayer(player);
     this.addEntity(new Arena(this, { x: 0, y: 0 }, this.launch.id));
+    if (this.launch.id === "ocellus-p1") this.addEntity(new BladeScenery(this, { x: P1_CENTRE.x, y: P1_CENTRE.y }));
     this.addMob(boss);
     this.setBoss(boss);
-    adds.forEach((add) => this.addMob(add));
+    adds.forEach((add) => {
+      if (this.launch.id === "ocellus-p3") return;
+      this.addMob(add);
+    });
     censers.forEach((censer) => this.addMob(censer));
     fixtures.forEach((fixture) => this.addMob(fixture));
+    if (this.launch.id === "bork") {
+      boss.blocks = true;
+      this.plantSight(boss);
+      adds.forEach((add) => {
+        if (add.blocks) this.plantSight(add);
+      });
+    }
     this.wallIn();
     this.mounted = { player, boss, adds, censers, fixtures };
     return { player };
@@ -489,6 +596,7 @@ export class RaidRegion extends Region {
       addsAlive: this.mounted.adds.filter((add) => add.currentStats.hitpoint > 0).length,
       prayer: protectionOf(player),
       previous: this.previous,
+      running: player.running,
     };
     const atTick = this.clockTick ?? 0;
     const step = advance(this.memory, this.launch.options, input, tick(atTick));
@@ -542,7 +650,18 @@ export class RaidRegion extends Region {
   }
 
   chat(): readonly string[] {
-    return [...this.lines];
+    return this.lines.map((line) => line.text);
+  }
+
+  /** Climbs on every spoken line, including one that pushes an older line out of the eight-line window. */
+  chatMark(): number {
+    const last = this.lines[this.lines.length - 1];
+    return last === undefined ? 0 : last.id;
+  }
+
+  /** The last lit volley. It stays up through the idle gap so the colour can be read without the chat. */
+  portalCall(): PortalCall | null {
+    return this.litCall;
   }
 
   fightLog(): Readonly<{ header: { seed: Seed }; rows: readonly Stamp[] }> {
@@ -570,10 +689,12 @@ export class RaidRegion extends Region {
     this.mounted.censers.forEach((censer, index) => this.applyBar(censer, { npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
     this.mounted.fixtures.forEach((fixture) => this.applyBar(fixture, fixtureBar(fixture.label)));
     dress(this.mounted.player, this.launch.gear);
+    if (this.launch.id === "ocellus-p1") this.wear(this.mounted.boss, ARCHIVE.p1.hoodedNpcId);
     this.memory = initialMemory(this.launch.id);
     this.clockTick = 0;
     this.rows = [];
     this.lines = [];
+    this.litCall = null;
     this.run = { kind: "running" };
     this.held = 0;
     this.released = 0;
@@ -586,9 +707,9 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p1" || this.launch.id === "ocellus-p2" || this.launch.id === "ocellus-p3") {
       this.say(`Demonbane weapons deal ${Math.round(DEMONBANE_RESISTANCE * 100)}% less against Ocellus.`);
     }
-    if (this.launch.id === "ocellus-p1") this.say("Block the tendrils. At 66% and 25% he comes to the centre.");
+    if (this.launch.id === "ocellus-p1") this.say("Block the vines. The cyan tile is where to stand, and the red outline is the explosion.");
     if (this.launch.id === "ocellus-p2") this.say("Stand where the orange arms cross. The Blade passes on half its damage.");
-    if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
+    if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two swings, then a shadow slash. Two of those, then a special.");
     const notice = standInNotice(this.launch.id);
     if (notice.length > 0) this.say(notice);
     const place = arenaFor(this.launch.id);
@@ -602,10 +723,12 @@ export class RaidRegion extends Region {
     if (!this.mounted) return;
     const { player, boss } = this.mounted;
     switch (event.kind) {
-      case "attack":
+      case "attack": {
         this.playAttack(event.name);
-        if (event.name !== "repair") this.say(event.text);
+        const line = spokenAttack(event.name, event.text);
+        if (line !== null) this.say(line);
         return;
+      }
       case "chat":
         this.say(event.text);
         return;
@@ -668,6 +791,8 @@ export class RaidRegion extends Region {
         this.showPortals(event);
         return;
       case "mark":
+        if ((event.text === "stand" || event.text.startsWith("stand-")) && !this.standHelper) return;
+        if (event.text === "blast-outline" && !this.blastOutline) return;
         if (event.text === "tendril" || event.text === "vine") {
           this.showFloor(event.text, event.tiles, event.ticks);
           return;
@@ -681,6 +806,9 @@ export class RaidRegion extends Region {
           this.marks.push(mark);
         });
         return;
+      case "ground":
+        this.showGround(event);
+        return;
       default: {
         const unhandled: never = event;
         return unhandled;
@@ -688,10 +816,80 @@ export class RaidRegion extends Region {
     }
   }
 
+  private showGround(event: Extract<RaidEvent, { kind: "ground" }>): void {
+    const placeSpot = (at: Tile) => {
+      const graphic = new FloorGraphic(this, { x: at.x, y: at.y });
+      graphic.kind = "spot";
+      graphic.spotAnim = event.graphic;
+      graphic.delay = 0;
+      graphic.loops = false;
+      graphic.life = event.ticks;
+      this.addEntity(graphic);
+      this.floor.push(graphic);
+    };
+    switch (event.role) {
+      case "oil":
+        event.tiles.forEach((at) => {
+          const oil = new OilPatch(this, { x: at.x, y: at.y });
+          oil.life = event.ticks;
+          this.addEntity(oil);
+          this.oils.push(oil);
+        });
+        return;
+      case "marker":
+      case "fire":
+      case "splat":
+      case "impact":
+        event.tiles.forEach(placeSpot);
+        return;
+      default: {
+        const unhandled: never = event.role;
+        return unhandled;
+      }
+    }
+  }
+
+  private plantSight(mob: PracticeMob): void {
+    const sight = new FootprintSight(this, { x: mob.location.x, y: mob.location.y });
+    sight.tiles = mob.size;
+    mob.sight = sight;
+    this.entities.unshift(sight);
+  }
+
+  /** The Smorks' mask comes off when they fall. 188 of 188 captures clear it on that despawn. */
+  private releaseFallenSight(): void {
+    this.mounted?.adds.forEach((add) => {
+      if (!add.sight || add.sight.open || add.currentStats.hitpoint > 0) return;
+      add.sight.open = true;
+      this.clearTileCollisionFlags(add.location.x, add.location.y, add.size);
+    });
+  }
+
+  attackSight(): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null {
+    if (!this.mounted) return null;
+    const { player, boss } = this.mounted;
+    const smorks = this.mounted.adds.find((add) => add.label === "Smorks");
+    if (!smorks) return null;
+    const range = player.attackRange;
+    return {
+      range,
+      bork: attackReaches(this, player.location.x, player.location.y, boss, range, boss.sight),
+      smorks: attackReaches(this, player.location.x, player.location.y, smorks, range, smorks.sight),
+    };
+  }
+
+  placePlayer(x: number, y: number): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null {
+    if (!this.mounted) return null;
+    this.mounted.player.setLocation({ x, y });
+    return this.attackSight();
+  }
+
   private enterPhase(name: string): void {
     if (!this.mounted) return;
     const { boss } = this.mounted;
     boss.immune = name === "protect-melee";
+    if (name === "hooded") this.wear(boss, ARCHIVE.p1.hoodedNpcId);
+    if (name === "combat-form") this.wear(boss, ARCHIVE.p1.npcId);
     if (name === "rooted") this.rooted = tile(this.mounted.player.location.x, this.mounted.player.location.y);
     if (name === "free") this.rooted = null;
     if (name === "flying") {
@@ -762,9 +960,7 @@ export class RaidRegion extends Region {
       this.spent.add(add);
       switch (add.label) {
         case "Void siphon":
-          landSplat(add, player, -ARCHIVE.p3.siphonHeal);
-          player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + ARCHIVE.p3.siphonHeal);
-          this.say("The siphon's killing blow heals you for 22.");
+          this.say(`The siphon's killing blow does not heal you. The old heal of ${ARCHIVE.p3.siphonKillingBlow} is disputed. While it lived it healed him, unless you stood on its line.`);
           return;
         case "Void rift":
           player.attackDelay = 0;
@@ -826,6 +1022,11 @@ export class RaidRegion extends Region {
       if (graphic.age()) this.removeEntity(graphic);
     });
     this.floor = this.floor.filter((graphic) => graphic.dying !== 0);
+    this.oils.forEach((oil) => {
+      if (oil.age()) this.removeEntity(oil);
+    });
+    this.oils = this.oils.filter((oil) => oil.dying !== 0);
+    this.releaseFallenSight();
   }
 
   /** Phase 1 cracks and the slam's floor blast, on the walk floor. */
@@ -870,6 +1071,7 @@ export class RaidRegion extends Region {
         idlePortals(this.portals);
         return;
       case "lit":
+        this.litCall = { colour: event.colour, quadrant: event.quadrant };
         paintPortals(this.portals, event.quadrant, event.nsGap, event.ewGap);
         return;
       default: {
@@ -921,14 +1123,16 @@ export class RaidRegion extends Region {
   }
 
   private say(text: string): void {
-    this.lines.push(text);
+    const id = this.nextChatId;
+    this.nextChatId += 1;
+    this.lines.push({ id, text });
     if (this.lines.length > 8) this.lines.shift();
   }
 
   private describeShots(): void {
     switch (this.launch.id) {
       case "bork":
-        this.say(`The bomb is graphic ${GRAPHICS.smorkBomb} from the Smorks. It waits 1 tick, then flies 4.5. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
+        this.say(`The napalm is graphic ${GRAPHICS.smorkNapalm}. It flies 4 ticks, then oil object ${ARCHIVE.bork.oil.objectId} covers the 3×3. The heavy cannonball is graphic ${GRAPHICS.smorkBomb}. It waits 1 tick, then flies 4.5. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
         return;
       case "ezekiel":
         return;
@@ -1009,13 +1213,6 @@ export class RaidRegion extends Region {
         return battery;
       });
     }
-    if (this.launch.id === "ocellus-p1") {
-      const figure = new PracticeMob(this, { x: HOODED_TILE.x, y: HOODED_TILE.y });
-      figure.kind = "fixture";
-      figure.label = "Hooded Figure";
-      figure.fill({ npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name: "Hooded Figure", size: ARCHIVE.p1.hoodedSize });
-      return [figure];
-    }
     return [];
   }
 
@@ -1064,7 +1261,6 @@ function landSplat(from: Unit, target: Unit, amount: number): void {
 }
 
 function fixtureBar(name: string): Bar {
-  if (name === "Hooded Figure") return { npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name, size: ARCHIVE.p1.hoodedSize };
   if (name === "Guardian battery") return { npcId: ARCHIVE.guardian.batteryNpcId, hp: 1, defence: 0, name, size: ARCHIVE.guardian.batterySize };
   return { npcId: 0, hp: 1, defence: 0, name, size: 1 };
 }
@@ -1109,6 +1305,7 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
   switch (launch.id) {
     case "bork":
       if (name === "bomb-tell") return one(drawn(GRAPHICS.smorkBomb, TYPELESS_SHOT, "smorks"));
+      if (name === "napalm") return one(drawn(GRAPHICS.smorkNapalm, TYPELESS_SHOT, "smorks"));
       return [];
     case "ezekiel":
       return [];
@@ -1137,9 +1334,11 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
       if (name === "throw") return [{ motion: wholeTickStandIn(ARCHIVE.dagonhai.bookFlight, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p1":
-      if (name === "4229") return one(drawn(GRAPHICS.p1Magic, MAGIC_SHOT));
-      if (name === "4232") return one(drawn(GRAPHICS.p1Ranged, RANGED_SHOT));
-      if (name === "14810") return [{ motion: wholeTickStandIn(ARCHIVE.p1.annihilationDelay, null), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "4229" || name === "last-4229") return one(drawn(GRAPHICS.p1Magic, MAGIC_SHOT));
+      if (name === "4232" || name === "last-4232") return one(drawn(GRAPHICS.p1Ranged, RANGED_SHOT));
+      if (name === "4260") return [{ motion: heldStandIn(2, GRAPHICS.p1Glow), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "4261") return [{ motion: heldStandIn(2, GRAPHICS.p1Explode), paint: TYPELESS_SHOT, from: "boss" }];
+      if (name === "14810") return [{ motion: wholeTickStandIn(ARCHIVE.p1.strikeFlight, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p2":
       if (name === "volley") return one(drawn(GRAPHICS.p2Volley, TYPELESS_SHOT));

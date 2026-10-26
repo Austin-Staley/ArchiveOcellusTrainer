@@ -99,6 +99,42 @@ export const ENCOUNTERS: readonly Readonly<{ id: RaidId | "ocellus-p4"; label: s
   { id: "dagonhai", label: encounterName("dagonhai") },
 ];
 
+/** Upstream fight-log drills. They open with `?phase=`, beside the fork's own rooms. */
+export const DRILL_ROOMS = [
+  { id: "drill-p1", phase: "p1", label: "Ocellus P1 drill (upstream logs)" },
+  { id: "drill-p2", phase: "p2", label: "Ocellus P2 drill (upstream logs)" },
+  { id: "drill-p3", phase: "p3", label: "Ocellus P3 Q1 drill (upstream logs)" },
+] as const;
+
+export type DrillRoomId = (typeof DRILL_ROOMS)[number]["id"];
+export type DrillRoomPhase = (typeof DRILL_ROOMS)[number]["phase"];
+
+export function isDrillRoomId(value: string): value is DrillRoomId {
+  switch (value) {
+    case "drill-p1":
+    case "drill-p2":
+    case "drill-p3":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function drillRoomPhase(id: DrillRoomId): DrillRoomPhase {
+  switch (id) {
+    case "drill-p1":
+      return "p1";
+    case "drill-p2":
+      return "p2";
+    case "drill-p3":
+      return "p3";
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}
+
 const KNOWN = ["encounter", "seed", "invincible", "bosshp", "enrage", "beam", "ezenrage", "sword", "smorkdef", "moiahp", "p2beam", "p2floors", "bladehp", "gear"];
 
 export type RaidLaunch = Readonly<{

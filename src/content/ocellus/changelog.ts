@@ -2,10 +2,59 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.19",
+    notes: [
+      "Bork and the Smorks block a ranged or magic shot. The cannon oil on the floor does not.",
+      "The Smorks play animation 14554 for the cannon. Graphic 4045 flies 4 ticks, then fire and oil cover the 3×3.",
+      "Standing on the oil chips 6 or 7 a tick. The heavy cannonball stays the likely second special.",
+    ],
+  },
+  {
+    version: "2026.10.26.18",
+    notes: [
+      "The phase 2 drill's model and floor graphics are in the asset bundle, so the page no longer logs missing assets.",
+      "Phase 1 and phase 3 chat no longer prints animation numbers or crack counters.",
+      "The phase 1 drill stands on the captured arena, with the scenery sword in the middle.",
+    ],
+  },
+  {
+    version: "2026.10.26.17",
+    notes: [
+      "Phase 1 wears the Hooded Figure for one tick, then Ocellus. The sword in the middle stays scenery. There is no blade npc in phase 1. The blast rolls 28 to 30.",
+      "Phase 3 follows the logged chain: two swings and a shadow slash, twice, then a special. A blocked crack still chips 3 to 5.",
+      "A siphon heals him 12 or 14 unless you stand on its line. The old 22 heal is disputed. The vine roots and does not time out.",
+    ],
+  },
+  {
+    version: "2026.10.26.16",
+    notes: [
+      "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits.",
+      "Phase 1's safe-tile countdown and the red outline five ticks before an explosion sit in those controls, and in Settings when the sidebar is off.",
+      "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+    ],
+  },
+  {
+    version: "2026.10.26.15",
+    notes: [
+      "Phase 1 puts the scenery sword in the middle. Ocellus is the only one of that body, and he walks the logged corners.",
+      "Vines open, close and explode on the logged ticks. Standing on one chips 3 to 5 and pays it back when you step off. The blast rolls 26 to 34.",
+      "A cyan tile counts 4, 3, 2, 1 before you need to move. A red outline marks the explosion five ticks early. Both can be turned off in Settings.",
+    ],
+  },
+  {
+    version: "2026.10.26.14",
+    notes: [
+      "Phase 1 draws one Ocellus. The Hooded Figure uses the same models, so that second body stays off the tile, and the 125 heal lands on the one boss.",
+      "The chat keeps the latest lines after the box fills.",
+      "Settings lists the upstream phase 1, phase 2 and phase 3 drills next to the rooms.",
+      "Phase 2 labels the current volley's colour and quadrant. A room with no seed draws a new random seed. Seed 5 opens red in the north-east.",
+    ],
+  },
+  {
     version: "2026.10.26.13",
     notes: [
-      "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits. Boss movement stays in those controls.",
-      "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+      "Phase 2's portal orders run orange, then red, then green, clockwise. The seed picks the starting quadrant and the first colour.",
+      "A volley line shows that colour and both letter names for the order. The portals on the floor stay the captured orange and purple models.",
     ],
   },
   {

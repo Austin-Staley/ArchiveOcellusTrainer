@@ -41,6 +41,32 @@ describe("the sidebar behind ARCHIVE_FULL", () => {
     expect(shown).toEqual(expected);
   });
 
+  test("phase 1 puts the safe-tile countdown and the AoE outline in the sidebar, both on", async () => {
+    vi.stubEnv("ARCHIVE_FULL", "on");
+    const page = await loadSidebarPage("/?encounter=ocellus-p1&seed=1");
+    const sidebar = document.querySelector("#sidebar");
+    const shown = {
+      countdown: sidebar?.contains(page.element("stand_helper")) === true && page.checked("stand_helper"),
+      outline: sidebar?.contains(page.element("blast_outline")) === true && page.checked("blast_outline"),
+      countdownLabel: page.element("stand_helper").closest("label")?.textContent,
+      outlineLabel: page.element("blast_outline").closest("label")?.textContent,
+    };
+    page.click("stand_helper");
+    page.click("blast_outline");
+    const after = { countdown: page.checked("stand_helper"), outline: page.checked("blast_outline") };
+    page.close();
+
+    expect({ shown, after }).toEqual({
+      shown: {
+        countdown: true,
+        outline: true,
+        countdownLabel: "Safe-tile countdown ",
+        outlineLabel: "AoE outline ",
+      },
+      after: { countdown: false, outline: false },
+    });
+  });
+
   test("each tile indicator box flips its SDK setting at once and saves it", async () => {
     vi.stubEnv("ARCHIVE_FULL", "on");
     const page = await loadSidebarPage("/?seed=1");

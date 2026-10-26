@@ -21,7 +21,7 @@ export const PLAYER_BLOCK = 424;
 
 export const SEQUENCES = {
   bork: { drum: 14542, oof: 14545, veryAngry: 14549, stomp: 14550, cycle: 14551, death: 14541 },
-  smorks: { bomb: 14555 },
+  smorks: { cannon: ARCHIVE.bork.cannon.anim, bomb: ARCHIVE.bork.cannon.heavyAnim },
   hooded: { idle: 14804 },
   battery: { idle: 15024, death: 15025 },
   ezekiel: { melee: 14685, sword: 14687, stun: 14691, recover: 14693, heal: 14688, wave: 14694 },
@@ -30,7 +30,7 @@ export const SEQUENCES = {
   binder: { attack: 14791, death: 14792 },
   xarth: { magic: 14984, ranged: 14985, tell: 14992, blast: 14989, death: 14995 },
   dagon: { magic: 14597, ranged: 14593 },
-  p1: { magic: 14806, ranged: 14807, charge: 14809, slam: 14811, strike: 14810 },
+  p1: { magic: 14806, ranged: 14807, lastVolley: 14807, charge: 14809, slam: 14811, strike: 14810, teleportOut: 14812, teleportIn: 14813 },
   p3: { melee: 14842, wave: 14846, voidShot: 14851, spin: 14869 },
   rift: { spawn: 14896, death: 14897 },
   siphon: { spawn: 14900, death: 14901 },
@@ -50,6 +50,10 @@ export const GRAPHICS = {
   dagonMagic: 1459,
   p1Magic: 4229,
   p1Ranged: 4232,
+  /** Charge glow on him from C + 5, every 2 ticks until he explodes. Fights 3 to 8. */
+  p1Glow: 4260,
+  /** On him with the explode pose. 31 of 33 corners at C + 18. */
+  p1Explode: 4261,
   /**
    * Portal bolt. Fight logs L1–L8 name projectile 4269 as each lit portal's bolt.
    * The digest counted 314 of them and did not resolve a source.
@@ -62,7 +66,19 @@ export const GRAPHICS = {
   p3Spin: 4325,
   /** From the Smorks, animation 14555. Flight in the capture is 4.5 ticks. */
   smorkBomb: 4440,
+  /** Incendiary cannonball, animation 14554. Flight in the capture is 4 ticks. */
+  smorkNapalm: ARCHIVE.bork.cannon.projectile,
+  smorkMarker: ARCHIVE.bork.cannon.marker,
+  smorkFire: ARCHIVE.bork.cannon.fire,
+  smorkHeavyMarker: ARCHIVE.bork.cannon.heavyMarker,
+  smorkHeavySpot: ARCHIVE.bork.cannon.heavySpot,
+  smorkHeavyFlash: ARCHIVE.bork.cannon.heavyFlash,
 } as const;
+
+/** Ragged oil tile. Cache object 62544 uses this model. It does not block a step or a shot. */
+export const OIL_MODEL = ARCHIVE.bork.oil.model;
+
+export const SMORK_SPLATS = ARCHIVE.bork.cannon.splats;
 
 /** Template regions from the digest. Chunk rotation is 0. Dreadnoth's 16728 is data only and is not loaded. */
 export const REGION_IDS = {
@@ -144,6 +160,8 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
           return { role: "boss", sequence: SEQUENCES.bork.stomp };
         case "14551":
           return { role: "boss", sequence: SEQUENCES.bork.cycle };
+        case "napalm":
+          return { role: "smorks", sequence: SEQUENCES.smorks.cannon };
         case "bomb-tell":
           return { role: "smorks", sequence: SEQUENCES.smorks.bomb };
         default:
@@ -219,9 +237,11 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
     case "ocellus-p1":
       switch (name) {
         case "4229":
-          return { role: "boss", sequence: SEQUENCES.p1.magic };
+        case "last-4229":
+          return { role: "boss", sequence: name.startsWith("last-") ? SEQUENCES.p1.lastVolley : SEQUENCES.p1.magic };
         case "4232":
-          return { role: "boss", sequence: SEQUENCES.p1.ranged };
+        case "last-4232":
+          return { role: "boss", sequence: name.startsWith("last-") ? SEQUENCES.p1.lastVolley : SEQUENCES.p1.ranged };
         case "14809":
           return { role: "boss", sequence: SEQUENCES.p1.charge };
         case "14811":
@@ -229,6 +249,10 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
           return { role: "boss", sequence: SEQUENCES.p1.slam };
         case "14810":
           return { role: "boss", sequence: SEQUENCES.p1.strike };
+        case "14812":
+          return { role: "boss", sequence: SEQUENCES.p1.teleportOut };
+        case "14813":
+          return { role: "boss", sequence: SEQUENCES.p1.teleportIn };
         default:
           return null;
       }

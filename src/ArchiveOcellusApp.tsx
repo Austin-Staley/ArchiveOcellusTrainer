@@ -5,7 +5,9 @@ import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
 import { movementDebug } from "./content/movementDebug";
-import { ENCOUNTERS, defaultGear, encounterName, isRaidId, parseRaid } from "./content/archive/catalog";
+import { DRILL_ROOMS, ENCOUNTERS, defaultGear, drillRoomPhase, encounterName, isDrillRoomId, isRaidId, parseRaid } from "./content/archive/catalog";
+import type { DrillRoomPhase } from "./content/archive/catalog";
+import type { PortalCall } from "./content/archive/RaidRegion";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { P3Region } from "./content/ocellus/js/P3Region";
@@ -45,6 +47,8 @@ declare global {
       snapshot(): VerificationProbeSnapshot;
       log(): FightLog | P3Log | P2Log | P1Log | ReturnType<RaidRegion["fightLog"]>;
       tileCentre(at: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> | null;
+      sight(): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null;
+      place(x: number, y: number): Readonly<{ bork: boolean; smorks: boolean; range: number }> | null;
     }>;
   }
 }
@@ -100,6 +104,8 @@ function exposeVerificationProbe(trainer: TrainerInstance, region: Drill["region
     },
     log: () => region.fightLog(),
     tileCentre: (at) => Viewport.viewport.projectTile(at, trainer.getSnapshot().world),
+    sight: () => (region instanceof RaidRegion ? region.attackSight() : null),
+    place: (x, y) => (region instanceof RaidRegion ? region.placePlayer(x, y) : null),
   });
 }
 
@@ -241,6 +247,50 @@ function startEncounter(id: string) {
   window.location.assign(url.href);
 }
 
+function phaseEnabled(flags: BuildFlags, phase: DrillRoomPhase): boolean {
+  switch (phase) {
+    case "p1":
+      return flags.p1;
+    case "p2":
+      return flags.p2;
+    case "p3":
+      return flags.p3;
+    default: {
+      const unhandled: never = phase;
+      return unhandled;
+    }
+  }
+}
+
+function roomMenu(flags: BuildFlags): readonly Readonly<{ id: string; label: string }>[] {
+  return [...ENCOUNTERS, ...DRILL_ROOMS.filter((room) => phaseEnabled(flags, room.phase))];
+}
+
+function openRoom(id: string): void {
+  if (isDrillRoomId(id)) {
+    startPhase(drillRoomPhase(id), "ranged", false);
+    return;
+  }
+  startEncounter(id);
+}
+
+function drillRoomId(phase: Drill["phase"]): string {
+  switch (phase) {
+    case "p4":
+      return "ocellus-p4";
+    case "p3":
+      return "drill-p3";
+    case "p2":
+      return "drill-p2";
+    case "p1":
+      return "drill-p1";
+    default: {
+      const unhandled: never = phase;
+      return unhandled;
+    }
+  }
+}
+
 /** The same phase again, keeping the setup, Invincible and the phase's own options; `focus` replaces P4's. */
 function rerun(drill: Drill, setup: string, seed: string | null, focus: string | null = null): RunRequest {
   const { invincible } = drill.region;
@@ -343,8 +393,8 @@ function DrillControls({ drill, flags, movement }: Readonly<{ drill: Drill; flag
       <div id="settings_menu" hidden={view !== "settings"}>
         <label>
           Encounter{" "}
-          <select id="encounter" value="ocellus-p4" onChange={(event) => startEncounter(event.target.value)}>
-            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          <select id="encounter" value={drillRoomId(drill.phase)} onChange={(event) => openRoom(event.target.value)}>
+            {roomMenu(flags).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
         {phases.length > 1 && (
@@ -622,21 +672,37 @@ function RunResultPanel({ drill, flags }: Readonly<{ drill: Drill; flags: BuildF
 const CHAT_LINES_SHOWN = 5;
 const CHAT_POLL_MS = 300;
 
-function GameChat({ region }: Readonly<{ region: Readonly<{ chat(): readonly string[] }> }>) {
-  const [lines, setLines] = useState<readonly string[]>([]);
+type Spoken = Readonly<{ chat(): readonly string[]; chatMark(): number }>;
+
+function GameChat({ region }: Readonly<{ region: Spoken }>) {
+  const [frame, setFrame] = useState<Readonly<{ mark: number; lines: readonly string[] }>>({ mark: 0, lines: [] });
   useEffect(() => {
-    const poll = window.setInterval(() => setLines((shown) => {
-      const latest = region.chat();
-      return latest.length === shown.length ? shown : latest;
+    const poll = window.setInterval(() => setFrame((shown) => {
+      const mark = region.chatMark();
+      if (mark === shown.mark) return shown;
+      return { mark, lines: region.chat() };
     }), CHAT_POLL_MS);
     return () => window.clearInterval(poll);
   }, [region]);
 
   return (
     <ol id="game_chat">
-      {lines.slice(-CHAT_LINES_SHOWN).map((line, index) => <li key={index}>{line}</li>)}
+      {frame.lines.slice(-CHAT_LINES_SHOWN).map((line, index) => <li key={`${frame.mark}:${index}`}>{line}</li>)}
     </ol>
   );
+}
+
+function PortalCallLabel({ region }: Readonly<{ region: RaidRegion }>) {
+  const [call, setCall] = useState<PortalCall | null>(null);
+  useEffect(() => {
+    const poll = window.setInterval(() => {
+      const next = region.portalCall();
+      setCall((shown) => (shown?.colour === next?.colour && shown?.quadrant === next?.quadrant ? shown : next));
+    }, CHAT_POLL_MS);
+    return () => window.clearInterval(poll);
+  }, [region]);
+  if (call === null) return null;
+  return <p id="portal_call">{call.colour} · {call.quadrant}</p>;
 }
 
 function restartRaid(nextSeed: string | null, invincible: boolean) {
@@ -680,7 +746,9 @@ function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; regi
 
 type MovementToggle = Readonly<{ shown: boolean; setShown: (on: boolean) => void }>;
 
-function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; movement: MovementToggle }>) {
+type P1Helpers = Readonly<{ stand: boolean; setStand: (on: boolean) => void; outline: boolean; setOutline: (on: boolean) => void }>;
+
+function RaidControls({ launch, region, flags, movement, p1 }: Readonly<{ launch: RaidLaunch; region: RaidRegion; flags: BuildFlags; movement: MovementToggle; p1: P1Helpers | null }>) {
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   return (
@@ -688,8 +756,8 @@ function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunc
       <div id="settings_menu" hidden={view !== "settings"}>
         <label>
           Encounter{" "}
-          <select id="encounter" value={launch.id} onChange={(event) => startEncounter(event.target.value)}>
-            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          <select id="encounter" value={launch.id} onChange={(event) => openRoom(event.target.value)}>
+            {roomMenu(flags).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
         {launch.id === "guardian" && (
@@ -726,6 +794,16 @@ function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunc
         <label>
           Boss movement <input id="boss_movement" type="checkbox" checked={movement.shown} onChange={(event) => movement.setShown(event.target.checked)} />
         </label>
+        {p1 !== null && (
+          <label>
+            Safe-tile countdown <input id="stand_helper" type="checkbox" checked={p1.stand} onChange={(event) => p1.setStand(event.target.checked)} />
+          </label>
+        )}
+        {p1 !== null && (
+          <label>
+            AoE outline <input id="blast_outline" type="checkbox" checked={p1.outline} onChange={(event) => p1.setOutline(event.target.checked)} />
+          </label>
+        )}
       </div>
       <button id="settings" type="button" aria-expanded={view !== "closed"} onClick={() => setView((shown) => (shown === "closed" ? "settings" : "closed"))}>⚙ Settings</button>
       <button id="restart" type="submit">Restart</button>
@@ -791,21 +869,47 @@ function MovementBadge({ region, shown }: Readonly<{ region: object; shown: bool
   return <p id="movement_badge">{text}</p>;
 }
 
+function P1Legend({ stand, outline }: Readonly<{ stand: boolean; outline: boolean }>) {
+  if (!stand && !outline) return null;
+  return (
+    <ul id="p1_legend">
+      {stand ? <li><span className="swatch stand" /> Stand here</li> : null}
+      {outline ? <li><span className="swatch outline" /> Explosion</li> : null}
+    </ul>
+  );
+}
+
+function BorkLegend() {
+  return (
+    <ul id="bork_legend">
+      <li><span className="swatch oil" /> Cannon oil</li>
+    </ul>
+  );
+}
+
 /** The sidebar loads behind a test of the raw build variable, which webpack folds, so a build with ARCHIVE_FULL off contains none of it. */
 const loadSidebar = () => (process.env.ARCHIVE_FULL === "on" ? lazy(() => import("./menu/Sidebar")) : null);
 
 function TrainerPage({ session }: Readonly<{ session: Session }>) {
   const [loading, setLoading] = useState<TrainerLoadingState>();
   const [showMovement, setShowMovement] = useState(false);
+  const [standHelper, setStandHelper] = useState(true);
+  const [blastOutline, setBlastOutline] = useState(true);
   const [Sidebar] = useState(loadSidebar);
   const region = session.kind === "drill" ? session.drill.region : session.region;
   const movement: MovementToggle = { shown: showMovement, setShown: setShowMovement };
+  const p1: P1Helpers | null = session.kind === "raid" && session.launch.id === "ocellus-p1" ? { stand: standHelper, setStand: setStandHelper, outline: blastOutline, setOutline: setBlastOutline } : null;
   useEffect(() => {
     movementDebug(region)?.showBossMovement(showMovement);
   }, [region, showMovement]);
+  useEffect(() => {
+    if (session.kind !== "raid") return;
+    session.region.standHelper = standHelper;
+    session.region.blastOutline = blastOutline;
+  }, [session, standHelper, blastOutline]);
   const controls = session.kind === "drill"
     ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} />
-    : <RaidControls launch={session.launch} region={session.region} movement={movement} />;
+    : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} p1={p1} />;
 
   return (
     <TrainerApp trainer={session.trainer} onLoadingStateChange={setLoading}>
@@ -813,6 +917,9 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
         <TrainerLoadingSplash state={loading} />
         <div id="hud_corner">
           <MovementBadge region={region} shown={showMovement} />
+          {session.kind === "raid" && session.launch.id === "ocellus-p2" ? <PortalCallLabel region={session.region} /> : null}
+          {p1 !== null ? <P1Legend stand={p1.stand} outline={p1.outline} /> : null}
+          {session.kind === "raid" && session.launch.id === "bork" ? <BorkLegend /> : null}
           <GameChat region={region} />
           {Sidebar === null && controls}
           <Credits makerInFooter={Sidebar === null} />

@@ -1,6 +1,6 @@
 import type { CacheRenderBundleManifest } from "osrs-sdk";
 import type { CacheAssets } from "osrs-sdk/asset-manifest";
-import { BLADE_MODEL, GRAPHICS } from "./content/archive/poses";
+import { BLADE_MODEL, GRAPHICS, OIL_MODEL, SMORK_SPLATS } from "./content/archive/poses";
 import { P1_ROOM, P2_ROOM } from "./content/archive/roomFacts";
 import { ARCHIVE } from "./content/archive/timings";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
@@ -57,12 +57,14 @@ export const SERVED_ASSETS = {
   models: {
     ...P4_ASSETS.models,
     theBlade: { id: BLADE_MODEL },
+    raggedTile: { id: OIL_MODEL },
     p2PortalInactive: { id: P2_ROOM.looks.inactive.model },
     p2PortalLit: { id: P2_ROOM.looks.lit.model },
   },
   spotAnims: Object.fromEntries([
     ...Object.entries(P4_ASSETS.spotAnims),
     ...Object.entries(GRAPHICS).map(([name, id]) => [name, { id }]),
+    ...SMORK_SPLATS.map((id) => [`raidSmorkSplat${id}`, { id }] as const),
     ...crackSpotAnims,
     ...P1_ROOM.floorExplosions.pieces.map((id) => [`p1Floor${id}`, { id }] as const),
   ]),

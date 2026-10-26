@@ -13,6 +13,11 @@ if [[ -n $reader ]]; then
 fi
 node scripts/patch-asset-tool.mjs
 
+# The same default as webpack: an unset phase flag includes that phase's assets, and an explicit off leaves them out.
+export ARCHIVE_P1="${ARCHIVE_P1:-on}"
+export ARCHIVE_P2="${ARCHIVE_P2:-on}"
+export ARCHIVE_P3="${ARCHIVE_P3:-on}"
+
 osrs-sdk-assets build "$@"
 npm run --silent item-icons -- "$@"
 node scripts/extract-sprites.mjs "$@"

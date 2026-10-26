@@ -114,6 +114,7 @@ describe("visual event sync", () => {
   it("pins each projectile's captured cycles, and keeps height and slope as the stand-in", () => {
     const drawn = [
       [4440, 30, 135, "captured"],
+      [4045, 0, 120, "captured"],
       [4201, 60, 60, "captured"],
       [4214, 0, 20, "captured"],
       [4213, 0, 120, "disputed"],
@@ -136,7 +137,7 @@ describe("visual event sync", () => {
       expect(record.slope).toBe(0);
       expect(record.plane === 0 || record.plane === 1).toBe(true);
     });
-    expect(SHOT_RECORDS.filter((record) => record.graphic === 4056 || record.graphic === 4057 || record.graphic === 4045).every((record) => !record.drawn)).toBe(true);
+    expect(SHOT_RECORDS.filter((record) => record.graphic === 4056 || record.graphic === 4057).every((record) => !record.drawn)).toBe(true);
     expect(visualLifeTicks(30, 135)).toBe(6);
     expect(visualLifeTicks(60, 60)).toBe(4);
     expect(visualLifeTicks(0, 20)).toBe(1);

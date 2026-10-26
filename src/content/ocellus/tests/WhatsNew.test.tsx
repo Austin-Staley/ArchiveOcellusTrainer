@@ -14,11 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.13",
+  version: "2026.10.26.19",
   date: "2026-10-26",
   notes: [
-    "With the full-fight flag on, the drill and encounter controls sit in a sidebar, with a Full fight (beta) entry, the tile indicators and the credits. Boss movement stays in those controls.",
-    "A build with the phase flags off no longer ships the phase 1, 2 and 3 timing recipes. The encounter rooms stay in every build.",
+    "Bork and the Smorks block a ranged or magic shot. The cannon oil on the floor does not.",
+    "The Smorks play animation 14554 for the cannon. Graphic 4045 flies 4 ticks, then fire and oil cover the 3×3.",
+    "Standing on the oil chips 6 or 7 a tick. The heavy cannonball stays the likely second special.",
   ],
 };
 

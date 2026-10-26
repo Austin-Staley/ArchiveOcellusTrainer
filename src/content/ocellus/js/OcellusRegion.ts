@@ -262,6 +262,11 @@ export class OcellusRegion extends Region {
     return this.mounted.kind === "mounted" ? [...this.mounted.views.chat] : [];
   }
 
+  /** The drill only appends, so the line count climbs with every new line. */
+  chatMark(): number {
+    return this.chat().length;
+  }
+
   fightLog(): FightLog {
     const rows = this.mounted.kind === "mounted" ? [...this.mounted.ocellus.binding.rows] : [];
     return { header: { seed: this.config.seed, choices: this.config.choices }, rows };

@@ -291,7 +291,7 @@ const BOSS: BossRecipe = {
   stats: selected({ attack: 325, strength: 250, defence: 250, range: 300, magic: 300 }, "spec-confirmed", "unscaled", "the wiki's phase 3 infobox, edited after the 21 October hotfix, lists the cache's levels; the phase 4 text gives him these same stats", BOSS_PAGE, cache("npc 16677 stats [325, 250, 250, 5250, 300, 300]")),
   defenceBonuses: selected({ stab: 150, slash: 100, crush: 30, magic: 200 }, "spec-confirmed", "unscaled", "cache params 5 to 8 match the wiki's phase 3 infobox", BOSS_PAGE, cache("npc 16677 params 5, 6, 7, 8")),
   rangedDefence: selected({ light: 250, standard: 250, heavy: 250 }, "spec-single", "unscaled", "the wiki's phase 3 infobox; the cache decode has no ranged defence param", BOSS_PAGE),
-  lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred)", BOSS_PAGE, DEFENCE_REDUCTION_TABLE, HOTFIX_NEWS),
+  lowestDefencePercent: selected(60, "spec-single", "unscaled", "the 21 October hotfix caps Defence reduction at 60% of the level: phase 3 Defence stops at 150 of 250; how a fractional floor rounds is not stated, rounded up (inferred). ocellus-sim 75bd193 phase4.ts incomingDamageFactor returns 0.5 while explosion marks are live. That 50% is Disputed against this 60% floor, which stays", BOSS_PAGE, DEFENCE_REDUCTION_TABLE, HOTFIX_NEWS),
   footprint: selected(
     { "lead-in": "walkable", "inner-void": "walkable", "after-inner": "walkable", "outer-void": "blocks-movement", "after-outer": "walkable" },
     "community-tested",
@@ -386,8 +386,8 @@ const AFTER_OUTER: TransitionRecipe<"after-outer"> = {
 const CYCLE: CycleRecipe = [INNER_VOID, AFTER_INNER, OUTER_VOID, AFTER_OUTER];
 
 const OVERHEADS: OverheadRecipe = {
-  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "the airborne half. Deflect Melee is up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it. The wiki's phase 4 text names Deflect Melee for this half, which closes the capture's open question of which window is melee", STRATEGIES, ...DEFLECT_MELEE_SEEN),
-  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "the grounded half. Deflect Range is up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed. The wiki's phase 4 text names Deflect Range for this half", STRATEGIES, ...DEFLECT_RANGE_SEEN),
+  "inner-void": selected("deflect-melee", "footage-repeated", "team-4-and-5", "the airborne half. Deflect Melee is up from the rise at S+0 to S+24 in all 7 cycles filmed, and absent the tick before the rise; the hovering boss's icon is mostly above the frame, and S+21 is never in it. The wiki's phase 4 text names Deflect Melee for this half, which closes the capture's open question of which window is melee. ocellus-sim 75bd193 data.ts uses 0–25. A reference cites 21. The filmed 0–24 stays", STRATEGIES, ...DEFLECT_MELEE_SEEN),
+  "outer-void": selected("deflect-range", "footage-repeated", "team-4-and-5", "the grounded half. Deflect Range is up with the flood from S+31 and through S+52, two ticks after it clears, in all 7 floods filmed. The wiki's phase 4 text names Deflect Range for this half. ocellus-sim 75bd193 data.ts uses 31–53. A reference cites 50. The filmed 31–52 stays. Soul Split sits between the two windows", STRATEGIES, ...DEFLECT_RANGE_SEEN),
   transition: selected("soul-split", "footage-repeated", "team-4-and-5", "white star after each transition tell", STRATEGIES_P4, vod("V1", "frames 2777, 3785, 4937"), vod("V2", "k73")),
   offBeforeVoid: selected(span(1), "footage-repeated", "team-4-and-5", "no icon at S+30 in 5 cycles and at S+59 in 3, with the boss and his HP bar in frame and the icon up on the ticks either side", NO_WIKI_TICKS, vod("V1", "G63, G123, G183, G92, G152"), vod("V2", "k78, k258, k167")),
 };
@@ -433,7 +433,7 @@ const SPECIAL: SpecialRecipe = {
 };
 
 const BOSS_HEALS: BossHealRecipe = {
-  soulSplitAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "boss heals by wrong-prayer damage only: +50 and +43 while protected players took 7 and 6", NO_WIKI_TICKS, vod("V1", "G62 then G64"), vod("V2", "k137 then k139")),
+  soulSplitAfterHit: selected(span(2), "footage-repeated", "team-4-and-5", "boss heals by wrong-prayer damage only: +50 and +43 while protected players took 7 and 6. ocellus-sim 75bd193 phase4.ts heals him by the unprotected hybrid hit 2 ticks later. The filmed heal is the same tick and the same hits. The sim's 'any unprotected hit' wording is flagged; the fight keeps the wrong-prayer credit", NO_WIKI_TICKS, vod("V1", "G62 then G64"), vod("V2", "k137 then k139")),
 };
 
 const RIFTS: RiftRecipe = {
@@ -677,7 +677,7 @@ const LIFEFORCE_ORB: LifeforceOrbRecipe = {
     span(0),
     "log-repeated",
     "unscaled",
-    "a player already standing on the orb gets the HP back on the tick it matures, not a tick later: 7 returns (spotanim 4314 on the player, with the heal) came at S+16, the tick the game first sends the glowing inner orb, over 4 cycles of two fights; one of those players had stood on the tile since S+14. No outer orb return came on its first ready tick, S+41: the two earliest were at S+42, which fits players who stepped on as it glowed (inferred)",
+    "a player already standing on the orb gets the HP back on the tick it matures, not a tick later: 7 returns (spotanim 4314 on the player, with the heal) came at S+16, the tick the game first sends the glowing inner orb, over 4 cycles of two fights; one of those players had stood on the tile since S+14. No outer orb return came on its first ready tick, S+41: the two earliest were at S+42, which fits players who stepped on as it glowed (inferred). ocellus-sim 75bd193 data.ts adds 8 hitpoints when the orb is taken on its ready tick. That bonus is only in the sim, so it is Disputed and not added",
     NO_WIKI_TICKS, fightLog("L2", "inner returns at S+16 on 3 players in cycle 1 and 2 in cycle 2; outer returns at S+42 on 2 players in cycle 1"),
     fightLog("L6", "inner returns at S+16 in cycles 1 and 3; the glowing orb sent from S+16"),
   ),
@@ -981,7 +981,7 @@ export const OCELLUS_P4 = {
         "halved",
         "community-tested",
         "unscaled",
-        "the cooldown becomes half the weapon speed, rounded down: a 4-tick weapon attacks every 2 ticks, a 5-tick weapon every 2 and a 6-tick weapon every 3. The trainer shortens the remaining cooldown by the difference, which is 3 ticks for a 5-tick or 6-tick weapon, the cut the explosion drills measured. Strategies rev 15381070; the other revision is the minus-3 choice",
+        "the cooldown becomes half the weapon speed, rounded down: a 4-tick weapon attacks every 2 ticks, a 5-tick weapon every 2 and a 6-tick weapon every 3. The trainer shortens the remaining cooldown by the difference, which is 3 ticks for a 5-tick or 6-tick weapon, the cut the explosion drills measured. Strategies rev 15381070; the other revision is the minus-3 choice. ocellus-sim 75bd193 phase4.ts sets the attack delay to at most 1. That reset is Disputed; halved stays the default",
         wiki("https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies", 15381070),
         owner("Scythe and Twisted bow on 2-tick gaps during the explosion series in the VOD", "2026-10-22"),
       ),

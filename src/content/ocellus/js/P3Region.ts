@@ -195,6 +195,11 @@ export class P3Region extends Region {
     return this.mounted.kind === "mounted" ? [...this.mounted.chat] : [];
   }
 
+  /** The drill only appends, so the line count climbs with every new line. */
+  chatMark(): number {
+    return this.chat().length;
+  }
+
   fightLog(): P3Log {
     const rows = this.mounted.kind === "mounted" ? [...this.mounted.boss.binding.rows] : [];
     return { header: { phase: "p3", seed: this.config.seed, choices: this.config.choices }, rows };

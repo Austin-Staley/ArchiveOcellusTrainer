@@ -18,6 +18,7 @@ function input(id: keyof typeof ROOMS): RaidInput {
     addsAlive: 0,
     prayer: null,
     previous: ROOMS[id].player,
+    running: true,
   };
 }
 
@@ -47,7 +48,9 @@ describe("boss walkable tiles", () => {
     expect(bork).not.toContainEqual(tile(0, 0));
     expect(bork).not.toContainEqual(tile(19, 21));
     expect(bossMayStand("ocellus-p1", tile(5, 17))).toBe(true);
-    expect(bossMayStand("ocellus-p1", P1_CORNERS[1] ?? tile(0, 0))).toBe(false);
+    expect(bossMayStand("ocellus-p1", tile(11, 23))).toBe(true);
+    expect(bossMayStand("ocellus-p1", tile(17, 17))).toBe(false);
+    expect(bossMayStand("ocellus-p1", P1_CORNERS[2] ?? tile(0, 0))).toBe(false);
     expect(bossMayStand("moia", tile(1, 1))).toBe(false);
     MOIA_STATIONS.forEach((at) => expect(bossMayStand("moia", at)).toBe(true));
   });
@@ -55,10 +58,11 @@ describe("boss walkable tiles", () => {
 
 describe("stationary and mobile windows", () => {
   it("holds every boss except Moia, and moves Moia only on a relocate or her reappearance", () => {
-    (["bork", "ezekiel", "guardian", "xarth", "dagonhai", "ocellus-p1", "ocellus-p2", "ocellus-p3"] as const).forEach((id) => {
+    (["bork", "ezekiel", "guardian", "xarth", "dagonhai", "ocellus-p2", "ocellus-p3"] as const).forEach((id) => {
       expect(bossMobility(initialMemory(id), 0)).toBe("stationary");
       expect(bossMobility(initialMemory(id), 20)).toBe("stationary");
     });
+    expect(bossMobility(initialMemory("ocellus-p1"), 0)).toBe("stationary");
     const moia = { id: "moia", phase: "p1", reappear: -1, nextChant: -1, chants: 0, station: 0, hopped: 0 } as const;
     expect(bossMobility(moia, 0)).toBe("stationary");
     expect(bossMobility(moia, ARCHIVE.moia.relocateFirst)).toBe("mobile");
@@ -71,7 +75,8 @@ describe("stationary and mobile windows", () => {
 
   it("refuses a step off the set and a step during a stationary tick", () => {
     const home = ROOMS["ocellus-p1"].boss;
-    expect(acceptBossStep("ocellus-p1", home, P1_CORNERS[2] ?? home, "stationary")).toEqual(home);
+    expect(acceptBossStep("ocellus-p1", home, tile(17, 17), "stationary")).toEqual(home);
+    expect(acceptBossStep("ocellus-p1", home, tile(17, 17), "mobile")).toEqual(home);
     expect(acceptBossStep("moia", tile(0, 7), tile(7, 14), "mobile")).toEqual(tile(7, 14));
     expect(acceptBossStep("moia", tile(0, 7), tile(7, 14), "stationary")).toEqual(tile(0, 7));
     expect(acceptBossStep("moia", tile(0, 7), tile(1, 1), "mobile")).toEqual(tile(0, 7));
@@ -112,5 +117,26 @@ describe("stationary and mobile windows", () => {
       memory = step.memory;
     }
     expect(moves).toBeGreaterThan(0);
+  });
+
+  it("walks Ocellus along the logged path and keeps every step inside the captured box", () => {
+    let memory = initialMemory("ocellus-p1");
+    const stood = [ROOMS["ocellus-p1"].boss];
+    let mobileSteps = 0;
+    for (let at = 0; at <= 90; at += 1) {
+      const step = advance(memory, options, input("ocellus-p1"), tick(at));
+      step.events.forEach((stamp) => {
+        if (stamp.event.kind !== "boss-at") return;
+        mobileSteps += 1;
+        expect(bossMobility(step.memory, at)).toBe("mobile");
+        expect(bossMayStand("ocellus-p1", stamp.event.tile)).toBe(true);
+        expect(stamp.event.tile).not.toEqual(tile(-1, 23));
+        expect(stamp.event.tile).not.toEqual(tile(-1, 11));
+        stood.push(stamp.event.tile);
+      });
+      memory = step.memory;
+    }
+    expect(mobileSteps).toBeGreaterThan(1);
+    expect(new Set(stood.map((at) => `${at.x},${at.y}`)).size).toBeGreaterThan(1);
   });
 });

@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.17",
+    notes: [
+      "The phase 2 drill's model and floor graphics are in the asset bundle, so the page no longer logs missing assets.",
+      "Phase 1 and phase 3 chat no longer prints animation numbers or crack counters.",
+      "The phase 1 drill stands on the captured arena, with the scenery sword in the middle.",
+    ],
+  },
+  {
     version: "2026.10.26.16",
     notes: [
       "Phase 1 wears the Hooded Figure for one tick, then Ocellus. The sword in the middle stays scenery. There is no blade npc in phase 1. The blast rolls 28 to 30.",

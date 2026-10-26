@@ -385,7 +385,7 @@ ensure_deps() {
 }
 
 manifest_ready() {
-  node_modules/.bin/tsx src/assetBundle/check.ts
+  ARCHIVE_P1="${ARCHIVE_P1:-on}" ARCHIVE_P2="${ARCHIVE_P2:-on}" ARCHIVE_P3="${ARCHIVE_P3:-on}" node_modules/.bin/tsx src/assetBundle/check.ts
 }
 
 stage_build() {

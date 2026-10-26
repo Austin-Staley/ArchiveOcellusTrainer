@@ -4,21 +4,29 @@ import { BLADE_MODEL, BLADE_STAND, GRAPHICS, PLAYER_BLOCK, REGION_IDS, SEQUENCES
 import { ARCHIVE } from "./content/archive/timings";
 import type { SpriteFrame } from "./content/ocellus/js/OcellusTimings";
 import { OCELLUS_P1, OCELLUS_P2, OCELLUS_P3, OCELLUS_P4 } from "./content/ocellus/js/OcellusTimings";
-import { readBuildFlags } from "./flags";
+import type { BuildFlags } from "./flags";
 
 const { boss, gear, presentation, lifeforceOrb, rifts, explosion, geometry, floorHoles } = OCELLUS_P4;
 
 const sequences = (poses: Readonly<Record<string, Readonly<{ value: number }>>>) => Object.fromEntries(Object.entries(poses).map(([pose, sequence]) => [pose, sequence.value]));
 const { looks: portalLooks } = OCELLUS_P2.portals;
 const p2Key = (name: string) => `p2${name.charAt(0).toUpperCase()}${name.slice(1)}`;
-/**
- * The encounter room always draws the two portal models. The rest of phase 2's poses and spotanims stay behind ARCHIVE_P2,
- * so a build with the drill hidden does not ask the cache for the drill. Cache 2746 also lacks three of its poses' frame sounds (12814, 12825, 12832).
- */
-const { p2 } = readBuildFlags();
-
 const P1_LOOK = OCELLUS_P1.presentation;
-const p1CrackPieces = [...Object.values(P1_LOOK.crackPieces.straight), ...Object.values(P1_LOOK.crackPieces.diagonal)].flatMap(({ value }) => [value.start, value.piece, value.end]);
+/**
+ * Webpack's EnvironmentPlugin writes an unset phase flag as "on". Extraction and the asset check run in Node, where an unset
+ * variable used to read as off, so a flag-on page asked for phase 2's npc and spotanims the bundle had never extracted.
+ * An explicit "off" still leaves the drill out of the cache request. Cache 2746 also lacks three of its poses' frame sounds (12814, 12825, 12832).
+ */
+function phaseOn(name: "ARCHIVE_P1" | "ARCHIVE_P2" | "ARCHIVE_P3"): boolean {
+  // Each read stays a direct process.env.NAME so webpack can inline it. A computed key leaves process undefined in the page.
+  const set = name === "ARCHIVE_P1" ? process.env.ARCHIVE_P1 : name === "ARCHIVE_P2" ? process.env.ARCHIVE_P2 : process.env.ARCHIVE_P3;
+  return set === undefined || set === "" ? true : set === "on";
+}
+
+/** The encounter room always draws the two portal models. The rest of phase 2's poses and spotanims follow ARCHIVE_P2. */
+export function archiveOcellusAssets(flags: BuildFlags) {
+  const { p2 } = flags;
+  const p1CrackPieces = [...Object.values(P1_LOOK.crackPieces.straight), ...Object.values(P1_LOOK.crackPieces.diagonal)].flatMap(({ value }) => [value.start, value.piece, value.end]);
 const p1SpotAnims = [
   ...Object.entries(P1_LOOK.spotAnims).map(([name, spotAnim]) => [`p1${name.charAt(0).toUpperCase()}${name.slice(1)}`, { id: spotAnim.value }]),
   ...[...p1CrackPieces, ...P1_LOOK.floorExplosions.value.pieces].map((id) => [`p1Floor${id}`, { id }]),
@@ -28,7 +36,7 @@ function poseMap<T extends Readonly<Record<string, number>>>(poses: T): Readonly
   return Object.fromEntries(Object.entries(poses));
 }
 
-export const ARCHIVE_OCELLUS_ASSETS = {
+  return {
   npcs: {
     ocellus: { id: boss.npcId.value, animations: { ...sequences(presentation.bossPoses), ...sequences(OCELLUS_P3.bossPoses) } },
     voidRift: { id: rifts.npcId.value, animations: sequences(rifts.poses) },
@@ -95,7 +103,10 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     block: { id: PLAYER_BLOCK },
   },
   sounds: Object.fromEntries(Object.entries(presentation.sounds).map(([cue, sound]) => [cue, { id: sound.value }])),
-} as const satisfies CacheAssets;
+  } as const satisfies CacheAssets;
+}
+
+export const ARCHIVE_OCELLUS_ASSETS = archiveOcellusAssets({ p1: phaseOn("ARCHIVE_P1"), p2: phaseOn("ARCHIVE_P2"), p3: phaseOn("ARCHIVE_P3") });
 
 export type ConfiguredIds = Readonly<Record<string, Readonly<{ id: number }>>>;
 

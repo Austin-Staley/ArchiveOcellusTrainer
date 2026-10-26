@@ -60,8 +60,8 @@
     "scripts/perf-report.mjs"
   ],
   "rules": [
-    { "paths": ["src/index.html"], "units": ["@shell", "p4_cycle"] },
-    { "paths": ["src/ArchiveOcellusApp.tsx"], "units": ["@shell", "loadouts", "p3_drill"] },
+    { "paths": ["src/index.html"], "units": ["@shell", "p4_cycle", "layered_present"] },
+    { "paths": ["src/ArchiveOcellusApp.tsx"], "units": ["@shell", "loadouts", "p3_drill", "layered_present"] },
     { "paths": ["src/content/ocellus/changelog.ts", "src/releases.ts", "scripts/release-notes.mjs"], "units": ["whats_new", "production"] },
     { "paths": ["src/hoverText.ts"], "units": ["supplies", "keybinds"] },
     { "paths": ["src/telemetry/**", "src/telemetry.json"], "units": ["telemetry", "production"] },
@@ -74,6 +74,6 @@
     { "paths": ["src/content/ocellus/js/p4/explosions.ts"], "units": ["@explosion_set"] },
     { "paths": ["src/content/ocellus/js/mobs/VoidRift.ts"], "units": ["overheads_rifts", "recorded_fights"] },
     { "paths": ["src/content/ocellus/js/gear/**", "src/content/ocellus/js/OcellusLoadout.ts", "src/content/ocellus/js/bossStats.ts"], "units": ["@combat"] },
-    { "paths": ["src/content/ocellus/js/P3Region.ts", "src/content/ocellus/js/P3Types.ts", "src/content/ocellus/js/mobs/OcellusP3.ts", "src/content/ocellus/js/p3/**"], "units": ["@p3"] }
+    { "paths": ["src/content/ocellus/js/P3Region.ts", "src/content/ocellus/js/P3Types.ts", "src/content/ocellus/js/entities/P3Marks.ts", "src/content/ocellus/js/mobs/OcellusP3.ts", "src/content/ocellus/js/p3/**"], "units": ["@p3"] }
   ]
 }

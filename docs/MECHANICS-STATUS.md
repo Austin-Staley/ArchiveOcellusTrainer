@@ -36,7 +36,7 @@ Orange and purple portals stand in a grid of 24 from tick 2. Orange is the gap, 
 
 ### Phase 3
 
-You are the only player, so you are the tank. The pattern is the trainer's measured auto, auto, wave, auto, auto, wave, which sums to 20 ticks. After that cycle the charged blade spins. The first quadrant has one saw, the next two, the last three. Leaving Protect from Melee on between saws injures you.
+You are the only player, so you are the tank. This room's pattern is still the measured auto, auto, wave, auto, auto, wave, which sums to 20 ticks. After that cycle the charged blade spins. The first quadrant has one saw, the next two, the last three. Leaving Protect from Melee on between saws injures you. The hidden phase 3 drill, behind `ARCHIVE_P3`, runs quadrant 1 as the fight logs do: swings at 4 and 7, a shadow slash at 10, a magic panic shot when nobody is in reach, then spin, Untether, spin and Insolence. The quadrant falls the tick after his hitpoints reach the floor. That chain and this room disagree on the void shot and on the spin's first hit. Both readings are in the audit, marked **Disputed**.
 
 Insolence is three waves that leave a field. Untether: step under him and leave on the final glow. This room uses four glows, the measured count. The strategy paste says the border glows twice. That count is still disputed.
 

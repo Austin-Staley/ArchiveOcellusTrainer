@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.12",
+    notes: [
+      "The 3D view draws in its own canvas under the HUD. Clicks stay on the same canvas.",
+      "The hidden phase 3 drill runs quadrant 1 as the logged chain: swings, a shadow slash, a magic panic shot, the spin, Untether, Insolence, and the fall.",
+    ],
+  },
+  {
     version: "2026.10.26.11",
     notes: [
       "Phase 1 draws the floor cracks on plane 1: the captured spotanims, eight tiles, opening every 2 ticks and closing after 5.",

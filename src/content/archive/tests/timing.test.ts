@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Tick } from "../../../sim/brands";
 import { seed, tile } from "../../../sim/brands";
-import { OCELLUS_P3 } from "../../ocellus/js/OcellusTimings";
 import { defaultOptions } from "../catalog";
 import type { RaidId } from "../catalog";
 import { patternOrder, project } from "../clock";
@@ -202,7 +201,7 @@ describe("raid clocks", () => {
   });
 
   it("follows the phase 3 auto offsets and the 13-tick collapse", () => {
-    const steps = OCELLUS_P3.autos.value;
+    const steps = ARCHIVE.p3.autos;
     const offsets: number[] = [];
     let cursor = 0;
     for (const step of steps) {

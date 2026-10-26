@@ -14,12 +14,11 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.11",
+  version: "2026.10.26.12",
   date: "2026-10-26",
   notes: [
-    "Phase 1 draws the floor cracks on plane 1: the captured spotanims, eight tiles, opening every 2 ticks and closing after 5.",
-    "Phase 2 raises the orange and purple portal grid at tick 2. Stand in the orange gap. Purple fires for 18 to 27.",
-    "The Blade stays on his tile for the whole of phase 2. His 3×3 is the footprint, and he has no walk beyond it.",
+    "The 3D view draws in its own canvas under the HUD. Clicks stay on the same canvas.",
+    "The hidden phase 3 drill runs quadrant 1 as the logged chain: swings, a shadow slash, a magic panic shot, the spin, Untether, Insolence, and the fall.",
   ],
 };
 

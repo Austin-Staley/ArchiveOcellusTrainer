@@ -153,8 +153,31 @@ if (source.includes(dropMarker)) {
         }
         console.warn(\`osrs-sdk-assets: sound effects missing from this cache are dropped from animations: \${missingSounds.join(", ")}\`);
       }`;
+  const packedCall = `      const soundEffects = await readSoundEffects(
+        soundEffectIds,
+        (id2) => cache.getFile(IndexType.SOUNDEFFECTS, id2, 0, { cacheResults: false })
+      );`;
+  const packedDrop = `${packedCall}
+      const packedSoundIds = new Set(soundEffects.map((sound) => sound.id));
+      const missingSounds = [...soundEffectIds].filter((id2) => !packedSoundIds.has(id2));
+      if (missingSounds.length) {
+        const missing = new Set(missingSounds);
+        for (const asset of assets) {
+          for (const animation of Object.values(asset.payload.animations ?? {})) {
+            if (!animation.frameSounds) continue;
+            for (const [frame, sounds] of Object.entries(animation.frameSounds)) {
+              const kept = sounds.filter((sound) => !missing.has(sound.id));
+              if (kept.length) animation.frameSounds[frame] = kept;
+              else delete animation.frameSounds[frame];
+            }
+            if (!Object.keys(animation.frameSounds).length) delete animation.frameSounds;
+          }
+        }
+        console.warn(\`osrs-sdk-assets: sound effects missing from this cache are dropped from animations: \${missingSounds.join(", ")}\`);
+      }`;
   if (source.includes(warned)) source = source.replace(warned, dropped);
   else if (source.includes(thrown)) source = source.replace(thrown, dropped);
+  else if (source.includes(packedCall)) source = source.replace(packedCall, packedDrop);
   else {
     console.error("patch-asset-tool: the sound-effect pack loop was not where this patch expects it");
     process.exit(1);

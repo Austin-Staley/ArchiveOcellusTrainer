@@ -60,14 +60,22 @@ describe("phases that stand still", () => {
     expect([OCELLUS_P4.geometry.bossAnchor.value.x, OCELLUS_P4.geometry.bossAnchor.value.y]).toEqual([4, 6]);
   });
 
-  it("keeps phase 3 on his anchor through the autos", async () => {
+  it("steps phase 3 toward the player during the chain and holds his tile through the spin", async () => {
     const drill = await startP3Drill({ seed: 1 });
-    drill.tickTo(30);
-    const at = drill.region.bossMovement();
-    const place = { x: drill.boss().location.x, y: drill.boss().location.y };
+    const start = { x: drill.boss().location.x, y: drill.boss().location.y };
+    drill.tickTo(12);
+    const chased = { x: drill.boss().location.x, y: drill.boss().location.y };
+    const whileChasing = drill.region.bossMovement();
+    drill.tickTo(24);
+    const spin = { x: drill.boss().location.x, y: drill.boss().location.y };
+    drill.tickTo(28);
+    const still = { x: drill.boss().location.x, y: drill.boss().location.y };
+    const standing = drill.region.bossMovement();
     drill.dispose();
-    expect(place).toEqual({ x: 21, y: 7 });
-    expect(at?.mobility).toBe("stationary");
-    expect(at?.actor).toBe("Ocellus");
+    expect(start).toEqual({ x: 21, y: 7 });
+    expect(chased).not.toEqual(start);
+    expect(whileChasing).toMatchObject({ mobility: "mobile", actor: "Ocellus" });
+    expect(still).toEqual(spin);
+    expect(standing).toMatchObject({ mobility: "stationary", actor: "Ocellus" });
   });
 });

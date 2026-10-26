@@ -276,6 +276,24 @@ export const ARCHIVE = {
     collapseDamage: 99,
     thresholds: [75, 50, 25],
     order: ["NW", "SW", "SE", "NE"],
+    /**
+     * The encounter room's previous 20-tick pattern: swing, swing, wave, twice.
+     * Disputed. The phase 3 drill follows the logged chain (swings at 4 and 7, shadow slash at 10). Upstream #88.
+     */
+    autos: [
+      { attack: "melee", next: 3 },
+      { attack: "melee", next: 4 },
+      { attack: "wave", next: 3 },
+      { attack: "melee", next: 3 },
+      { attack: "melee", next: 4 },
+      { attack: "wave", next: 3 },
+    ] as const,
+    /**
+     * Typeless 20, dealt on the swing tick when he cannot reach.
+     * Disputed. Animation 14851 is the drill's panic shot: magic, landing 2 ticks after the cast.
+     * The dossier's range is 12–33. The drill uses the wiki's 20–26. The 182 segments timed graphic 4297 at flight 0.5 with the splat on the cast tick.
+     */
+    voidShot: 20,
     spinAt: 20,
     /** Unverified. Render digest 25 Oct 2026, 31 phase 3 files: animation 14869 lasts 5 ticks and carries graphic 4325 on all 192 spins. */
     spinGraphicTicks: 5,

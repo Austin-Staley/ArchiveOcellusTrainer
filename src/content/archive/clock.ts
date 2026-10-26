@@ -673,7 +673,7 @@ function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: nu
 }
 
 function p3Attacks(): Readonly<{ offset: number; kind: "melee" | "wave" }[]> {
-  const steps = OCELLUS_P3.autos.value;
+  const steps = ARCHIVE.p3.autos;
   const rows: { offset: number; kind: "melee" | "wave" }[] = [];
   let cursor = 0;
   for (const step of steps) {
@@ -685,7 +685,7 @@ function p3Attacks(): Readonly<{ offset: number; kind: "melee" | "wave" }[]> {
         rows.push({ offset: cursor, kind: "wave" });
         break;
       default: {
-        const unhandled: never = step.attack;
+        const unhandled: never = step;
         return unhandled;
       }
     }
@@ -730,7 +730,7 @@ function stepP3(memory: P3Memory, input: RaidInput, at: number): Readonly<{ memo
           events.push(damage("swing", "melee", OCELLUS_P3.swing.protectedDamage.value.max, OCELLUS_P3.swing.unprotectedDamage.value.max));
         } else {
           events.push(attack("void-shot", "14851"));
-          events.push(damage("void-shot", "typeless", OCELLUS_P3.voidShot.value.max, OCELLUS_P3.voidShot.value.max));
+          events.push(damage("void-shot", "typeless", rules.voidShot, rules.voidShot));
         }
       } else {
         events.push(attack("wave", "14846"));

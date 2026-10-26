@@ -7,6 +7,7 @@ import type { RaidId } from "./catalog";
  *
  * Wiki: https://oldschool.runescape.wiki/w/The_Fractured_Archive/Strategies (25 Oct 2026)
  * and https://oldschool.runescape.wiki/w/Ocellus (25 Oct 2026).
+ * The 25 Oct 2026 render digest supplies the flight ticks and animation ids the rooms play.
  */
 
 /** Ocellus reduces demonbane weapon damage by this share. Unverified. Wiki strategies, 25 Oct 2026. */
@@ -43,6 +44,10 @@ export const ARCHIVE = {
     lightning: { first: 3, second: 5, damage: 34 },
     meleeAfterSpecial: [7, 12, 26, 31],
     stunAt: 14,
+    /** Unverified. Render digest 25 Oct 2026: the stun animation ends 8 ticks after it starts. */
+    stunRecover: 8,
+    /** Unverified. The enrage NPC animation. Spotanim 4175 and tile graphics 4196–4198 are not this animation. */
+    waveAnim: 14694,
     healAt: 16,
     healAmount: 91,
     waveInterval: 11,
@@ -57,9 +62,11 @@ export const ARCHIVE = {
     defence: 260,
     defenceFloor: 156,
     autoInterval: 5,
+    /** Unverified. The ranged graphic starts 2 ticks into the attack and flies about 2.3, landing with this 4-tick hit. */
     autoFlight: 4,
     landDelay: 3,
-    grounded: 35,
+    /** Unverified. Render digest cross-check 25 Oct 2026: the first grounding is 35, then 41, then 47, and later stays hold 47. */
+    groundedStays: [35, 41, 47],
     takeoff: 3,
     autoAfterTakeoff: 4,
     vineFirst: 5,
@@ -88,8 +95,10 @@ export const ARCHIVE = {
     autoInterval: 5,
     relocateFirst: 20,
     relocateInterval: 25,
-    rangedFlight: 4,
-    magicFlight: 5,
+    /** Unverified. Three fights in the 25 Oct 2026 digest: the ranged hit is the same tick as the attack. Low confidence. */
+    rangedFlight: 0,
+    /** Unverified. Those same three fights: the relocate hit is 4 ticks after the teleport. Low confidence. */
+    magicFlight: 4,
     ranged: { prayed: 1, unprayed: 32 },
     magic: { prayed: 0, unprayed: 39 },
     binderNpcId: 16670,
@@ -98,6 +107,8 @@ export const ARCHIVE = {
     bindersPerChant: 6,
     binderHop: 15,
     binderReach: 2,
+    /** Unverified. Render digest 25 Oct 2026: binders attack every 5 ticks. */
+    binderAttack: 5,
     binderDamage: 20,
     enragePercent: 33,
     /** Unverified. Practice stand-in inside the 10–14 tick vanish. */
@@ -114,7 +125,8 @@ export const ARCHIVE = {
     defence: 170,
     defenceFloor: 102,
     autoInterval: 4,
-    autoFlight: 4,
+    /** Unverified. Render digest 25 Oct 2026: magic and ranged land 2 ticks after the attack. */
+    autoFlight: 2,
     autosBeforeBlast: 5,
     tellAfterAuto: 4,
     blastAfterTell: 3,
@@ -131,6 +143,7 @@ export const ARCHIVE = {
     defence: 100,
     defenceFloor: 0,
     autoInterval: 5,
+    /** Unverified. One fight measured flights of 3 and 1. The room keeps 5 so the graphic and the hit land together. Low confidence. */
     autoFlight: 5,
     chip: { prayed: 14, unprayed: 35 },
     channelFirst: 19,
@@ -154,8 +167,8 @@ export const ARCHIVE = {
     defence: 215,
     defenceFloor: 129,
     volleyInterval: 5,
-    /** Unverified. Flight was measured at 4–5 ticks; the room uses 4. */
-    volleyFlight: 4,
+    /** Unverified. Render digest 25 Oct 2026: the volley lands about 2 ticks after the attack. The room uses 2. */
+    volleyFlight: 2,
     prayed: 12,
     unprayed: 42,
     tendrilCount: 7,
@@ -188,6 +201,7 @@ export const ARCHIVE = {
     firstVolley: 11,
     volleys: 6,
     spacing: 5,
+    /** Unverified. The orange volley is a ground graphic whose hit is 4 ticks later. Projectile 4269's source was not resolved, so that graphic is not this delay. */
     hitDelay: 4,
     padAfterSixth: 2,
     voidAfterSixth: 3,

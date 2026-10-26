@@ -1,5 +1,5 @@
-import { AmuletOfRancour, AttackStyle, AttackStylesController, AvernicTreadsMax, BasicModel, CacheRenderModel, CacheRenderReferences, CollisionType, Entity, FerociousGloves, InfernalCape, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Region, ScytheOfVitur, Settings, TileMarkerModel, UltorRing } from "osrs-sdk";
-import type { Model, RenderableListener, UnitBonuses } from "osrs-sdk";
+import { BasicModel, CacheRenderModel, CacheRenderReferences, CacheRenderSceneModel, CollisionType, Entity, InvisibleMovementBlocker, LineOfSightMask, Mob, Player, Projectile, Region, Settings, TileMarkerModel, TwistedBow } from "osrs-sdk";
+import type { Model, RenderableListener, Unit, UnitBonuses } from "osrs-sdk";
 import type { Seed, Tile } from "../../sim/brands";
 import { tick, tile } from "../../sim/brands";
 import { protectionOf } from "../../sim/sdk/EncounterBinding";
@@ -7,6 +7,9 @@ import type { RaidLaunch } from "./catalog";
 import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { CENSERS, ROOMS } from "./layout";
+import { dress } from "./loadout";
+import { GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
+import type { ActorRole } from "./poses";
 import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
@@ -39,6 +42,10 @@ class PracticeMob extends Mob {
 
   override get combatLevel(): number {
     return 1;
+  }
+
+  override get deathAnimationId(): number | null {
+    return deathSequence(this.npcId);
   }
 
   override attack(): boolean {
@@ -132,23 +139,25 @@ class Mark extends Entity {
   }
 }
 
-/** A coloured sphere. No projectile graphic id is recorded, so this is the stand-in. */
+/** A travelling graphic. A null graphic id is a coloured sphere, used where the capture did not resolve a source. */
 class Shot extends Entity {
   life = 1;
   paint = "#e0a040";
+  graphicId: number | null = null;
   private fromX = 0;
   private fromY = 0;
   private toX = 0;
   private toY = 0;
   private span = 1;
   private age = 0;
+  private held = false;
 
   override get size(): number {
     return 1;
   }
 
   override entityName(): string {
-    return "Stand-in projectile";
+    return this.graphicId === null ? "Stand-in projectile" : `Projectile ${this.graphicId}`;
   }
 
   override get color(): string {
@@ -156,10 +165,11 @@ class Shot extends Entity {
   }
 
   override create3dModel(): Model {
+    if (this.graphicId !== null) return CacheRenderModel.forRenderable(this, CacheRenderReferences.spotAnim([{ id: this.graphicId }]));
     return BasicModel.sphereForRenderable(this);
   }
 
-  fly(from: Tile, to: Tile, ticks: number, paint: string): void {
+  fly(from: Tile, to: Tile, ticks: number, paint: string, graphic: number | null, hold: boolean): void {
     this.fromX = from.x + 0;
     this.fromY = from.y + 0;
     this.toX = to.x + 0;
@@ -167,6 +177,8 @@ class Shot extends Entity {
     this.span = Math.max(1, ticks);
     this.life = this.span;
     this.paint = paint;
+    this.graphicId = graphic;
+    this.held = hold;
     this.age = 0;
     this.location = { x: this.fromX, y: this.fromY };
   }
@@ -174,15 +186,18 @@ class Shot extends Entity {
   advance(): void {
     this.age += 1;
     this.life -= 1;
-    const along = Math.min(1, this.age / this.span);
-    this.location = {
-      x: Math.round(this.fromX + (this.toX - this.fromX) * along),
-      y: Math.round(this.fromY + (this.toY - this.fromY) * along),
-    };
+    if (!this.held) {
+      const along = Math.min(1, this.age / this.span);
+      this.location = {
+        x: Math.round(this.fromX + (this.toX - this.fromX) * along),
+        y: Math.round(this.fromY + (this.toY - this.fromY) * along),
+      };
+    }
     if (this.life <= 0) this.dying = 0;
   }
 
   override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    if (this.held) return { x: this.fromX, y: this.fromY, z: 1.2 };
     const along = Math.min(1, (this.age + tickPercent) / this.span);
     return {
       x: this.fromX + (this.toX - this.fromX) * along,
@@ -198,6 +213,42 @@ class Shot extends Entity {
     context.beginPath();
     context.arc((at.x + 0.5) * scale, (at.y + 0.5) * scale, scale * 0.28, 0, Math.PI * 2);
     context.fill();
+  }
+}
+
+/** The captured map, slid so the boss tile of the template sits on this room's boss tile. */
+class Arena extends Entity {
+  constructor(
+    region: Region,
+    location: { x: number; y: number },
+    private readonly launchId: RaidLaunch["id"],
+  ) {
+    super(region, location);
+  }
+
+  override get size(): number {
+    return 1;
+  }
+
+  override entityName(): string {
+    return `Region ${arenaFor(this.launchId).region}`;
+  }
+
+  override get color(): string {
+    return "#3c4638";
+  }
+
+  override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    void tickPercent;
+    void context;
+  }
+
+  override create3dModel(): Model {
+    const place = arenaFor(this.launchId);
+    return new CacheRenderSceneModel(`region:${place.region}`, {
+      originOffset: { x: place.offsetX, y: place.offsetY },
+      elevation: place.elevation,
+    });
   }
 }
 
@@ -295,18 +346,13 @@ export class RaidRegion extends Region {
     return ROOMS[this.launch.id].height;
   }
 
-  /** No map square is recorded for these rooms. The checkerboard is the coloured stand-in floor. */
+  /** The clickable walk plane stays. The texture is clear so the captured map shows through it. */
   override drawDefaultFloor(): boolean {
     return true;
   }
 
   override drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number): void {
-    for (let x = 0; x < this.width; x += 1) {
-      for (let y = 0; y < this.height; y += 1) {
-        context.fillStyle = (x + y) % 2 === 0 ? "#3c4638" : "#333d30";
-        context.fillRect(x * scale, y * scale, scale, scale);
-      }
-    }
+    context.clearRect(0, 0, this.width * scale, this.height * scale);
   }
 
   initialiseRegion(): { player: Player } {
@@ -317,6 +363,7 @@ export class RaidRegion extends Region {
     const adds = this.spawnAdds();
     const censers = this.launch.id === "ocellus-p3" ? this.spawnCensers() : [];
     this.addPlayer(player);
+    this.addEntity(new Arena(this, { x: 0, y: 0 }, this.launch.id));
     this.addMob(boss);
     this.setBoss(boss);
     adds.forEach((add) => this.addMob(add));
@@ -393,7 +440,7 @@ export class RaidRegion extends Region {
     }
     this.mounted.adds.forEach((add) => this.applyBar(add, addBar(this.launch, add.label)));
     this.mounted.censers.forEach((censer, index) => this.applyBar(censer, { npcId: 0, hp: 1, defence: 0, name: CENSOR_NAMES[index] ?? "Censer", size: 1 }));
-    dressMelee(this.mounted.player);
+    dress(this.mounted.player, this.launch.gear);
     this.memory = initialMemory(this.launch.id);
     this.clockTick = 0;
     this.rows = [];
@@ -410,8 +457,10 @@ export class RaidRegion extends Region {
     if (this.launch.id === "ocellus-p3") this.say("You are the tank. Two melee hits, then a wave. After two waves, the blade.");
     const notice = standInNotice(this.launch.id);
     if (notice.length > 0) this.say(notice);
-    this.say("The arena floor is a coloured stand-in. No map id is recorded for this room.");
-    if (roomFiresShot(this.launch.id)) this.say("Flying shots are coloured stand-ins. No projectile graphic id is recorded.");
+    const place = arenaFor(this.launch.id);
+    const plane = place.region === 16472 ? ", plane 1" : "";
+    this.say(`The arena is map region ${place.region}${plane}.`);
+    this.describeShots();
     if (this.launch.id === "ocellus-p3") this.say("The censers are coloured stand-ins. They are scenery, and this view has no model for them.");
   }
 
@@ -420,6 +469,7 @@ export class RaidRegion extends Region {
     const { player, boss } = this.mounted;
     switch (event.kind) {
       case "attack":
+        this.playAttack(event.name);
         this.say(event.text);
         return;
       case "chat":
@@ -428,19 +478,24 @@ export class RaidRegion extends Region {
       case "damage": {
         const prayed = event.style !== "typeless" && protectionOf(player) === event.style;
         const amount = prayed ? event.protectedAmount : event.unprotectedAmount;
+        landSplat(boss, player, amount);
         player.currentStats.hitpoint -= amount;
+        if (amount > 0 && player.equipment.weapon instanceof TwistedBow) void player.playAnimation(PLAYER_BLOCK);
         return;
       }
       case "heal-player":
+        landSplat(boss, player, -event.amount);
         player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + event.amount);
         return;
       case "heal-boss":
+        landSplat(player, boss, -event.amount);
         boss.currentStats.hitpoint = Math.min(boss.stats.hitpoint, boss.currentStats.hitpoint + event.amount);
         if (this.form === "grounded") this.realHp = boss.currentStats.hitpoint;
         return;
       case "bank-halve": {
         const stored = Math.max(0, boss.stats.hitpoint - boss.currentStats.hitpoint - this.banked);
         const half = Math.floor(stored / 2);
+        landSplat(player, boss, -half);
         boss.currentStats.hitpoint = Math.min(boss.stats.hitpoint, boss.currentStats.hitpoint + half);
         this.banked += stored;
         this.say(`The Blade passes on ${half}.`);
@@ -512,7 +567,10 @@ export class RaidRegion extends Region {
     if (!add) return;
     const label = name === "void-rift" ? "Void rift" : name === "void-siphon" ? "Void siphon" : "Void augmenter";
     add.label = label;
-    this.applyBar(add, addBar(this.launch, label));
+    const bar = addBar(this.launch, label);
+    this.applyBar(add, bar);
+    const spawn = spawnSequence(bar.npcId);
+    if (spawn !== null) void add.playAnimation(spawn);
     this.spent.delete(add);
     if (!this.mobs.includes(add) && !this.newMobs.includes(add)) this.addMob(add);
   }
@@ -555,6 +613,7 @@ export class RaidRegion extends Region {
       this.spent.add(add);
       switch (add.label) {
         case "Void siphon":
+          landSplat(add, player, -ARCHIVE.p3.siphonHeal);
           player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + ARCHIVE.p3.siphonHeal);
           this.say("The siphon's killing blow heals you for 22.");
           return;
@@ -589,6 +648,7 @@ export class RaidRegion extends Region {
           this.say("Zarosian censer: 50% special attack restored.");
           return;
         case "Saradomin censer":
+          landSplat(censer, player, -ARCHIVE.p3.censerHeal);
           player.currentStats.hitpoint = Math.min(player.stats.hitpoint, player.currentStats.hitpoint + ARCHIVE.p3.censerHeal);
           player.currentStats.prayer = Math.min(99, (player.currentStats.prayer ?? 0) + ARCHIVE.p3.censerPrayer);
           this.say("Saradomin censer: 50 hitpoints and 50 prayer. Captures have also shown 28–40.");
@@ -622,12 +682,12 @@ export class RaidRegion extends Region {
     const to = tile(player.location.x, player.location.y);
     events.forEach((stamp) => {
       if (stamp.event.kind !== "attack") return;
-      const look = shotLook(this.launch, stamp.event.name);
-      if (!look) return;
-      const shot = new Shot(this, { x: from.x, y: from.y });
-      shot.fly(from, to, look.ticks, look.paint);
-      this.addEntity(shot);
-      this.shots.push(shot);
+      shotLooks(this.launch, stamp.event.name).forEach((look) => {
+        const shot = new Shot(this, { x: from.x, y: from.y });
+        shot.fly(from, to, look.ticks, look.paint, look.graphic, look.hold);
+        this.addEntity(shot);
+        this.shots.push(shot);
+      });
     });
   }
 
@@ -655,6 +715,50 @@ export class RaidRegion extends Region {
   private say(text: string): void {
     this.lines.push(text);
     if (this.lines.length > 8) this.lines.shift();
+  }
+
+  private describeShots(): void {
+    switch (this.launch.id) {
+      case "bork":
+        this.say("Projectiles 4056 and 4057 have no captured source, so they are not drawn.");
+        return;
+      case "ezekiel":
+        return;
+      case "guardian":
+        this.say(`The ranged shot is graphic ${GRAPHICS.guardianRanged}. The beam's travel is a coloured stand-in. Its own graphic is ${GRAPHICS.guardianBeam}.`);
+        return;
+      case "moia":
+        this.say(`The ranged shot is graphic ${GRAPHICS.moiaRanged} and the relocate shot is ${GRAPHICS.moiaRelocate}. This sample is three fights, so those roles stay low confidence.`);
+        return;
+      case "xarth":
+        this.say(`Magic is graphic ${GRAPHICS.xarthMagic}, ranged is ${GRAPHICS.xarthRanged}, and the tell is ${GRAPHICS.xarthTell}.`);
+        return;
+      case "dagonhai":
+        this.say(`Ranged is graphic ${GRAPHICS.dagonRanged} and magic is ${GRAPHICS.dagonMagic}. The book throw is a coloured stand-in. Hitsplat type 11 has no sprite here. This sample is one fight, so the 5-tick hit stays.`);
+        return;
+      case "ocellus-p1":
+        this.say(`The volleys are graphics ${GRAPHICS.p1Magic} and ${GRAPHICS.p1Ranged}. Ocellus has no captured death animation, so none plays.`);
+        return;
+      case "ocellus-p2":
+        this.say("Projectile 4269 has no captured source, so the volley is a coloured stand-in. The Blade's animations are a stand-in. The captures record none.");
+        return;
+      case "ocellus-p3":
+        this.say(`The void shot is graphic ${GRAPHICS.p3Void}. Ocellus has no captured death animation, so none plays. The vine's animations are a stand-in.`);
+        return;
+      default: {
+        const unhandled: never = this.launch.id;
+        return unhandled;
+      }
+    }
+  }
+
+  private playAttack(name: string): void {
+    if (!this.mounted) return;
+    const played = attackSequence(this.launch.id, name);
+    if (!played) return;
+    actorsFor(this.mounted, played.role).forEach((actor) => {
+      void actor.playAnimation(played.sequence);
+    });
   }
 
   private spawnAdds(): PracticeMob[] {
@@ -708,16 +812,27 @@ export class RaidRegion extends Region {
   }
 }
 
-function dressMelee(player: Player): void {
-  const weapon = new ScytheOfVitur();
-  player.equipment.weapon = weapon;
-  player.equipment.gloves = new FerociousGloves();
-  player.equipment.cape = new InfernalCape();
-  player.equipment.necklace = new AmuletOfRancour();
-  player.equipment.feet = new AvernicTreadsMax();
-  player.equipment.ring = new UltorRing();
-  player.equipmentChanged();
-  AttackStylesController.controller.setWeaponAttackStyle(weapon, AttackStyle.AGGRESSIVECRUSH);
+function actorsFor(mounted: Mounted, role: ActorRole): readonly PracticeMob[] {
+  switch (role) {
+    case "boss":
+      return [mounted.boss];
+    case "smorks":
+      return mounted.adds.filter((add) => add.label === "Smorks");
+    case "binder":
+      return mounted.adds.filter((add) => add.label === "Undead binder");
+    default: {
+      const unhandled: never = role;
+      return unhandled;
+    }
+  }
+}
+
+/** A hitsplat that draws on the land tick and the next, without applying its damage a second time. */
+function landSplat(from: Unit, target: Unit, amount: number): void {
+  const splat = new Projectile(null, amount, from, target, "typeless", { setDelay: 1 });
+  splat.remainingDelay = 0;
+  splat.totalDelay = 0;
+  target.incomingProjectiles.push(splat);
 }
 
 function addBar(launch: RaidLaunch, name: string): Bar {
@@ -733,59 +848,45 @@ const RANGED_SHOT = "#7ec8ff";
 const MAGIC_SHOT = "#c45bff";
 const TYPELESS_SHOT = "#e0a040";
 
-type ShotLook = Readonly<{ ticks: number; paint: string }>;
+type ShotLook = Readonly<{ ticks: number; paint: string; graphic: number | null; hold: boolean }>;
 
-function roomFiresShot(id: RaidLaunch["id"]): boolean {
-  switch (id) {
-    case "guardian":
-    case "moia":
-    case "xarth":
-    case "dagonhai":
-    case "ocellus-p1":
-    case "ocellus-p2":
-      return true;
-    case "bork":
-    case "ezekiel":
-    case "ocellus-p3":
-      return false;
-    default: {
-      const unhandled: never = id;
-      return unhandled;
-    }
-  }
-}
-
-function shotLook(launch: RaidLaunch, name: string): ShotLook | null {
+function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
+  const travel = (ticks: number, paint: string, graphic: number | null): ShotLook => ({ ticks, paint, graphic, hold: false });
+  const held = (ticks: number, graphic: number): ShotLook => ({ ticks, paint: TYPELESS_SHOT, graphic, hold: true });
   switch (launch.id) {
     case "bork":
     case "ezekiel":
-    case "ocellus-p3":
-      return null;
+      return [];
     case "guardian":
-      if (name === "14751") return { ticks: ARCHIVE.guardian.autoFlight, paint: RANGED_SHOT };
-      if (name === "beam") return { ticks: launch.options.guardianBeamDelay, paint: MAGIC_SHOT };
-      return null;
+      if (name === "14751") return [travel(ARCHIVE.guardian.autoFlight, RANGED_SHOT, GRAPHICS.guardianRanged)];
+      if (name === "beam") return [travel(launch.options.guardianBeamDelay, MAGIC_SHOT, null), held(launch.options.guardianBeamDelay, GRAPHICS.guardianBeam)];
+      if (name === "mushroom") return [held(ARCHIVE.guardian.mushroomArm, GRAPHICS.guardianMushroom)];
+      return [];
     case "moia":
-      if (name === "14785") return { ticks: ARCHIVE.moia.rangedFlight, paint: RANGED_SHOT };
-      if (name === "relocate") return { ticks: ARCHIVE.moia.magicFlight, paint: MAGIC_SHOT };
-      return null;
+      if (name === "14785") return [travel(Math.max(1, ARCHIVE.moia.rangedFlight), RANGED_SHOT, GRAPHICS.moiaRanged)];
+      if (name === "relocate") return [travel(ARCHIVE.moia.magicFlight, MAGIC_SHOT, GRAPHICS.moiaRelocate)];
+      return [];
     case "xarth":
-      if (name === "14984") return { ticks: ARCHIVE.xarth.autoFlight, paint: MAGIC_SHOT };
-      if (name === "14985") return { ticks: ARCHIVE.xarth.autoFlight, paint: RANGED_SHOT };
-      return null;
+      if (name === "14984") return [travel(ARCHIVE.xarth.autoFlight, MAGIC_SHOT, GRAPHICS.xarthMagic)];
+      if (name === "14985") return [travel(ARCHIVE.xarth.autoFlight, RANGED_SHOT, GRAPHICS.xarthRanged)];
+      if (name === "14992") return [travel(ARCHIVE.xarth.autoFlight, TYPELESS_SHOT, GRAPHICS.xarthTell)];
+      return [];
     case "dagonhai":
-      if (name === "14597") return { ticks: ARCHIVE.dagonhai.autoFlight, paint: MAGIC_SHOT };
-      if (name === "14593") return { ticks: ARCHIVE.dagonhai.autoFlight, paint: RANGED_SHOT };
-      if (name === "throw") return { ticks: ARCHIVE.dagonhai.bookFlight, paint: TYPELESS_SHOT };
-      return null;
+      if (name === "14597") return [travel(ARCHIVE.dagonhai.autoFlight, MAGIC_SHOT, GRAPHICS.dagonMagic)];
+      if (name === "14593") return [travel(ARCHIVE.dagonhai.autoFlight, RANGED_SHOT, GRAPHICS.dagonRanged)];
+      if (name === "throw") return [travel(ARCHIVE.dagonhai.bookFlight, TYPELESS_SHOT, null)];
+      return [];
     case "ocellus-p1":
-      if (name === "4229") return { ticks: ARCHIVE.p1.volleyFlight, paint: MAGIC_SHOT };
-      if (name === "4232") return { ticks: ARCHIVE.p1.volleyFlight, paint: RANGED_SHOT };
-      if (name === "14810") return { ticks: ARCHIVE.p1.annihilationDelay, paint: TYPELESS_SHOT };
-      return null;
+      if (name === "4229") return [travel(ARCHIVE.p1.volleyFlight, MAGIC_SHOT, GRAPHICS.p1Magic)];
+      if (name === "4232") return [travel(ARCHIVE.p1.volleyFlight, RANGED_SHOT, GRAPHICS.p1Ranged)];
+      if (name === "14810") return [travel(ARCHIVE.p1.annihilationDelay, TYPELESS_SHOT, null)];
+      return [];
     case "ocellus-p2":
-      if (name === "volley") return { ticks: ARCHIVE.p2.hitDelay, paint: TYPELESS_SHOT };
-      return null;
+      if (name === "volley") return [travel(ARCHIVE.p2.hitDelay, TYPELESS_SHOT, null)];
+      return [];
+    case "ocellus-p3":
+      if (name === "void-shot") return [travel(1, TYPELESS_SHOT, GRAPHICS.p3Void)];
+      return [];
     default: {
       const unhandled: never = launch.id;
       return unhandled;

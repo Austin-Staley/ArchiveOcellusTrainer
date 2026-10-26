@@ -24,6 +24,7 @@ import {
   vinesAround,
 } from "./layout";
 import type { Quadrant } from "./layout";
+import { SEQUENCES } from "./poses";
 import { ARCHIVE } from "./timings";
 
 export type { RaidOptions } from "./catalog";
@@ -58,7 +59,7 @@ type Scheduled = Readonly<{ at: number; event: RaidEvent }>;
 
 type BorkMemory = Readonly<{ id: "bork"; nextDrum: number; suppressUntil: number; nextBomb: number; chainTell: number | null; pending: readonly Scheduled[]; wiped: boolean }>;
 type EzekielMemory = Readonly<{ id: "ezekiel"; enraged: boolean; marked: Tile; wave: number }>;
-type GuardianMemory = Readonly<{ id: "guardian"; form: "flying" | "landing" | "grounded" | "takeoff"; landAt: number; takeoffAt: number; nextAuto: number; nextMushroom: number; nextBeam: number; enraged: boolean; nextVine: number; vineStop: number; pending: readonly Scheduled[] }>;
+type GuardianMemory = Readonly<{ id: "guardian"; form: "flying" | "landing" | "grounded" | "takeoff"; landAt: number; takeoffAt: number; nextAuto: number; nextMushroom: number; nextBeam: number; enraged: boolean; nextVine: number; vineStop: number; groundings: number; pending: readonly Scheduled[] }>;
 type MoiaMemory = Readonly<{ id: "moia"; phase: "p1" | "gone" | "p2"; reappear: number; nextChant: number; chants: number; station: number; hopped: number }>;
 type XarthMemory = Readonly<{ id: "xarth"; phase: "p1" | "p2" }>;
 type DagonMemory = Readonly<{ id: "dagonhai"; stunned: boolean }>;
@@ -93,7 +94,7 @@ export function initialMemory(id: RaidId): RaidMemory {
     case "ezekiel":
       return { id, enraged: false, marked: ROOMS.ezekiel.player, wave: 0 };
     case "guardian":
-      return { id, form: "flying", landAt: -1, takeoffAt: -1, nextAuto: 0, nextMushroom: ARCHIVE.guardian.mushroomInterval, nextBeam: -1, enraged: false, nextVine: -1, vineStop: -1, pending: [] };
+      return { id, form: "flying", landAt: -1, takeoffAt: -1, nextAuto: 0, nextMushroom: ARCHIVE.guardian.mushroomInterval, nextBeam: -1, enraged: false, nextVine: -1, vineStop: -1, groundings: 0, pending: [] };
     case "moia":
       return { id, phase: "p1", reappear: -1, nextChant: -1, chants: 0, station: 0, hopped: 0 };
     case "xarth":
@@ -202,7 +203,7 @@ function stepEzekiel(memory: EzekielMemory, options: RaidOptions, input: RaidInp
     const origin = next.wave;
     const index = Math.floor((at - origin) / ARCHIVE.ezekiel.waveInterval);
     if ((at - origin) % ARCHIVE.ezekiel.waveInterval === 0) {
-      events.push(attack("wave", "4175"));
+      events.push(attack("wave", `${ARCHIVE.ezekiel.waveAnim}`));
       events.push({ kind: "mark", tiles: ezShape(index), colour: "#d8e27a", text: "safe", ticks: 6 });
       events.push(attack("wave-arm", "4"), attack("wave-arm", "5"), attack("wave-arm", "6"));
     }
@@ -228,7 +229,10 @@ function stepEzekiel(memory: EzekielMemory, options: RaidOptions, input: RaidInp
   if (told !== null && sameTile(input.player, next.marked)) {
     events.push(damage("lightning", "typeless", ARCHIVE.ezekiel.lightning.damage, ARCHIVE.ezekiel.lightning.damage));
   }
-  if (ezSpecials(at - ARCHIVE.ezekiel.stunAt) !== null && options.swordCrossesBoss) events.push(attack("stun", "8"));
+  if (ezSpecials(at - ARCHIVE.ezekiel.stunAt) !== null && options.swordCrossesBoss) events.push(attack("stun", `${SEQUENCES.ezekiel.stun}`));
+  if (ezSpecials(at - ARCHIVE.ezekiel.stunAt - ARCHIVE.ezekiel.stunRecover) !== null && options.swordCrossesBoss) {
+    events.push(attack("stun-end", `${SEQUENCES.ezekiel.recover}`));
+  }
   if (ezSpecials(at - ARCHIVE.ezekiel.healAt) !== null && !options.swordCrossesBoss) {
     events.push({ kind: "heal-boss", amount: ARCHIVE.ezekiel.healAmount });
     events.push(attack("heal", "14688"));
@@ -279,12 +283,14 @@ function stepGuardian(memory: GuardianMemory, options: RaidOptions, input: RaidI
     events.push(phase("grounded"));
     events.push(attack("14747", "land"));
     if (reach <= rules.landingReach) events.push(damage("landing", "typeless", rules.landingDamage, rules.landingDamage));
-    const takeoffAt = at + rules.grounded;
+    const stay = rules.groundedStays[Math.min(next.groundings, rules.groundedStays.length - 1)] ?? rules.groundedStays[0];
+    const takeoffAt = at + stay;
     events.push(...[0, 1, 2].map((step) => attack("swipe", `${rules.swipe.tell[step] ?? 0}`)));
     const swipeDamage = damage("swipe", "melee", rules.swipe.prayed, rules.swipe.unprayed);
     next = {
       ...next,
       form: "grounded",
+      groundings: next.groundings + 1,
       takeoffAt,
       nextVine: at + rules.vineFirst,
       vineStop: takeoffAt - rules.vineBeforeTakeoff,
@@ -302,7 +308,7 @@ function stepGuardian(memory: GuardianMemory, options: RaidOptions, input: RaidI
   }
   if (next.form === "takeoff" && at === next.takeoffAt + rules.takeoff) {
     events.push(phase("flying"));
-    next = { ...next, form: "flying", nextAuto: next.takeoffAt + rules.autoAfterTakeoff, landAt: -1 };
+    next = { ...next, form: "flying", nextAuto: next.enraged ? -1 : next.takeoffAt + rules.autoAfterTakeoff, landAt: -1 };
   }
   if (next.enraged && at === next.nextBeam) {
     events.push(attack("beam", "14754"));
@@ -310,7 +316,7 @@ function stepGuardian(memory: GuardianMemory, options: RaidOptions, input: RaidI
     const hit = aligned
       ? damage("beam", "typeless", rules.beamAligned, rules.beamAligned)
       : damage("beam", "magic", rules.beamPrayed, rules.beamUnprayed);
-    next = { ...next, nextBeam: at + rules.beamInterval, pending: later(next.pending, at, hit, at + options.guardianBeamDelay) };
+    next = { ...next, nextBeam: at + rules.beamInterval, nextAuto: -1, pending: later(next.pending, at, hit, at + options.guardianBeamDelay) };
   } else if (events.length >= 0) {
     next = { ...next, pending: keep(next.pending, at) };
   }
@@ -364,7 +370,10 @@ function stepMoia(memory: MoiaMemory, options: RaidOptions, input: RaidInput, at
     const place = BINDER_STOPS[(index + next.hopped) % BINDER_STOPS.length] ?? stop;
     return Math.max(Math.abs(place.x - input.player.x), Math.abs(place.y - input.player.y)) <= rules.binderReach;
   });
-  if (nearBinder) events.push(damage("binder", "typeless", rules.binderDamage, rules.binderDamage));
+  if (at % rules.binderAttack === 0) {
+    events.push(attack("14791", "14791"));
+    if (nearBinder) events.push(damage("binder", "typeless", rules.binderDamage, rules.binderDamage));
+  }
   if (next.phase === "p2" && at === next.nextChant) {
     events.push(attack("chant", "14787"));
     if (next.chants > 0) {

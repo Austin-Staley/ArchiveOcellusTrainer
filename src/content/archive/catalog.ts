@@ -17,6 +17,29 @@ export type RaidOptions = Readonly<{
 export const RAID_IDS = ["bork", "ezekiel", "guardian", "moia", "xarth", "dagonhai", "ocellus-p1", "ocellus-p2", "ocellus-p3"] as const;
 export type RaidId = (typeof RAID_IDS)[number];
 
+export type GearPlan = "ranged" | "melee";
+
+/** P1 is ranged and P2 is crush, as requested. The other rooms follow the captured top weapon, and phase 3 follows the crush tank note. */
+export function defaultGear(id: RaidId): GearPlan {
+  switch (id) {
+    case "ezekiel":
+    case "ocellus-p2":
+    case "ocellus-p3":
+      return "melee";
+    case "bork":
+    case "guardian":
+    case "moia":
+    case "xarth":
+    case "dagonhai":
+    case "ocellus-p1":
+      return "ranged";
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
+}
+
 export function isRaidId(value: string): value is RaidId {
   switch (value) {
     case "bork":
@@ -47,11 +70,12 @@ export const ENCOUNTERS: readonly Readonly<{ id: RaidId | "ocellus-p4"; label: s
   { id: "dagonhai", label: "Dagon'hai trio" },
 ];
 
-const KNOWN = ["encounter", "seed", "invincible", "bosshp", "enrage", "beam", "ezenrage", "sword", "smorkdef", "moiahp", "p2beam", "p2floors", "bladehp"];
+const KNOWN = ["encounter", "seed", "invincible", "bosshp", "enrage", "beam", "ezenrage", "sword", "smorkdef", "moiahp", "p2beam", "p2floors", "bladehp", "gear"];
 
 export type RaidLaunch = Readonly<{
   id: RaidId;
   options: RaidOptions;
+  gear: GearPlan;
   invincible: boolean;
   bossHp: number | null;
   rejected: readonly string[];
@@ -115,10 +139,13 @@ export function parseRaid(url: URL, id: RaidId, freshSeed: () => number): RaidLa
   if (p2beam !== null && p2beam !== "50" && p2beam !== "27") rejected.push(`p2beam=${p2beam}`);
   if (p2floors !== null && p2floors !== "2" && p2floors !== "3") rejected.push(`p2floors=${p2floors}`);
   if (bladehp !== null && bladehp !== "2500" && bladehp !== "1000") rejected.push(`bladehp=${bladehp}`);
+  const gearRaw = url.searchParams.get("gear");
+  const gear = gearRaw === "ranged" || gearRaw === "melee" ? gearRaw : defaultGear(id);
+  if (gearRaw !== null && gearRaw !== "ranged" && gearRaw !== "melee") rejected.push(`gear=${gearRaw}`);
   const rawHp = url.searchParams.get("bosshp");
   const bossHp = rawHp !== null && /^\d{1,6}$/.test(rawHp) ? Number(rawHp) : null;
   if (rawHp !== null && bossHp === null) rejected.push(`bosshp=${rawHp}`);
   const invincible = url.searchParams.get("invincible");
   if (invincible !== null && invincible !== "on") rejected.push(`invincible=${invincible}`);
-  return { id, options, invincible: invincible === "on", bossHp, rejected };
+  return { id, options, gear, invincible: invincible === "on", bossHp, rejected };
 }

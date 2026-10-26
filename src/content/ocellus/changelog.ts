@@ -2,6 +2,15 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.1",
+    notes: [
+      "Bosses play recorded stand, attack and death animations, and hits show as hitsplats.",
+      "Each room wears a ranged or crush setup, and Settings can switch it.",
+      "The arena is the captured map region. Ocellus's floor uses that overlay's map colour. A few projectiles, the Blade's animations, and Ocellus's death animation are still stand-ins.",
+      "The Archive Guardian stays down 35 ticks, then 41, then 47.",
+    ],
+  },
+  {
     version: "2026.10.25.6",
     notes: [
       "Bork, Ezekiel, the Archive Guardian, Moia, Xarth, the Dagon'hai trio, and Ocellus phases 1 to 3 now show an arena, you, and the bosses in the 3D view.",

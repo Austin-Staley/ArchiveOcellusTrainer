@@ -4,7 +4,7 @@ import { CacheRender, ControlPanelController, SETTINGS_STORAGE_KEY, Settings, So
 import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
-import { ENCOUNTERS, isRaidId, parseRaid } from "./content/archive/catalog";
+import { ENCOUNTERS, defaultGear, isRaidId, parseRaid } from "./content/archive/catalog";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import { P3Region } from "./content/ocellus/js/P3Region";
@@ -530,6 +530,13 @@ function RaidControls({ launch, region }: Readonly<{ launch: RaidLaunch; region:
             </select>
           </label>
         )}
+        <label>
+          Gear{" "}
+          <select id="gear" value={launch.gear} onChange={(event) => setRaidParam("gear", event.target.value, defaultGear(launch.id))}>
+            <option value="ranged">Ranged</option>
+            <option value="melee">Crush</option>
+          </select>
+        </label>
         <label>
           Seed <input id="seed" inputMode="numeric" value={typedSeed ?? String(launch.options.seed)} onInput={(event) => setTypedSeed(event.currentTarget.value)} onKeyDown={(event) => event.stopPropagation()} />
         </label>

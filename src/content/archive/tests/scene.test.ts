@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
 import { seed, tick } from "../../../sim/brands";
-import { GRAPHICS } from "../poses";
+import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
 
@@ -68,6 +68,11 @@ describe("raid rooms in 3D", () => {
     if (!blade) throw new Error("the Blade was not in the room");
     expect(blade.get3dModel()).toBeInstanceOf(CacheRenderModel);
     expect({ x: blade.location.x, y: blade.location.y, npc: phase2.region.snapshot()?.boss.npcId }).toEqual({ x: 11, y: 13, npc: ARCHIVE.p2.npcId });
+    expect(blade.getPerceivedLocation(0).z).toBe(-BLADE_SEAT);
+    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    const ocellus = [...phase1.region.mobs, ...phase1.region.newMobs].find((mob) => mob.mobName() === "Ocellus");
+    if (!ocellus) throw new Error("Ocellus was not in phase 1");
+    expect(ocellus.getPerceivedLocation(0).z).toBe(0);
     fight(phase2.world, 12);
     const volley = phase2.region.entities.find((entity) => entity.entityName() === "Stand-in projectile");
     if (!volley) throw new Error("the volley was not a stand-in");

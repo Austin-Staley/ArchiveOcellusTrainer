@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.5",
+    notes: [
+      "The Blade stands in the centre of its tile marker. The drawn sword starts above the model origin, and phase 2 lowers it onto that marker.",
+      "The blade tip stays inside the opening view.",
+    ],
+  },
+  {
     version: "2026.10.26.4",
     notes: [
       "Phase 2 shows one Blade, the sword on the boss tile. Phase 1 no longer draws the pair beside it.",

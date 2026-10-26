@@ -8,7 +8,7 @@ import { advance, initialMemory } from "./clock";
 import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { CENSERS, ROOMS } from "./layout";
 import { dress } from "./loadout";
-import { BLADE_MODEL, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
+import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
 import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
 
@@ -87,6 +87,13 @@ class PracticeMob extends Mob {
     if (this.npcId === ARCHIVE.p2.npcId) return CacheRenderModel.forRenderable(this, CacheRenderReferences.model(BLADE_MODEL), { basisRotation: 0 });
     if (modelledNpc(this.npcId)) return CacheRenderModel.forRenderable(this, CacheRenderReferences.npc(this.npcId));
     return BasicModel.forRenderable(this);
+  }
+
+  override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
+    const at = super.getPerceivedLocation(tickPercent);
+    // The marker stays on the walk tile. Only the mesh drops, onto the centre of that marker.
+    if (this.npcId !== ARCHIVE.p2.npcId) return at;
+    return { x: at.x, y: at.y, z: at.z - BLADE_SEAT };
   }
 
   override get bonuses(): UnitBonuses {

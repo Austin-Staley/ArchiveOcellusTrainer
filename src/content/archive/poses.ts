@@ -73,6 +73,12 @@ export const REGION_IDS = {
 export const BLADE_SCENERY = 62706;
 export const BLADE_MODEL = 62699;
 export const BLADE_STAND = 14873;
+/**
+ * Tiles the drawn sword sits above model 62699's origin after sequence 14873.
+ * Cache 2746. The faces that reach the origin are hidden; the sword that remains starts here.
+ * A downward camera paints that height behind the ground marker, so phase 2 lowers the actor by it.
+ */
+export const BLADE_SEAT = 3.135;
 
 export type ArenaPlace = Readonly<{ region: number; offsetX: number; offsetY: number; elevation: number }>;
 

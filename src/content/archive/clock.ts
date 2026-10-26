@@ -494,6 +494,8 @@ function stepP1(memory: P1Memory, input: RaidInput, at: number): Readonly<{ memo
       events.push(phase("corner"));
       events.push(bossAt(P1_CORNERS[next.corner] ?? P1_CORNERS[0]));
     }
+    if (elapsed % rules.chargeVisual === 0) events.push(attack("14809", "14809"));
+    if (elapsed % rules.chargeVisual === rules.chargeVisual / 2) events.push(attack("14811", "14811"));
     if (elapsed % rules.tendrilGap === 0 && elapsed / rules.tendrilGap < rules.tendrilCount) {
       const index = elapsed / rules.tendrilGap;
       events.push(attack("tendril", `${index + 1}`));

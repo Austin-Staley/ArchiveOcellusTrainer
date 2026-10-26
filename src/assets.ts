@@ -64,7 +64,9 @@ export const ARCHIVE_OCELLUS_ASSETS = {
     ["raidDagonMagic", { id: GRAPHICS.dagonMagic }],
     ["raidP1Magic", { id: GRAPHICS.p1Magic }],
     ["raidP1Ranged", { id: GRAPHICS.p1Ranged }],
+    ["raidP2Volley", { id: GRAPHICS.p2Volley }],
     ["raidP3Void", { id: GRAPHICS.p3Void }],
+    ["raidP3Spin", { id: GRAPHICS.p3Spin }],
     ["raidSmorkBomb", { id: GRAPHICS.smorkBomb }],
   ]),
   playerAnimations: {

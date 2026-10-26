@@ -175,6 +175,12 @@ export const ARCHIVE = {
     defence: 215,
     defenceFloor: 129,
     volleyInterval: 5,
+    /**
+     * Unverified. Render digest 25 Oct 2026, 32 phase 1 files.
+     * Animation 14809 repeats most often every 8 ticks (174 gaps). 14811 does too (168 gaps).
+     * Other gaps are common, so 8 is the mode, not every sample.
+     */
+    chargeVisual: 8,
     /** Unverified. Render digest 25 Oct 2026: the volley lands about 2 ticks after the attack. The room uses 2. */
     volleyFlight: 2,
     prayed: 12,
@@ -241,6 +247,8 @@ export const ARCHIVE = {
     thresholds: [75, 50, 25],
     order: ["NW", "SW", "SE", "NE"],
     spinAt: 20,
+    /** Unverified. Render digest 25 Oct 2026, 31 phase 3 files: animation 14869 lasts 5 ticks and carries graphic 4325 on all 192 spins. */
+    spinGraphicTicks: 5,
     spinWave: [4, 7, 10],
     spinPrayed: 8,
     spinUnprayed: 42,

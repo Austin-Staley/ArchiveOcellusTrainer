@@ -117,6 +117,7 @@ Region 16472, plane 1. Offset (-25, -6).
 | Ocellus 16674 | model | npc 16674, idle 14805, no walk | npc 16674 | npc 16674 | matched |
 | Ocellus 16674 | corner path | several corner tiles in the histogram, no order | practice corners | practice corners | stand-in |
 | Ocellus 16674 | volley | 14806 graphic 4229, 14807 graphic 4232, flight about 2 | those ids, flight 2 | same | matched |
+| Ocellus 16674 | charge / slam visuals | 14809 and 14811, each most often every 8 ticks (174 and 168 gaps, 32 files) | slam 14811 only, on the scripted blast | 14809 on ticks divisible by 8, 14811 four ticks later, during a corner | fixed |
 | Ocellus 16674 | slam / strike | 14811 and 14810; the role labels are low confidence | slam 14811, strike 14810 | same | matched |
 | Ocellus 16674 | 14809 / 14812 / 14813 | roles not mapped onto a sim action | not attached | not attached | stand-in |
 | Ocellus 16674 | death | no captured death | none plays | none plays | stand-in |
@@ -134,7 +135,8 @@ Same region and plane. Offset (-19, -10).
 | The Blade 16676 | movement | does not move | stands | stands | matched |
 | The Blade 16676 | animations | none captured | none play | none play | stand-in |
 | Ocellus form 16675 | tile | no template position | not placed | not placed | stand-in |
-| Volley | projectile 4269 | source unresolved | coloured sphere, hit delay 4 | coloured sphere, hit delay 4 | stand-in |
+| Volley | ground graphic | gobj 4304, 1,262 spawns, life mode 3, 31 files; hit stays +4 | coloured sphere, hit delay 4 | graphic 4304, travel 4 | fixed |
+| Volley | projectile 4269 | source unresolved, flight about 2.8, 314 samples | not drawn | not drawn | stand-in |
 
 ## Ocellus phase 3
 
@@ -146,6 +148,7 @@ Same region and plane. Offset (-31, -11).
 | Ocellus 16677 | model | npc 16677 | npc 16677 | npc 16677 | matched |
 | Ocellus 16677 | movement | quadrant tiles in the histogram, no tick path | the quadrant script | the quadrant script | stand-in |
 | Ocellus 16677 | attacks | melee 14842, wave 14846, void shot 14851 graphic 4297, spin 14869 | those ids | those ids | matched |
+| Ocellus 16677 | spin graphic | 4325 on 192 of 192 spins, 31 files | not drawn | graphic 4325 held on the spin | fixed |
 | Ocellus 16677 | death | no captured death | none plays | none plays | stand-in |
 | Void rift 16678 | spawn tile | scattered | one rift two tiles from the player | same | stand-in |
 | Void rift 16678 | animations | spawn 14896, idle 14895, walk 14468, death 14897 | those ids on the one rift | same | matched |
@@ -165,6 +168,22 @@ The phase 4 view, not a raid-room grid. The digest has no template position for 
 | Ocellus 16677 | model | npc 16677, idle 14840, walk 14849 | npc 16677 | npc 16677 | matched |
 | Ocellus 16677 | deflect / pre-blast / melee | 14863, 14865, 14844 | those ids in the shipped loop | those ids, unchanged | matched |
 | Ocellus 16677 | death | no captured death used by this view | the shipped phase 4 death handling | unchanged | stand-in |
+
+## Ocellus, counted across the 182 segments
+
+The raw `capture-000.jsonl` files are not in this workspace. These counts are the digest built from all 182 segments (`fights_files` is the number of segments in that phase). A value is the mode of that distribution. The spread is the other gaps the digest kept.
+
+The digest does not record camera pitch, yaw, or zoom. The capture setup excludes those client timers. The shared camera is unchanged. Arena lighting is the cache's own light for the region. No light value was added.
+
+| Phase | segments | What the segments support | Sim after this pass |
+| --- | --- | --- | --- |
+| P1 | 32 | Boss mode tile (4126, 5672) plane 1, 129 of 2,167 samples. Hooded Figure on (4126, 5669) in all 32. Charge 14809 gap 8 in 174 gaps, also 37 (55), 28 (44), 29 (22). Slam 14811 gap 8 in 168 gaps. Volley graphics 4229 (1,187) and 4232 (1,046), flight mode 2.17, hit +2. Specials 14812/14813 with graphics 4266/4267, n=92 each, but the 81-tick gap is only 5 and 4 samples. | Charge and slam alternate on the 8-tick mode during a corner. The tendril script is unchanged. 14812/14813 stay off, because the interval is not one value. |
+| P2 | 31 | Blade on one tile in all 31, no animation. Ocellus form 16675 has spawn 14837 and the line 14878 in all 31, and no template tile. Volley gobj 4304 ×1,262, life mode 3. Projectile 4269 ×314, source unresolved, flight mode 2.8. Objects 62707 and 62709 spawn once per fight (31/31) and last about 32 and 84 ticks. | One Blade, seated as before. Volley draws 4304. 4269 is not drawn. 16675 is not placed. The extra blade objects are not added on top of the one sword. |
+| P3 | 31 | Boss mode tile (4132, 5666). Melee 14842 gap 3 in 559 of its gaps, wave 14846 gap 10 in 313. Spin 14869 every about 89 ticks (18 at 89, 14 at 72, 12 at 86) with graphic 4325 on all 192. Void shot 14851, graphic 4297, flight mode 0.5. Untether 14857 gap about 161, only a handful of repeats. Vine 16681 has no animation. Censers 62693, 62695, 62697, 62699 are present at load; the props note says 32 files. | Melee, wave, void shot, and spin ids unchanged. The spin draws 4325. The 89-tick and 161-tick gaps are not a single interval, so those clocks stay. Vine and censer tiles stay stand-ins. |
+| P4 | 8 | No template tile. Loop anims 14863 and 14864 and 14865 and 14856 and 14855 and 14844. 14863 repeats at 60 ticks in 8 of its gaps. | The shipped 60-tick loop is unchanged. It already plays 14863, 14864, 14865, and 14844. |
+| Adds | 31 | Rift, siphon, and augmenter spawn and death ids as in the earlier table. Positions are scattered, a few samples per tile. Siphon projectile 4303, flight 1, on the order of 180 shots. | One rift beside the player. Spawn tiles stay a stand-in. |
+
+Player hitsplats in these phases are type 17 for damage and type 13 for a block, plus type 6 heals. P1 boss hits are type 19 (8,203 on 16674). The view still draws the SDK damage, block, and heal images.
 
 ## Hitsplats
 

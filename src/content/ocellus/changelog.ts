@@ -2,6 +2,14 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.7",
+    notes: [
+      "In phase 1, Ocellus alternates the captured charge and slam animations on the 8-tick beat those 32 fights show most often.",
+      "Phase 2 draws the volley as ground graphic 4304. Projectile 4269 still has no source, so it is not drawn.",
+      "Phase 3 draws graphic 4325 on the spin. The phase 4 loop is unchanged.",
+    ],
+  },
+  {
     version: "2026.10.26.6",
     notes: [
       "The Smorks stand on the tile where every capture put them, and their bomb uses graphic 4440.",

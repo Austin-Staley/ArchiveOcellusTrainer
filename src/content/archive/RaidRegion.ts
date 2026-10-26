@@ -776,10 +776,10 @@ export class RaidRegion extends Region {
         this.say(`The volleys are graphics ${GRAPHICS.p1Magic} and ${GRAPHICS.p1Ranged}. Ocellus has no captured death animation, so none plays.`);
         return;
       case "ocellus-p2":
-        this.say("Projectile 4269 has no captured source, so the volley is a coloured stand-in. The Blade stands still, because the captures record no animation.");
+        this.say(`The volley is ground graphic ${GRAPHICS.p2Volley}. Projectile 4269 has no captured source, so it is not drawn. The Blade stands still, because the captures record no animation.`);
         return;
       case "ocellus-p3":
-        this.say(`The void shot is graphic ${GRAPHICS.p3Void}. Ocellus has no captured death animation, so none plays. The vine's animations are a stand-in.`);
+        this.say(`The void shot is graphic ${GRAPHICS.p3Void} and the spin is ${GRAPHICS.p3Spin}. Ocellus has no captured death animation, so none plays. The vine's animations are a stand-in.`);
         return;
       default: {
         const unhandled: never = this.launch.id;
@@ -961,10 +961,11 @@ function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
       if (name === "14810") return [travel(ARCHIVE.p1.annihilationDelay, TYPELESS_SHOT, null)];
       return [];
     case "ocellus-p2":
-      if (name === "volley") return [travel(ARCHIVE.p2.hitDelay, TYPELESS_SHOT, null)];
+      if (name === "volley") return [travel(ARCHIVE.p2.hitDelay, TYPELESS_SHOT, GRAPHICS.p2Volley)];
       return [];
     case "ocellus-p3":
       if (name === "void-shot") return [travel(1, TYPELESS_SHOT, GRAPHICS.p3Void)];
+      if (name === "spin") return [held(ARCHIVE.p3.spinGraphicTicks, GRAPHICS.p3Spin)];
       return [];
     default: {
       const unhandled: never = launch.id;

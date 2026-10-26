@@ -118,7 +118,7 @@ describe("raid rooms in 3D", () => {
     expect(shot.get3dModel()).toBeInstanceOf(CacheRenderModel);
   });
 
-  it("keeps the book throw and the phase 2 volley as coloured spheres", () => {
+  it("keeps the book throw as a coloured sphere and draws the phase 2 volley graphic", () => {
     const dagon = open("dagonhai", "?encounter=dagonhai&seed=1&invincible=on");
     fight(dagon.world, 32);
     const book = dagon.region.entities.find((entity) => entity.entityName() === "Stand-in projectile");
@@ -138,9 +138,9 @@ describe("raid rooms in 3D", () => {
     if (!ocellus) throw new Error("Ocellus was not in phase 1");
     expect(ocellus.getPerceivedLocation(0).z).toBe(0);
     fight(phase2.world, 12);
-    const volley = phase2.region.entities.find((entity) => entity.entityName() === "Stand-in projectile");
-    if (!volley) throw new Error("the volley was not a stand-in");
-    expect(volley.get3dModel()).toBeInstanceOf(BasicModel);
+    const volley = phase2.region.entities.find((entity) => entity.entityName() === `Projectile ${GRAPHICS.p2Volley}`);
+    if (!volley) throw new Error("the volley graphic was not launched");
+    expect(volley.get3dModel()).toBeInstanceOf(CacheRenderModel);
   });
 
   it("lands a hitsplat on the hit and does not apply that hit again next tick", () => {
@@ -195,6 +195,10 @@ describe("raid rooms in 3D", () => {
     expect(region.chat().some((line) => line.includes("censers are coloured stand-ins"))).toBe(true);
     fight(world, 1);
     expect(region.snapshot()?.boss.npcId).toBe(ARCHIVE.p3.npcId);
+    fight(world, ARCHIVE.p3.spinAt);
+    const spin = region.entities.find((entity) => entity.entityName() === `Projectile ${GRAPHICS.p3Spin}`);
+    if (!spin) throw new Error("the spin graphic was not launched");
+    expect(spin.get3dModel()).toBeInstanceOf(CacheRenderModel);
   });
 
   it.each<[RaidId, number]>([

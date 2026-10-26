@@ -32,7 +32,7 @@ export const SEQUENCES = {
   binder: { attack: 14791, death: 14792 },
   xarth: { magic: 14984, ranged: 14985, tell: 14992, blast: 14989, death: 14995 },
   dagon: { magic: 14597, ranged: 14593 },
-  p1: { magic: 14806, ranged: 14807, slam: 14811, strike: 14810 },
+  p1: { magic: 14806, ranged: 14807, charge: 14809, slam: 14811, strike: 14810 },
   p3: { melee: 14842, wave: 14846, voidShot: 14851, spin: 14869 },
   rift: { spawn: 14896, death: 14897 },
   siphon: { spawn: 14900, death: 14901 },
@@ -52,7 +52,11 @@ export const GRAPHICS = {
   dagonMagic: 1459,
   p1Magic: 4229,
   p1Ranged: 4232,
+  /** Ground graphic on the phase 2 volley. 31 fights, 1,262 spawns, life mode 3. Projectile 4269 stays unresolved. */
+  p2Volley: 4304,
   p3Void: 4297,
+  /** On every phase 3 spin, animation 14869. 31 fights, 192 of 192. */
+  p3Spin: 4325,
   /** From the Smorks, animation 14555. Flight in the capture is 4.5 ticks. */
   smorkBomb: 4440,
 } as const;
@@ -215,6 +219,9 @@ export function attackSequence(id: RaidId, name: string): Readonly<{ role: Actor
           return { role: "boss", sequence: SEQUENCES.p1.magic };
         case "4232":
           return { role: "boss", sequence: SEQUENCES.p1.ranged };
+        case "14809":
+          return { role: "boss", sequence: SEQUENCES.p1.charge };
+        case "14811":
         case "slam":
           return { role: "boss", sequence: SEQUENCES.p1.slam };
         case "14810":

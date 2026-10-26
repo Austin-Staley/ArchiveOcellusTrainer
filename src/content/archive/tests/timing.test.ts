@@ -127,6 +127,8 @@ describe("raid clocks", () => {
   it("sends seven corner tendrils and then the two-tile slam", () => {
     const rows = names("ocellus-p1", 44);
     expect(rows.filter((row) => row.name === "tendril").map((row) => row.at)).toEqual([0, 6, 12, 18, 24, 30, 36]);
+    expect(rows.filter((row) => row.name === "14809").map((row) => row.at)).toEqual([0, 8, 16, 24, 32, 40]);
+    expect(rows.filter((row) => row.name === "14811").map((row) => row.at)).toEqual([4, 12, 20, 28, 36, 44]);
     expect(rows.find((row) => row.name === "slam")?.at).toBe(41);
     const walked = project("ocellus-p1", options, 47, hold("ocellus-p1"));
     const volley = walked.find((stamp) => stamp.event.kind === "attack" && (stamp.event.name === "4229" || stamp.event.name === "4232"));

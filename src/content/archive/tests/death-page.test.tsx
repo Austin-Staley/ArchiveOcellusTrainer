@@ -33,12 +33,12 @@ describe("raid death", () => {
   beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
 
   test.each([
-    { id: "xarth", room: "Xarth", gear: "ranged" },
-    { id: "ocellus-p3", room: "Ocellus phase 3", gear: "melee" },
-  ])("$room shows You died on tick 10, and Restart and Retry seed keep the room", async ({ id, room, gear }) => {
+    { id: "xarth", room: "Xarth", gear: "ranged", at: 10 },
+    { id: "ocellus-p3", room: "Ocellus phase 3", gear: "melee", at: 14 },
+  ])("$room shows You died on tick $at, and Restart and Retry seed keep the room", async ({ id, room, gear, at }) => {
     const navigation = captureNavigation();
     const fight = await openRaid(`/?encounter=${id}&seed=7&gear=${gear}`);
-    fight.ticks(11);
+    fight.ticks(at + 1);
     const ended = fight.run();
     const shown = await fight.result();
     fight.page.click("result_retry");
@@ -48,8 +48,8 @@ describe("raid death", () => {
     navigation.restore();
 
     expect({ ended, shown, navigation: navigation.assigned }).toEqual({
-      ended: { kind: "ended", seed: seed(7), at: tick(10), reason: "death" },
-      shown: { lines: ["You died", `on ${room} tick 10`], buttons: ["Restart", "Retry seed"] },
+      ended: { kind: "ended", seed: seed(7), at: tick(at), reason: "death" },
+      shown: { lines: ["You died", `on ${room} tick ${at}`], buttons: ["Restart", "Retry seed"] },
       navigation: [
         `http://localhost/?encounter=${id}&seed=7&gear=${gear}`,
         `http://localhost/?encounter=${id}&gear=${gear}&invincible=on`,

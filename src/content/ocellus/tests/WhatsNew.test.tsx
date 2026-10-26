@@ -14,11 +14,11 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.12",
+  version: "2026.10.26.13",
   date: "2026-10-26",
   notes: [
-    "The 3D view draws in its own canvas under the HUD. Clicks stay on the same canvas.",
-    "The hidden phase 3 drill runs quadrant 1 as the logged chain: swings, a shadow slash, a magic panic shot, the spin, Untether, Insolence, and the fall.",
+    "Phase 2's portal orders run orange, then red, then green, clockwise. The seed picks the starting quadrant and the first colour.",
+    "A volley line shows that colour and both letter names for the order. The portals on the floor stay the captured orange and purple models.",
   ],
 };
 

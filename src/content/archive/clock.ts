@@ -23,6 +23,8 @@ import {
 } from "./layout";
 import { blastRing, cornerCrack } from "./cracks";
 import type { Quadrant } from "./layout";
+import { PORTAL_COLOURS, gapsFor, nextColour, volleyLabel } from "./portals";
+import type { PortalColour } from "./portals";
 import { SEQUENCES } from "./poses";
 import { ARCHIVE } from "./timings";
 
@@ -52,7 +54,7 @@ export type RaidEvent =
   | Readonly<{ kind: "chat"; text: string }>
   | Readonly<{ kind: "pad"; tile: Tile; next: Tile }>
   | Readonly<{ kind: "portals"; look: "idle" }>
-  | Readonly<{ kind: "portals"; look: "lit"; quadrant: Quadrant; nsGap: number; ewGap: number }>;
+  | Readonly<{ kind: "portals"; look: "lit"; quadrant: Quadrant; colour: PortalColour; nsGap: number; ewGap: number }>;
 
 export type Stamp = Readonly<{ at: Tick; event: RaidEvent }>;
 
@@ -598,28 +600,39 @@ function stepP1(memory: P1Memory, options: RaidOptions, input: RaidInput, at: nu
   return { memory: next, events };
 }
 
-const PATTERNS = {
-  A: [[3, 3], [3, 4], [2, 5], [3, 3], [3, 5], [4, 4]],
-  B: [[2, 2], [4, 2], [2, 4], [2, 2], [3, 3], [5, 2]],
-  C: [[2, 1], [2, 4], [2, 6], [4, 4], [3, 3], [4, 1]],
-} as const;
+const QUADRANTS = ["NW", "NE", "SE", "SW"] as const;
 
-type PatternName = keyof typeof PATTERNS;
+export type PortalOpening = Readonly<{
+  quadrants: readonly Quadrant[];
+  colours: readonly PortalColour[];
+}>;
 
-export function patternOrder(runSeed: number): readonly PatternName[] {
-  const bucket = runSeed % 31;
-  if (bucket < 20) return ["B", "A", "C"];
-  if (bucket < 28) return ["A", "C", "B"];
-  return ["C", "B", "A"];
+function cycleAt<T>(rows: readonly T[], index: number): T {
+  const count = rows.length;
+  const value = rows[((index % count) + count) % count];
+  if (value === undefined) throw new Error("empty portal cycle");
+  return value;
 }
 
-const P2_QUADS: readonly Quadrant[] = ["NW", "NE", "SE", "SW"];
+/**
+ * The starting quadrant and the first sequence colour vary between raids, so both are only Likely.
+ * The seed picks them. From that pair the colours run orange → red → green and the quadrants run clockwise,
+ * which is what makes volley 1 predict all 18.
+ */
+export function portalOpening(runSeed: number): PortalOpening {
+  const quadrantStart = Math.abs(runSeed) % QUADRANTS.length;
+  const colourStart = Math.floor(Math.abs(runSeed) / QUADRANTS.length) % 3;
+  return {
+    quadrants: [0, 1, 2].map((step) => cycleAt(QUADRANTS, quadrantStart + step)),
+    colours: [0, 1, 2].map((step) => cycleAt(PORTAL_COLOURS, colourStart + step)),
+  };
+}
 
 function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: number): Readonly<{ memory: P2Memory; events: RaidEvent[] }> {
   const rules = ARCHIVE.p2;
   const tiles = [...memory.tiles, input.player].slice(-6);
   const events: RaidEvent[] = [];
-  const order = patternOrder(options.seed);
+  const opening = portalOpening(options.seed);
   if (at === rules.portalsRise) {
     events.push(phase("portals"));
     events.push({ kind: "portals", look: "idle" });
@@ -630,18 +643,19 @@ function stepP2(memory: P2Memory, options: RaidOptions, input: RaidInput, at: nu
   if (at === rules.end) events.push(phase("complete"));
   for (const bank of rules.banks) if (at === bank) events.push({ kind: "bank-halve" });
   for (let q = 0; q < options.p2Floors; q += 1) {
-    const quadrant = P2_QUADS[q] ?? "NW";
-    const letter = order[q % order.length] ?? "B";
-    const pairs = PATTERNS[letter];
+    const quadrant = opening.quadrants[q];
+    const colour = opening.colours[q];
+    if (quadrant === undefined || colour === undefined) continue;
     const first = rules.firstVolley + q * (rules.spacing * (rules.volleys - 1) + rules.padAfterSixth + rules.nextAfterPad + rules.hitDelay - rules.hitDelay);
     const span = rules.spacing * (rules.volleys - 1);
     const sixth = first + span;
     for (let i = 0; i < rules.volleys; i += 1) {
       const volley = first + i * rules.spacing;
-      const pair = pairs[i] ?? pairs[0];
+      const pair = gapsFor(colour, i);
       if (at === volley) {
-        events.push(attack("volley", `${letter} ${pair[0]},${pair[1]}`));
-        events.push({ kind: "portals", look: "lit", quadrant, nsGap: pair[0], ewGap: pair[1] });
+        const forecast = i === 0 && q === 0 ? ` Next clockwise: ${nextColour(colour, 1)}, then ${nextColour(colour, 2)}.` : "";
+        events.push(attack("volley", `${volleyLabel(colour)} in ${quadrant}, gaps ${pair[0]} and ${pair[1]}.${forecast}`));
+        events.push({ kind: "portals", look: "lit", quadrant, colour, nsGap: pair[0], ewGap: pair[1] });
       }
       if (at === volley + rules.hitDelay) {
         events.push({ kind: "portals", look: "idle" });

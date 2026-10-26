@@ -3,7 +3,7 @@ import type { Tick } from "../../../sim/brands";
 import { seed, tile } from "../../../sim/brands";
 import { defaultOptions } from "../catalog";
 import type { RaidId } from "../catalog";
-import { patternOrder, project } from "../clock";
+import { portalOpening, project } from "../clock";
 import type { RaidInput } from "../clock";
 import { cornerCrack } from "../cracks";
 import { DAGON_TRAIL, ROOMS, WAVE_SKIP, beamHits, centreTendril } from "../layout";
@@ -152,7 +152,7 @@ describe("raid clocks", () => {
     const lit = rows.find((stamp) => stamp.event.kind === "portals" && stamp.at === 11);
     if (!risen || risen.event.kind !== "portals" || !lit || lit.event.kind !== "portals" || lit.event.look !== "lit") throw new Error("the portal grid did not light");
     expect(risen.event).toEqual({ kind: "portals", look: "idle" });
-    expect(lit.event).toEqual({ kind: "portals", look: "lit", quadrant: "NW", nsGap: 2, ewGap: 2 });
+    expect(lit.event).toEqual({ kind: "portals", look: "lit", quadrant: "NE", colour: "orange", nsGap: 2, ewGap: 2 });
     expect(rows.filter((stamp) => stamp.event.kind === "phase" && stamp.event.name === "blade-open").map((stamp) => stamp.at)).toEqual([7]);
     expect(rows.filter((stamp) => stamp.event.kind === "bank-halve").map((stamp) => stamp.at)).toEqual([46, 88, 124]);
     expect(rows.some((stamp) => stamp.event.kind === "chat" && stamp.at === 123)).toBe(true);
@@ -185,10 +185,34 @@ describe("raid clocks", () => {
   });
 
   it("keeps the orange-on-orange pocket safe and the next purple tile hit", () => {
-    expect(patternOrder(1)[0]).toBe("B");
     expect(beamHits("NW", 2, 2, tile(8, 15))).toBe(false);
     expect(beamHits("NW", 2, 2, tile(10, 15))).toBe(true);
     expect(WAVE_SKIP.NW.outer.x).toBe(6);
+  });
+
+  it("seeds the starting quadrant and first colour, then runs orange, red, green clockwise", () => {
+    expect(portalOpening(1)).toEqual({
+      quadrants: ["NE", "SE", "SW"],
+      colours: ["orange", "red", "green"],
+    });
+    expect(portalOpening(4)).toEqual({
+      quadrants: ["NW", "NE", "SE"],
+      colours: ["red", "green", "orange"],
+    });
+    expect(portalOpening(8)).toEqual({
+      quadrants: ["NW", "NE", "SE"],
+      colours: ["green", "orange", "red"],
+    });
+    const rows = project("ocellus-p2", options, 131, hold("ocellus-p2"));
+    const lit = rows.flatMap((stamp) => (stamp.event.kind === "portals" && stamp.event.look === "lit" ? [stamp.event] : []));
+    expect(lit).toHaveLength(18);
+    expect(lit.slice(0, 6).every((event) => event.quadrant === "NE" && event.colour === "orange")).toBe(true);
+    expect(lit.slice(6, 12).every((event) => event.quadrant === "SE" && event.colour === "red")).toBe(true);
+    expect(lit.slice(12, 18).every((event) => event.quadrant === "SW" && event.colour === "green")).toBe(true);
+    const first = rows.find((stamp) => stamp.event.kind === "attack" && stamp.event.name === "volley");
+    expect(first?.event).toMatchObject({
+      text: "orange · luuj A · reference C in NE, gaps 2 and 2. Next clockwise: red, then green.",
+    });
   });
 
   it("fires six portal volleys from tick 11 and opens the orange pad", () => {
@@ -197,7 +221,7 @@ describe("raid clocks", () => {
     const pad = rows.find((stamp) => stamp.event.kind === "pad");
     expect(volleys).toEqual([11, 16, 21, 26, 31, 36]);
     expect(pad?.at).toBe(38);
-    expect(pad?.event).toMatchObject({ kind: "pad", next: { x: 16, y: 16 } });
+    expect(pad?.event).toMatchObject({ kind: "pad", next: { x: 16, y: 8 } });
   });
 
   it("follows the phase 3 auto offsets and the 13-tick collapse", () => {

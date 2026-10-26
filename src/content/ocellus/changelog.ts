@@ -2,6 +2,13 @@ import type { Changelog } from "../../releases";
 
 export const CHANGELOG: Changelog = [
   {
+    version: "2026.10.26.13",
+    notes: [
+      "Phase 2's portal orders run orange, then red, then green, clockwise. The seed picks the starting quadrant and the first colour.",
+      "A volley line shows that colour and both letter names for the order. The portals on the floor stay the captured orange and purple models.",
+    ],
+  },
+  {
     version: "2026.10.26.12",
     notes: [
       "The 3D view draws in its own canvas under the HUD. Clicks stay on the same canvas.",

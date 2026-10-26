@@ -281,7 +281,19 @@ Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smor
 
 Phase 1's floor vines are the corner cracks from the fight logs (upstream #87), drawn on plane 1. Seven cracks open on the charge tick and every 2 ticks after. Each is 8 tiles and closes 5 ticks later. The far tile waits 60 client cycles and each tile closer waits one cycle more. The spotanim family is the direction back toward him: straight 4236–4247 and diagonal 4248–4259, start piece on the far tile, the middle piece along the line, the end piece as it closes. An x or y crack runs straight. The corner crack runs on the diagonal. The slam paints floor spotanims 4262–4265 on the tiles within 2 of his 3×3.
 
-Phase 2's portals are the 24 locs from upstream #79. They rise at tick 2, six 2×1 portals on each arm. Orange is model 62758 (loc 62684). Purple is model 62757 (loc 62685). Both loop animation 14830. North, east, south and west use loc rotations 3, 0, 1 and 2. A round lights at 11, then 53, then 95, and the lit pair of arms turns with the quadrant. Ten of the twelve portals on those arms go purple. The other one on each arm stays orange: that gap is the colour to stand in, and the orange-by-orange pocket does not take the hit. Purple fires. The damage is the existing typeless 18–27, and prayer does not block it. The 2D floor paints the same orange and purple tiles.
+Phase 2's portals are the 24 locs from upstream #79. They rise at tick 2, six 2×1 portals on each arm. The gap is model 62758 (loc 62684). A lit portal is model 62757 (loc 62685). Both loop animation 14830. North, east, south and west use loc rotations 3, 0, 1 and 2. Austin called the grid purple and orange. That matches these two captured objects: the 25 Oct render digest lists 62684 (7,235 spawns) and 62685 (6,870) in the phase 2 room, and no third portal object. The room keeps those two models. Orange on the model is the gap. Purple on the model fires. The damage is the existing typeless 18–27, and prayer does not block it. The 2D floor paints the same two colours.
+
+The sequence colour is separate from the model colour. Austin's dossier now marks the cycle Verified: the three orders run orange → red → green, clockwise through the quadrants, so volley 1 predicts all 18. The cited support is 55/55 in the captures, 87/87 in VERIFIED-REFERENCE.md, and the same order in kjc623's ocellus-portals (`PortalSequences.Colour`). The marked tile of each wave is that plugin's `(columnsOut, rowsOut)` from the quadrant's inner corner. The sim's portal bands already contain every one of those tiles. The dossier's safe-tile bands were drawn one tile further out (`x = 28 − 2·col`, `y = 43 + 2·row` on the north-west). The room does not use that shift: the marked tile stays safe, and the dossier's outer corner takes the hit.
+
+The starting quadrant and the first colour vary between raids, so both stay Likely. The seed picks them. It does not fix north-west and orange. From that pair the quadrants run clockwise and the colours run orange, red, green.
+
+| Order | kjc623 colour | luuj `PORTAL_SEQUENCES` | reference, which swaps A and C | Status |
+| --- | --- | --- | --- | --- |
+| `{{1,1},{3,1},{1,3},{1,1},{2,2},{4,1}}` | orange | A | C | Disputed |
+| `{{2,2},{2,3},{1,4},{2,2},{2,4},{3,3}}` | red | B | B | the shared letter |
+| `{{1,0},{1,3},{1,5},{3,3},{2,2},{3,0}}` | green | C | A | Disputed |
+
+The spoken volley line shows the colour and both letters. There is no separate red or green portal model in the capture, so none was added.
 
 ## Visual event sync
 

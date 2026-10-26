@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { tile } from "../../../sim/brands";
 import { blastCues, cornerCrack, crackCues } from "../cracks";
 import { P1_CORNERS, beamHits } from "../layout";
-import { PORTAL_IDLE, PORTAL_ORANGE, PORTAL_PURPLE, portalLook, portalPlaces, portalTiles } from "../portals";
+import type { Quadrant } from "../layout";
+import { PORTAL_COLOURS, PORTAL_IDLE, PORTAL_ORANGE, PORTAL_PURPLE, gapsFor, markedSafeTile, portalLook, portalPlaces, portalTiles } from "../portals";
 
 describe("phase 1 floor cracks", () => {
   it("opens an 8-tile south crack from the standing boss, far tile first", () => {
@@ -59,5 +60,21 @@ describe("phase 2 portal grid", () => {
     expect(beamHits("NW", 2, 2, tile(12, 13))).toBe(true);
     const yaw = portalPlaces().find((place) => place.arm === "east")?.yaw;
     expect(yaw).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it("keeps each marked safe tile inside the gap and one tile in from the dossier band", () => {
+    const quadrants: readonly Quadrant[] = ["NW", "NE", "SE", "SW"];
+    PORTAL_COLOURS.forEach((colour) => {
+      quadrants.forEach((quadrant) => {
+        for (let wave = 0; wave < 6; wave += 1) {
+          const [nsGap, ewGap] = gapsFor(colour, wave);
+          expect(beamHits(quadrant, nsGap, ewGap, markedSafeTile(colour, wave, quadrant))).toBe(false);
+        }
+      });
+    });
+    expect(gapsFor("orange", 0)).toEqual([2, 2]);
+    expect(markedSafeTile("orange", 0, "NW")).toEqual(tile(9, 15));
+    expect(beamHits("NW", 2, 2, tile(9, 15))).toBe(false);
+    expect(beamHits("NW", 2, 2, tile(7, 16))).toBe(true);
   });
 });

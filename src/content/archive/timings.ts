@@ -26,7 +26,7 @@ export const ARCHIVE = {
     tempo: { full: 7, threeQuarter: 6, half: 5, low: 4 },
     /** Unverified. Practice stand-in for the measured 33–88 tick bomb range. */
     bombInterval: 33,
-    /** Unverified. Render digest 25 Oct 2026: projectile 4440 flies 4.5 ticks. The room shows 5. */
+    /** Unverified. The old whole-tick stand-in. The drawn graphic waits 1 tick and flies 4.5. No hitsplat used this number. */
     bombFlight: 5,
     prayed: 10,
     unprayed: 33,

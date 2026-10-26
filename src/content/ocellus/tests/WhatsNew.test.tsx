@@ -14,11 +14,12 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.9",
+  version: "2026.10.26.10",
   date: "2026-10-26",
   notes: [
-    "Settings has a Boss movement toggle. It tints the tiles a boss may stand on and labels the current tick STATIONARY or MOBILE.",
-    "A boss stays inside the tiles the captures recorded, and he does not step on a tick where he is standing still.",
+    "Shots leave from the centre of the attacker, on the captured client cycle, and they stay on that room's plane.",
+    "Ocellus is on plane 1. Projectile height and slope were not in the capture, so those stay a flat line.",
+    "A boss who actually steps plays his walk animation for that tick. The frame lengths are the cache sequences.",
   ],
 };
 
@@ -55,8 +56,24 @@ describe("What's new", () => {
     const afterReload = whatsNew(reloaded);
     reloaded.close();
     const versions = opened.releases.map((release) => release.version ?? "");
+    const rank = (value: string): readonly number[] => value.split(".").map((part) => Number(part));
+    const newer = (left: string, right: string): boolean => {
+      const a = rank(left);
+      const b = rank(right);
+      const length = Math.max(a.length, b.length);
+      for (let index = 0; index < length; index += 1) {
+        const partA = a[index] ?? 0;
+        const partB = b[index] ?? 0;
+        if (partA !== partB) return partA > partB;
+      }
+      return false;
+    };
+    const newestFirst = versions.every((value, index) => {
+      const next = versions[index + 1];
+      return next === undefined || newer(value, next);
+    });
 
-    expect({ firstVisit, opened, closed, afterReload, version, newestFirst: versions.join() === [...versions].sort().reverse().join() }).toEqual({
+    expect({ firstVisit, opened, closed, afterReload, version, newestFirst }).toEqual({
       firstVisit: { settingsDot: true, menuDot: true, panelShown: false, releases: expect.any(Array) },
       opened: {
         settingsDot: false,

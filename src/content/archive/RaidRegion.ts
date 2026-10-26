@@ -14,6 +14,8 @@ import { ARCHIVE, DEMONBANE_RESISTANCE, standInNotice } from "./timings";
 import type { BossMovement, Mobility } from "../movementDebug";
 import { WalkTint } from "../movementDebug";
 import { acceptAddStep, acceptBossStep, actorName, addMobility, bossMobility, cauldronMayStand, overlayTiles } from "./movement";
+import { flightProgress, graphicAnchor, heldStandIn, movementPoseIndex, shotByGraphic, shotMotion, visualLifeTicks, wholeTickStandIn, clientProjectileHeight } from "./visualSync";
+import type { ShotMotion } from "./visualSync";
 
 type Bar = Readonly<{ npcId: number; hp: number; defence: number; name: string; size: number }>;
 
@@ -26,6 +28,21 @@ class PracticeMob extends Mob {
   kind: "boss" | "add" | "censer" | "fixture" = "boss";
   /** The first cache model is the one on screen. Later builds must not replace its animation listener. */
   private hearListener = true;
+  /** Set for the render after a step that changed the tile. setLocation snaps, so the SDK never sees the move. */
+  private stepping = false;
+
+  /** The next render plays the walk pose. Cleared at the start of the following tick. */
+  stepped(): void {
+    this.stepping = true;
+  }
+
+  settlePose(): void {
+    this.stepping = false;
+  }
+
+  override get animationIndex(): number {
+    return movementPoseIndex(this.stepping);
+  }
 
   override get collisionType(): CollisionType {
     return this.blocks ? CollisionType.BLOCK_MOVEMENT : CollisionType.NONE;
@@ -161,7 +178,11 @@ class Shot extends Entity {
   private fromY = 0;
   private toX = 0;
   private toY = 0;
-  private span = 1;
+  private startCycles = 0;
+  private travelCycles = 1;
+  private startHeight = 1.2;
+  private endHeight = 1.2;
+  private slope = 0;
   private age = 0;
   private held = false;
 
@@ -182,49 +203,68 @@ class Shot extends Entity {
     return BasicModel.sphereForRenderable(this);
   }
 
-  fly(from: Tile, to: Tile, ticks: number, paint: string, graphic: number | null, hold: boolean): void {
-    this.fromX = from.x + 0;
-    this.fromY = from.y + 0;
-    this.toX = to.x + 0;
-    this.toY = to.y + 0;
-    this.span = Math.max(1, ticks);
-    this.life = this.span;
+  /**
+   * The entity's tile stays on the attacker's south-west corner, which is what a same-tick lookup reads.
+   * The mesh is drawn from the footprint centre, on the captured client cycles.
+   */
+  fly(from: Tile, fromSize: number, to: Tile, toSize: number, paint: string, motion: ShotMotion): void {
+    const start = graphicAnchor(from, fromSize, this.size);
+    const end = graphicAnchor(to, toSize, this.size);
+    this.fromX = start.x;
+    this.fromY = start.y;
+    this.toX = end.x;
+    this.toY = end.y;
+    this.startCycles = motion.startCycles;
+    this.travelCycles = motion.travelCycles;
+    this.startHeight = motion.startHeight;
+    this.endHeight = motion.endHeight;
+    this.slope = motion.slope;
+    this.life = visualLifeTicks(motion.startCycles, motion.travelCycles);
     this.paint = paint;
-    this.graphicId = graphic;
-    this.held = hold;
+    this.graphicId = motion.graphic;
+    this.held = motion.hold;
     this.age = 0;
-    this.location = { x: this.fromX, y: this.fromY };
+    this.location = { x: from.x, y: from.y };
   }
 
   advance(): void {
     this.age += 1;
     this.life -= 1;
-    if (!this.held) {
-      const along = Math.min(1, this.age / this.span);
-      this.location = {
-        x: Math.round(this.fromX + (this.toX - this.fromX) * along),
-        y: Math.round(this.fromY + (this.toY - this.fromY) * along),
-      };
-    }
     if (this.life <= 0) this.dying = 0;
   }
 
+  override visible(tickPercent: number): boolean {
+    if (this.held) return true;
+    return flightProgress(this.age, tickPercent, this.startCycles, this.travelCycles) !== null;
+  }
+
   override getPerceivedLocation(tickPercent: number): { x: number; y: number; z: number } {
-    if (this.held) return { x: this.fromX, y: this.fromY, z: 1.2 };
-    const along = Math.min(1, (this.age + tickPercent) / this.span);
+    if (this.held) return { x: this.fromX, y: this.fromY, z: this.startHeight };
+    const along = flightProgress(this.age, tickPercent, this.startCycles, this.travelCycles) ?? 0;
     return {
       x: this.fromX + (this.toX - this.fromX) * along,
       y: this.fromY + (this.toY - this.fromY) * along,
-      z: 1.2,
+      z: clientProjectileHeight(this.startHeight, this.endHeight, this.slope, along),
     };
   }
 
+  override getPerceivedPitch(tickPercent: number): number {
+    if (this.held) return 0;
+    const along = flightProgress(this.age, tickPercent, this.startCycles, this.travelCycles) ?? 0;
+    const dx = this.toX - this.fromX;
+    const dy = this.toY - this.fromY;
+    const distance = Math.hypot(dx, dy);
+    const dz = this.endHeight - this.startHeight + this.slope * (1 - 2 * along);
+    return distance === 0 ? 0 : Math.atan2(dz, distance);
+  }
+
   override draw(tickPercent: number, context: OffscreenCanvasRenderingContext2D): void {
+    if (!this.visible(tickPercent)) return;
     const at = this.getPerceivedLocation(tickPercent);
     const scale = Settings.tileSize;
     context.fillStyle = this.paint;
     context.beginPath();
-    context.arc((at.x + 0.5) * scale, (at.y + 0.5) * scale, scale * 0.28, 0, Math.PI * 2);
+    context.arc((at.x + this.size / 2) * scale, (at.y - this.size / 2) * scale, scale * 0.28, 0, Math.PI * 2);
     context.fill();
   }
 }
@@ -422,6 +462,8 @@ export class RaidRegion extends Region {
 
   override postTick(): void {
     if (this.world.getReadyTimer > 0 || this.run.kind === "ended" || !this.mounted) return;
+    this.mounted.boss.settlePose();
+    this.mounted.adds.forEach((add) => add.settlePose());
     const { player, boss } = this.mounted;
     if (this.launch.id === "ocellus-p2") this.holdBladeDamage(boss);
     const at = tile(player.location.x, player.location.y);
@@ -572,6 +614,7 @@ export class RaidRegion extends Region {
       case "boss-at": {
         const from = tile(boss.location.x, boss.location.y);
         const next = acceptBossStep(this.launch.id, from, event.tile, this.mobility);
+        if (next.x !== from.x || next.y !== from.y) boss.stepped();
         boss.setLocation({ x: next.x, y: next.y });
         return;
       }
@@ -580,6 +623,7 @@ export class RaidRegion extends Region {
         if (!add) return;
         const from = tile(add.location.x, add.location.y);
         const next = acceptAddStep(this.launch.id, from, event.tile, addMobility(this.launch.id, this.shownTick));
+        if (next.x !== from.x || next.y !== from.y) add.stepped();
         add.setLocation({ x: next.x, y: next.y });
         return;
       }
@@ -752,6 +796,7 @@ export class RaidRegion extends Region {
   private launchShots(events: readonly Stamp[]): void {
     if (!this.mounted) return;
     const to = tile(this.mounted.player.location.x, this.mounted.player.location.y);
+    const playerSize = this.mounted.player.size;
     events.forEach((stamp) => {
       if (stamp.event.kind !== "attack") return;
       shotLooks(this.launch, stamp.event.name).forEach((look) => {
@@ -759,7 +804,7 @@ export class RaidRegion extends Region {
         if (!actor) return;
         const start = tile(actor.location.x, actor.location.y);
         const shot = new Shot(this, { x: start.x, y: start.y });
-        shot.fly(start, to, look.ticks, look.paint, look.graphic, look.hold);
+        shot.fly(start, actor.size, to, playerSize, look.paint, look.motion);
         this.addEntity(shot);
         this.shots.push(shot);
       });
@@ -797,7 +842,7 @@ export class RaidRegion extends Region {
   private describeShots(): void {
     switch (this.launch.id) {
       case "bork":
-        this.say(`The bomb is graphic ${GRAPHICS.smorkBomb} from the Smorks. Its captured flight is 4.5 ticks, shown as ${ARCHIVE.bork.bombFlight}. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
+        this.say(`The bomb is graphic ${GRAPHICS.smorkBomb} from the Smorks. It waits 1 tick, then flies 4.5. Projectiles 4056 and 4057 have no captured source, so they are not drawn.`);
         return;
       case "ezekiel":
         return;
@@ -952,7 +997,7 @@ const MAGIC_SHOT = "#c45bff";
 const TYPELESS_SHOT = "#e0a040";
 
 type ShotFrom = "boss" | "smorks";
-type ShotLook = Readonly<{ ticks: number; paint: string; graphic: number | null; hold: boolean; from: ShotFrom }>;
+type ShotLook = Readonly<{ motion: ShotMotion; paint: string; from: ShotFrom }>;
 
 function shotOrigin(mounted: Mounted | null, from: ShotFrom): PracticeMob | undefined {
   if (!mounted) return undefined;
@@ -969,45 +1014,54 @@ function shotOrigin(mounted: Mounted | null, from: ShotFrom): PracticeMob | unde
 }
 
 function shotLooks(launch: RaidLaunch, name: string): readonly ShotLook[] {
-  const travel = (ticks: number, paint: string, graphic: number | null, from: ShotFrom = "boss"): ShotLook => ({ ticks, paint, graphic, hold: false, from });
-  const held = (ticks: number, graphic: number): ShotLook => ({ ticks, paint: TYPELESS_SHOT, graphic, hold: true, from: "boss" });
+  const drawn = (graphic: number, paint: string, from: ShotFrom = "boss"): ShotLook | null => {
+    const record = shotByGraphic(graphic);
+    if (!record) return null;
+    return { motion: shotMotion(record), paint, from };
+  };
+  const one = (look: ShotLook | null): readonly ShotLook[] => (look === null ? [] : [look]);
   switch (launch.id) {
     case "bork":
-      if (name === "bomb-tell") return [travel(ARCHIVE.bork.bombFlight, TYPELESS_SHOT, GRAPHICS.smorkBomb, "smorks")];
+      if (name === "bomb-tell") return one(drawn(GRAPHICS.smorkBomb, TYPELESS_SHOT, "smorks"));
       return [];
     case "ezekiel":
       return [];
     case "guardian":
-      if (name === "14751") return [travel(ARCHIVE.guardian.autoFlight, RANGED_SHOT, GRAPHICS.guardianRanged)];
-      if (name === "beam") return [travel(launch.options.guardianBeamDelay, MAGIC_SHOT, null), held(launch.options.guardianBeamDelay, GRAPHICS.guardianBeam)];
-      if (name === "mushroom") return [held(ARCHIVE.guardian.mushroomArm, GRAPHICS.guardianMushroom)];
+      if (name === "14751") return one(drawn(GRAPHICS.guardianRanged, RANGED_SHOT));
+      if (name === "beam") {
+        return [
+          { motion: wholeTickStandIn(launch.options.guardianBeamDelay, null), paint: MAGIC_SHOT, from: "boss" },
+          { motion: heldStandIn(launch.options.guardianBeamDelay, GRAPHICS.guardianBeam), paint: TYPELESS_SHOT, from: "boss" },
+        ];
+      }
+      if (name === "mushroom") return [{ motion: heldStandIn(ARCHIVE.guardian.mushroomArm, GRAPHICS.guardianMushroom), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "moia":
-      if (name === "14785") return [travel(Math.max(1, ARCHIVE.moia.rangedFlight), RANGED_SHOT, GRAPHICS.moiaRanged)];
-      if (name === "relocate") return [travel(ARCHIVE.moia.magicFlight, MAGIC_SHOT, GRAPHICS.moiaRelocate)];
+      if (name === "14785") return one(drawn(GRAPHICS.moiaRanged, RANGED_SHOT));
+      if (name === "relocate") return one(drawn(GRAPHICS.moiaRelocate, MAGIC_SHOT));
       return [];
     case "xarth":
-      if (name === "14984") return [travel(ARCHIVE.xarth.autoFlight, MAGIC_SHOT, GRAPHICS.xarthMagic)];
-      if (name === "14985") return [travel(ARCHIVE.xarth.autoFlight, RANGED_SHOT, GRAPHICS.xarthRanged)];
-      if (name === "14992") return [travel(ARCHIVE.xarth.autoFlight, TYPELESS_SHOT, GRAPHICS.xarthTell)];
+      if (name === "14984") return one(drawn(GRAPHICS.xarthMagic, MAGIC_SHOT));
+      if (name === "14985") return one(drawn(GRAPHICS.xarthRanged, RANGED_SHOT));
+      if (name === "14992") return one(drawn(GRAPHICS.xarthTell, TYPELESS_SHOT));
       return [];
     case "dagonhai":
-      if (name === "14597") return [travel(ARCHIVE.dagonhai.autoFlight, MAGIC_SHOT, GRAPHICS.dagonMagic)];
-      if (name === "14593") return [travel(ARCHIVE.dagonhai.autoFlight, RANGED_SHOT, GRAPHICS.dagonRanged)];
-      if (name === "throw") return [travel(ARCHIVE.dagonhai.bookFlight, TYPELESS_SHOT, null)];
+      if (name === "14597") return one(drawn(GRAPHICS.dagonMagic, MAGIC_SHOT));
+      if (name === "14593") return one(drawn(GRAPHICS.dagonRanged, RANGED_SHOT));
+      if (name === "throw") return [{ motion: wholeTickStandIn(ARCHIVE.dagonhai.bookFlight, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p1":
-      if (name === "4229") return [travel(ARCHIVE.p1.volleyFlight, MAGIC_SHOT, GRAPHICS.p1Magic)];
-      if (name === "4232") return [travel(ARCHIVE.p1.volleyFlight, RANGED_SHOT, GRAPHICS.p1Ranged)];
-      if (name === "14810") return [travel(ARCHIVE.p1.annihilationDelay, TYPELESS_SHOT, null)];
+      if (name === "4229") return one(drawn(GRAPHICS.p1Magic, MAGIC_SHOT));
+      if (name === "4232") return one(drawn(GRAPHICS.p1Ranged, RANGED_SHOT));
+      if (name === "14810") return [{ motion: wholeTickStandIn(ARCHIVE.p1.annihilationDelay, null), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p2":
-      if (name === "volley") return [travel(ARCHIVE.p2.hitDelay, TYPELESS_SHOT, GRAPHICS.p2Volley)];
-      if (name === "repair") return [held(ARCHIVE.p2.repairEvery, GRAPHICS.p2Repair)];
+      if (name === "volley") return one(drawn(GRAPHICS.p2Volley, TYPELESS_SHOT));
+      if (name === "repair") return [{ motion: heldStandIn(ARCHIVE.p2.repairEvery, GRAPHICS.p2Repair), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     case "ocellus-p3":
-      if (name === "void-shot") return [travel(1, TYPELESS_SHOT, GRAPHICS.p3Void)];
-      if (name === "spin") return [held(ARCHIVE.p3.spinGraphicTicks, GRAPHICS.p3Spin)];
+      if (name === "void-shot") return one(drawn(GRAPHICS.p3Void, TYPELESS_SHOT));
+      if (name === "spin") return [{ motion: heldStandIn(ARCHIVE.p3.spinGraphicTicks, GRAPHICS.p3Spin), paint: TYPELESS_SHOT, from: "boss" }];
       return [];
     default: {
       const unhandled: never = launch.id;

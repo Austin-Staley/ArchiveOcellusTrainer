@@ -2,7 +2,7 @@
 
 Compared with the 25 Oct 2026 render digest and cache 2746 region placement. A trainer tile is the captured template minus the region base, then the room's scene offset: `trainerX = localX + offsetX`, `trainerY = offsetY + 63 - localY`. The digest records a position histogram, not a tile per tick, so a path is a stand-in wherever that histogram has no order.
 
-Boss movement, the walkable tiles and the stationary ticks, is in [Boss movement](#boss-movement). Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. `Disputed` means the render digest and the eight fight logs (L1 to L8, upstream #85) disagree, and the room uses the stronger count. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056 and 4057, and hitsplat 11.
+Boss movement, the walkable tiles and the stationary ticks, is in [Boss movement](#boss-movement). Planes, animation lengths and projectile cycles are in [Visual event sync](#visual-event-sync). Status is `fixed` where this pass changed the sim to a captured value, `matched` where it already agreed, and `stand-in` where the captures do not support a value. `Disputed` means the render digest and the eight fight logs (L1 to L8, upstream #85) disagree, and the room uses the stronger count. No id was invented for a gap. The known gaps stay gaps: animations for 16676 and 16681, the Ocellus death, projectiles 4056 and 4057, and hitsplat 11.
 
 ## Bork and the Smorks
 
@@ -20,7 +20,7 @@ Region 16727, plane 0. Offset (-16, -19).
 | Smorks 16641 | model | npc 16641, idle 14553, no walk | npc 16641 | npc 16641 | matched |
 | Smorks 16641 | movement | does not move | stands | stands | matched |
 | Smorks 16641 | bomb animation | 14555, "Big bomb! Bork watch out!" | 14555 on bomb-tell | 14555 on bomb-tell | matched |
-| Smorks 16641 | bomb projectile | 4440 from 16641, flight 4.5, launch-to-hit unresolved, usually anim+1 | not drawn | graphic 4440 from the Smorks tile, travel 5, toward the player | fixed |
+| Smorks 16641 | bomb projectile | 4440 from 16641, flight 4.5, launch-to-hit unresolved, usually anim+1 | not drawn | graphic 4440 from the Smorks' centre, waits 1 tick, flies 4.5 | fixed |
 | Smorks 16641 | auto 14554 / projectile 4045 | role low confidence, flight 4 | not drawn | not drawn | stand-in |
 | Smorks 16641 | bomb cadence | 33–88 ticks, no single gap | every 33 | every 33 | stand-in |
 | Bork handler 16642 | tile | one junk tile, no idle | not spawned | not spawned | stand-in |
@@ -36,7 +36,7 @@ Region 16471, plane 0. Offset (-18, -23).
 | Archive Guardian 16659 / 16660 | mode tile | template (4125, 5597), plane 0; he also relocates | trainer (11, 11), size 5 | trainer (11, 11), size 5 | matched |
 | Archive Guardian | model | 16659 shielded, 16660 grounded, idle 14745 | those ids | those ids | matched |
 | Archive Guardian | movement | histogram across the arena, no tick path | stands, then the landing script | stands, then the landing script | stand-in |
-| Archive Guardian | ranged | anim 14751 every 5, graphic 4201 at +2, flight about 2.3, hit +4 | anim 14751, graphic 4201, flight 4 | same | matched |
+| Archive Guardian | ranged | anim 14751 every 5, graphic 4201 at +2, flight about 2.3, hit +4 | anim 14751, graphic 4201, flight 4 from the attack tick | graphic waits 2 ticks then flies 2, hit still +4 | fixed |
 | Archive Guardian | beam | anim 14754 every 20, graphic 4204 | anim 14754, graphic 4204, travel is a coloured sphere | same | matched |
 | Archive Guardian | mushroom | anim 14753, graphic 4205 | those ids, interval 25 inside 20–30 | same | stand-in |
 | Archive Guardian | takeoff / land / death | 14748, 14747, 14749 | those ids; stays 35, then 41, then 47 | same | matched |
@@ -58,7 +58,7 @@ Region 16216, plane 0. Offset (-23, -26).
 | Moia 16667 | mode tile | template (4055, 5662), plane 0 | trainer (0, 7), size 3 | trainer (0, 7), size 3 | matched |
 | Moia 16667 | model | npc 16667, idle 14783 | npc 16667 | npc 16667 | matched |
 | Moia 16667 | movement | relocates inside a box; no tick path | practice stations | practice stations | stand-in |
-| Moia 16667 | ranged | anim 14785 every 5, graphic 4214, flight under a tick, hit same tick | anim 14785, graphic 4214, travel 1, hit same tick | same | matched |
+| Moia 16667 | ranged | anim 14785 every 5, graphic 4214, flight under a tick, hit same tick | anim 14785, graphic 4214, travel 1, hit same tick | graphic flies 20 client cycles, hit same tick | fixed |
 | Moia 16667 | relocate | anim 14788, graphic 4213, flight 5.5, hit +4 | anim 14788, graphic 4213, travel 4 | same | matched |
 | Binder 16670 | mode tile | template (4061, 5665) is one of the start tiles | eight binders on y 4, x 4–7, which includes trainer (6, 4) | same | matched |
 | Binder 16670 | model | npc 16670, idle 14789, walk 14790 | npc 16670 | npc 16670 | matched |
@@ -273,3 +273,108 @@ Bork's blocked anchors are everything outside (8, 8)–(19, 21). Xarth, the Smor
 | Ocellus, encounter phase 3 | autos, spins, untether, the whole fight | stationary | holds (5, 18) | no tick path in 31 fights |
 | Ocellus, phase 3 drill | arrive, autos, destroy | stationary | holds (21, 7). He does not chase | the anchor is an assumption. The captures show the box above, in the other grid |
 | Ocellus, phase 4 | lead-in, inner void, after inner, outer void, after outer | stationary | holds (4, 6). During the outer void his 3×3 blocks the player, who paths around the edge | footage. 8 segments, no template tile |
+
+## Visual event sync
+
+Cache 2746 and the 25 Oct 2026 render digest. A client cycle is 20 ms, and 30 cycles are one game tick. The digest records a flight mode and, where it was timed, the delay from the animation to the launch. It does not record start height, end height or slope, and this cache reader has no projectile-config archive, so those three stay the stand-in the rooms already used: height 1.2 at both ends and slope 0, a straight line. Combat hit ticks are unchanged. Where the graphic's arrival and the audited splat disagree, the row is Disputed.
+
+The scene mesh is shifted by the measured rise at the boss tile, `(raw height − region base) / 128`, so an actor at z 0 stands on the walk floor. Map settings bit 1 (value 2) is the bridge bit. It is clear on every seat below. Settings value 4, which the Guardian and Ocellus use, is a different bit and does not pull plane 1 down onto plane 0.
+
+### Planes
+
+| Room | Tile | Plane | Settings | Height byte | Raw | Below | Base | Rise | Elevation before | Elevation after | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Bork 16727 | local (26, 32) | 0 | none | 60 | 480 | none | 480 | 0 | 0 | 0 | matched |
+| Ezekiel 16214 | local (30, 31) | 0 | none | 30 | 240 | none | 480 | −1.875 | +1.875 | +1.875 | matched |
+| Guardian 16471 | local (29, 29) | 0 | 4 | 30 | 240 | none | 240 | 0 | 0 | 0 | matched |
+| Moia 16216 | local (23, 30) | 0 | none | 75 | 600 | none | 480 | +0.9375 | −0.9375 | −0.9375 | matched |
+| Xarth 16726 | local (30, 30) | 0 | none | 60 | 480 | none | 480 | 0 | 0 | 0 | matched |
+| Dagon'hai 16215 | local (28, 34) | 0 | none | 75 | 600 | none | 480 | +0.9375 | −0.9375 | −0.9375 | matched |
+| Ocellus 16472, phase 1 | local (30, 40) | 1 | 4, bridge clear | 96 | 1008 | 240 | 240 | +6 | −6 | −6 | matched |
+| Ocellus 16472, Hooded Figure | local (30, 37) | 1 | 4, bridge clear | 96 | 1008 | 240 | 240 | +6 | −6 | −6 | matched |
+| Ocellus 16472, The Blade | local (30, 40) | 1 | 4, bridge clear | 96 | 1008 | 240 | 240 | +6 | −6 | −6 | matched |
+| Ocellus 16472, phase 3 | local (36, 34) | 1 | 4, bridge clear | 96 | 1008 | 240 | 240 | +6 | −6 | −6 | matched |
+
+Actors, scenery, ground graphics and projectiles in a raid room share that room's scene, so they sit on the same plane as the floor. The phase drills paint their own floors and do not load region 16472. Their grids are a different origin. Ocellus in those drills is still the plane-1 fight, drawn on the drill floor at z 0.
+
+### Projectiles
+
+A 3×3 launches from the footprint centre, `south-west + size / 2`, not from the south-west corner and not from the SDK's `(size − 1) / 2`. The phase 1 drill and the phase 2 portal bolt use the SDK projectile, shifted so the mesh leaves that centre. Raid-room shots are the room's own graphic and do the same. Height and slope on every row are the stand-in.
+
+| Event | Anim | Graphic | Plane | Samples | Flight | Hit | Launch delay | Sim before | Sim after | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Smorks bomb | 14555 | 4440 from 16641 | 0 | 535 | 4.5 ticks, 135 cycles | unresolved | 1 tick on 485, also 2 on 38 and 3 on 7 | travel 5 from the south-west tile, from the attack tick, height 1.2 | waits 30 cycles, flies 135, from the 3×3 centre, height 1.2, slope 0 | captured |
+| Bork 4056 | none resolved | 4056, source unresolved | 0 | the row was not kept | 3 | 3 | none | not drawn | not drawn | stand-in |
+| Bork 4057 | none resolved | 4057, source unresolved | 0 | the row was not kept | 3 | 3 | none | not drawn | not drawn | stand-in |
+| Smorks auto | low confidence | 4045 from 16641 | 0 | 688 | 4 | unresolved | 0 on 461 | not drawn | not drawn | stand-in |
+| Guardian ranged | 14751 | 4201 from 16659 | 0 | 6,314 | mode 2.27, 68 cycles | 2 ticks on 5,341 | 2 ticks on 4,122 | flies 4 ticks from the attack, south-west corner, height 1.2 | waits 60, flies 60, from the centre. The 8-cycle gap against 2.27 is not applied, so the graphic meets the +4 splat | captured |
+| Moia ranged | 14785 | 4214 | 0 | 343 | 0.67 ticks, drawn as 20 cycles | 0 on 329 | 1 tick on 75 of 78 timed launches, not used | forced to 1 tick | 20 cycles from the attack tick. The splat stays on that tick | captured |
+| Moia relocate | 14788 | 4213 | 0 | 70 | 5.5 | 4 on 39, then 5 on 20 | not a clean pair with 14788 | flies 4 ticks | flies 120 cycles, so it meets the splat. The 5.5-tick flight is the disagreement | Disputed |
+| Xarth magic | 14984 | 4034 | 0 | 1,135, and a second row of 573 | 2 | 2 | 1 on 533, then 2 on 395 | flies 2 from the attack | waits 30, flies 60. The graphic ends one tick after the splat, which stays at +2 | Disputed |
+| Xarth ranged | 14985 | 4374 | 0 | 1,837 | 2 | 2 | 2 on 886 | flies 2 from the attack | waits 60, flies 60. The graphic ends two ticks after the splat, which stays at +2 | Disputed |
+| Xarth tell | 14992 | 4378 | 0 | 520 | 2 | unresolved | 2 on 55 | flies 2 from the attack | waits 60, flies 60. No splat to meet. The delay sample is thin | captured |
+| Dagon'hai ranged | 14593 | 4071 from 16643 | 0 | 6, one fight | 3 | 3 | 2 on 2 | flies 5 from the attack | waits 60, flies 90, and arrives with the existing +5 splat | captured |
+| Dagon'hai magic | 14597 | 1459 from 16643 | 0 | 5, one fight | 1 | 1 | 2 on 2 | flies 5 from the attack | waits 60, flies 30, so the graphic arrives at +3. The splat stays at +5 | Disputed |
+| Phase 1 magic, raid | 14806 | 4229 from 16674 | 1 | 1,187 | 2.17 | 2 | a minority, not applied | flies 2 from the attack | flies 60 cycles from the attack, from the centre | captured |
+| Phase 1 ranged, raid | 14807 | 4232 from 16674 | 1 | 1,046 | 2.17 | 2 | a minority, not applied | flies 2 from the attack | flies 60 cycles from the attack, from the centre | captured |
+| Phase 1 drill volley | 14806 / 14807 | 4229 / 4232 | drill floor | logs L3 | 65 and 95 cycles in one logged fight, far shots longer | the fight's own hit | start cycle 30 | start 30, near end 95, far end 125, height 0.6 chosen by eye, end z 0.4 | the same cycles and the eye-chosen height. The mesh now leaves the 3×3 centre. Slope 0 | captured cycles, stand-in height |
+| Phase 2 bolt | none in the digest | 4269, source unresolved. Logs name it as the portal bolt | 1 | 314 | 2.8, drawn as 84 cycles | the room's hit stays at 4 | none | flies 4 ticks, the hit delay | flies 84 cycles from the attack. The splat stays at 4 | Disputed |
+| Phase 2 drill bolt | the portal's cast | 4269 | drill floor | the phase 2 logs | per-tile cycles already in the drill | the fight's own hit | 0 | height 0.2, from the emitter's corner | the same cycles and height. The mesh leaves the emitter tile's centre | stand-in height |
+| Phase 3 void | 14851 | 4297 from 16677 | 1 | 362 | 0.5, 15 cycles | 0 on 297 | 2 on 94 | flies 1 tick from the attack | waits 60, flies 15. The splat is already on the attack tick | Disputed |
+| Siphon 4303 | 16679 | 4303 | 1 | on the order of 180 | 1 | 0 | not pinned | not drawn as a travelling shot. Spawn tiles are a stand-in | unchanged | stand-in |
+| Book throw | none | no graphic | 0 | one fight, no projectile id | the room's 4 | the room's book hit | none | coloured sphere, 4 ticks, south-west corner | coloured sphere, 4 ticks, from the centre. Height 1.2, slope 0 | stand-in |
+| Phase 1 annihilation travel | 14810 | no graphic | 1 | no projectile id | the room's 9 | the room's hit | none | coloured sphere for 9 ticks | coloured sphere for 9 ticks, from the centre | stand-in |
+| Guardian beam travel | 14754 | 4204 is held, the travel has no id | 0 | the beam graphic is separate | the chosen 10 or 12 | that delay | none | coloured sphere plus held 4204 | the same lengths, from the centre. The travel stays a coloured stand-in | stand-in |
+
+Repair graphic 4304 and spin graphic 4325 are held spotanims, not travelling shots. 4304 stays on the sword for the room's 3 ticks. 4325 stays on the spin for the room's 5 ticks. Their heights are the spotanim models. Spotanim 4339, the phase 4 explosion, is sequence 14933, 55 client cycles, and it starts on the mark tick. The shards sit high in that model. Nothing in this pass moves them.
+
+### Animation lengths
+
+Lengths are client cycles from cache 2746. A Maya sequence is `end − start` with start 0. A classic sequence is the sum of its frame timings. The SDK already plays those lengths. This pass pins the numbers. It does not replace the playback.
+
+| Sequence | Kind | Cycles | Used for |
+| --- | --- | --- | --- |
+| 14539 | Maya 0–60 | 60 | Bork walk |
+| 14540 | Maya 0–90 | 90 | Bork idle |
+| 14542 | Maya 0–90 | 90 | Bork drum |
+| 14553 | Maya 0–90 | 90 | Smorks idle and walk, the same sequence |
+| 14555 | Maya 0–90 | 90 | Smorks bomb |
+| 14581 | classic, eight frames | 90 | Dagon'hai idle |
+| 14587 | classic | 60 | Dagon'hai walk |
+| 14593 | classic | 90 | Dagon'hai ranged |
+| 14597 | classic | 90 | Dagon'hai magic |
+| 14683 | Maya 0–120 | 120 | Ezekiel idle |
+| 14684 | Maya 0–60 | 60 | Ezekiel walk |
+| 14745 | Maya 0–90 | 90 | Guardian idle and walk |
+| 14751 | Maya 0–90 | 90 | Guardian ranged |
+| 14783 | Maya 0–90 | 90 | Moia idle and walk |
+| 14785 | Maya 0–60 | 60 | Moia ranged |
+| 14788 | Maya 0–34 | 34 | Moia relocate |
+| 14789 | classic | 162 | Binder idle |
+| 14790 | classic | 48 | Binder walk |
+| 14804 | Maya 0–90 | 90 | Ocellus phase 1 and the Hooded Figure, idle |
+| 14805 | Maya 0–60 | 60 | Ocellus phase 1 and the Hooded Figure, walk |
+| 14806 | Maya 0–90 | 90 | Phase 1 volley start. The reference loops the last 2 ticks. The sequence itself is 3 ticks |
+| 14807 | Maya 0–30 | 30 | Phase 1 volley end |
+| 14809 | Maya 0–120 | 120 | Phase 1 charge. The 8-tick gap in the digest counts the repeated beat, not this sequence |
+| 14811 | Maya 0–60 | 60 | Phase 1 slam |
+| 14840 | Maya 0–90 | 90 | Ocellus phase 3 and 4, idle |
+| 14842 | Maya 0–60 | 60 | Phase 3 melee |
+| 14849 | Maya 0–60 | 60 | Ocellus phase 3 and 4, walk |
+| 14851 | Maya 0–90 | 90 | Phase 3 void shot |
+| 14869 | Maya 0–168 | 168 | Phase 3 spin |
+| 14979 | classic | 120 | Xarth idle, and his turn |
+| 14980 | classic | 90 | Xarth walk |
+| 14984 | classic | 60 | Xarth magic |
+| 14985 | classic | 90 | Xarth ranged |
+| 15024 | classic, frames 4, 5, 5, 5, 5, 5, 5, 5 | 39 | Battery idle. Walk is −1 |
+| 4269 | classic, the graphic's own sequence | 111 | Phase 2 bolt spotanim. Separate from the 84-cycle flight |
+| 4440 | classic, the graphic's own sequence | 143 | Bomb spotanim. Separate from the 135-cycle flight |
+
+The Blade, 16676, has every animation at −1. That stays a stand-in. The void vine, 16681, has no captured animation. Ocellus has no captured death.
+
+### Idle, walk and turn
+
+Pose index 0 is the idle sequence and index 1 is the walk sequence, which is how the client picks them. Run is −1 on every NPC in this table, so there is no run sequence to play. Turn is −1 except Xarth, whose left and right turn are his idle 14979, so a turn would play the idle. A raid actor who changes tile plays index 1 for the following render. `setLocation` snaps the tile, so without that flag the walk pose never starts. Standing still stays on index 0.
+
+The player's walk and run stay the SDK's movement poses. Void shards over the player's head are spotanim 4339's model, from the earlier change that lifts them, and they start on the mark tick. Phase 1 cracks use the logged delays: 60 client cycles on the far tile and one more per tile back toward him, and the floor blast uses delays 0 and 2. Those timings were already the captured ones.

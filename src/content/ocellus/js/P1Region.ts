@@ -13,6 +13,7 @@ import { FloorViews } from "./entities/P1Views";
 import { OcellusP1 } from "./mobs/OcellusP1";
 import { ARENA_SIZE, RIM, ROOM, distanceToBody } from "./p1/arena";
 import { walkableAnchors } from "./p1/movement";
+import { centreCorrectedFlight } from "../../archive/visualSync";
 
 const LETHAL_HIT: Readonly<Record<P1HitSource, string>> = {
   volley: "a volley",
@@ -210,7 +211,13 @@ export class P1Region extends Region {
     this.addProjectile(
       new Projectile(null, 0, this.mounted.boss, { x: to.x + 0.5, y: to.y - 0.5, z: SHOT_HEIGHT }, "magic", {
         setDelay: flight,
-        visuals: { spotAnim: { id: spotAnim }, startCycleOffset: startCycle, endCycleOffset: endCycle, verticalOffset: shot.value.height },
+        visuals: {
+          spotAnim: { id: spotAnim },
+          startCycleOffset: startCycle,
+          endCycleOffset: endCycle,
+          verticalOffset: shot.value.height,
+          motionInterpolator: centreCorrectedFlight,
+        },
       }),
     );
   }

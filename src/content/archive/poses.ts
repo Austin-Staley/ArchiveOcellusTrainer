@@ -1,5 +1,6 @@
 import type { RaidId } from "./catalog";
 import { ARCHIVE } from "./timings";
+import { sceneElevation } from "./visualSync";
 
 /**
  * Animation and graphic ids from the 25 Oct 2026 render digest.
@@ -10,14 +11,11 @@ import { ARCHIVE } from "./timings";
 
 /**
  * Compiled terrain sits at (tile height - the region's base) / 128.
- * These shifts are that value at each room's captured boss tile, from cache 2746,
- * so the fight plane lands on the walk floor.
+ * The shift for each room is the measured rise at its boss tile, from cache 2746, in visualSync.
  * Ocellus plane 1 is height byte 96, which is 768 above the plane below it: 768 / 128 = 6.
  * The compiled fight floor sits at that 6. The lower strip of the same region is a different height and is not the boss tile.
  */
-export const OCELLUS_PLANE_DROP = 768 / 128;
-const EZEKIEL_FLOOR_LIFT = 240 / 128;
-const LOW_FLOOR_DROP = 120 / 128;
+export const OCELLUS_PLANE_DROP = -sceneElevation("ocellus-p1");
 
 export const PLAYER_BLOCK = 424;
 
@@ -103,25 +101,25 @@ export type ArenaPlace = Readonly<{ region: number; offsetX: number; offsetY: nu
 export function arenaFor(id: RaidId): ArenaPlace {
   switch (id) {
     case "bork":
-      return { region: REGION_IDS.bork, offsetX: -16, offsetY: -19, elevation: 0 };
+      return { region: REGION_IDS.bork, offsetX: -16, offsetY: -19, elevation: sceneElevation("bork") };
     case "ezekiel":
-      return { region: REGION_IDS.ezekiel, offsetX: -22, offsetY: -24, elevation: EZEKIEL_FLOOR_LIFT };
+      return { region: REGION_IDS.ezekiel, offsetX: -22, offsetY: -24, elevation: sceneElevation("ezekiel") };
     case "guardian":
-      return { region: REGION_IDS.guardian, offsetX: -18, offsetY: -23, elevation: 0 };
+      return { region: REGION_IDS.guardian, offsetX: -18, offsetY: -23, elevation: sceneElevation("guardian") };
     case "moia":
-      return { region: REGION_IDS.moia, offsetX: -23, offsetY: -26, elevation: -LOW_FLOOR_DROP };
+      return { region: REGION_IDS.moia, offsetX: -23, offsetY: -26, elevation: sceneElevation("moia") };
     case "xarth":
-      return { region: REGION_IDS.xarth, offsetX: -23, offsetY: -26, elevation: 0 };
+      return { region: REGION_IDS.xarth, offsetX: -23, offsetY: -26, elevation: sceneElevation("xarth") };
     case "dagonhai":
-      return { region: REGION_IDS.dagonhai, offsetX: -26, offsetY: -20, elevation: -LOW_FLOOR_DROP };
+      return { region: REGION_IDS.dagonhai, offsetX: -26, offsetY: -20, elevation: sceneElevation("dagonhai") };
     case "ocellus-p1":
-      return { region: REGION_IDS.ocellus, offsetX: -25, offsetY: -6, elevation: -OCELLUS_PLANE_DROP };
+      return { region: REGION_IDS.ocellus, offsetX: -25, offsetY: -6, elevation: sceneElevation("ocellus-p1") };
     case "ocellus-p2":
       // Object 62706, The Blade, is cache local (31, 41): the centre of monster 16676's 3x3, which is trainer (12, 12).
       // The scene mirror flips local Y, so offsetY pins that centre on tile y 12. Pinning the south-west tile (30, 40) on (11, 11) left the model two tiles toward the camera.
-      return { region: REGION_IDS.ocellus, offsetX: -19, offsetY: -10, elevation: -OCELLUS_PLANE_DROP };
+      return { region: REGION_IDS.ocellus, offsetX: -19, offsetY: -10, elevation: sceneElevation("ocellus-p2") };
     case "ocellus-p3":
-      return { region: REGION_IDS.ocellus, offsetX: -31, offsetY: -11, elevation: -OCELLUS_PLANE_DROP };
+      return { region: REGION_IDS.ocellus, offsetX: -31, offsetY: -11, elevation: sceneElevation("ocellus-p3") };
     default: {
       const unhandled: never = id;
       return unhandled;

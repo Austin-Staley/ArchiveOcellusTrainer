@@ -5,7 +5,9 @@ import type { Item, SettingsState } from "osrs-sdk";
 import { GameOverlay, TrainerApp, TrainerLoadingSplash, useSettingsSnapshot } from "osrs-sdk-react";
 import { RaidRegion } from "./content/archive/RaidRegion";
 import { movementDebug } from "./content/movementDebug";
-import { ENCOUNTERS, defaultGear, encounterName, isRaidId, parseRaid } from "./content/archive/catalog";
+import { DRILL_ROOMS, ENCOUNTERS, defaultGear, drillRoomPhase, encounterName, isDrillRoomId, isRaidId, parseRaid } from "./content/archive/catalog";
+import type { DrillRoomPhase } from "./content/archive/catalog";
+import type { PortalCall } from "./content/archive/RaidRegion";
 import type { RaidLaunch } from "./content/archive/catalog";
 import { OcellusRegion } from "./content/ocellus/js/OcellusRegion";
 import type { P3Region } from "./content/ocellus/js/P3Region";
@@ -246,6 +248,50 @@ function startEncounter(id: string) {
   window.location.assign(url.href);
 }
 
+function phaseEnabled(flags: BuildFlags, phase: DrillRoomPhase): boolean {
+  switch (phase) {
+    case "p1":
+      return flags.p1;
+    case "p2":
+      return flags.p2;
+    case "p3":
+      return flags.p3;
+    default: {
+      const unhandled: never = phase;
+      return unhandled;
+    }
+  }
+}
+
+function roomMenu(flags: BuildFlags): readonly Readonly<{ id: string; label: string }>[] {
+  return [...ENCOUNTERS, ...DRILL_ROOMS.filter((room) => phaseEnabled(flags, room.phase))];
+}
+
+function openRoom(id: string): void {
+  if (isDrillRoomId(id)) {
+    startPhase(drillRoomPhase(id), "ranged", false);
+    return;
+  }
+  startEncounter(id);
+}
+
+function drillRoomId(phase: Drill["phase"]): string {
+  switch (phase) {
+    case "p4":
+      return "ocellus-p4";
+    case "p3":
+      return "drill-p3";
+    case "p2":
+      return "drill-p2";
+    case "p1":
+      return "drill-p1";
+    default: {
+      const unhandled: never = phase;
+      return unhandled;
+    }
+  }
+}
+
 /** The same phase again, keeping the setup, Invincible and the phase's own options; `focus` replaces P4's. */
 function rerun(drill: Drill, setup: string, seed: string | null, focus: string | null = null): RunRequest {
   const { invincible } = drill.region;
@@ -348,8 +394,8 @@ function DrillControls({ drill, flags, movement }: Readonly<{ drill: Drill; flag
       <div id="settings_menu" hidden={view !== "settings"}>
         <label>
           Encounter{" "}
-          <select id="encounter" value="ocellus-p4" onChange={(event) => startEncounter(event.target.value)}>
-            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          <select id="encounter" value={drillRoomId(drill.phase)} onChange={(event) => openRoom(event.target.value)}>
+            {roomMenu(flags).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
         {phases.length > 1 && (
@@ -627,21 +673,37 @@ function RunResultPanel({ drill, flags }: Readonly<{ drill: Drill; flags: BuildF
 const CHAT_LINES_SHOWN = 5;
 const CHAT_POLL_MS = 300;
 
-function GameChat({ region }: Readonly<{ region: Readonly<{ chat(): readonly string[] }> }>) {
-  const [lines, setLines] = useState<readonly string[]>([]);
+type Spoken = Readonly<{ chat(): readonly string[]; chatMark(): number }>;
+
+function GameChat({ region }: Readonly<{ region: Spoken }>) {
+  const [frame, setFrame] = useState<Readonly<{ mark: number; lines: readonly string[] }>>({ mark: 0, lines: [] });
   useEffect(() => {
-    const poll = window.setInterval(() => setLines((shown) => {
-      const latest = region.chat();
-      return latest.length === shown.length ? shown : latest;
+    const poll = window.setInterval(() => setFrame((shown) => {
+      const mark = region.chatMark();
+      if (mark === shown.mark) return shown;
+      return { mark, lines: region.chat() };
     }), CHAT_POLL_MS);
     return () => window.clearInterval(poll);
   }, [region]);
 
   return (
     <ol id="game_chat">
-      {lines.slice(-CHAT_LINES_SHOWN).map((line, index) => <li key={index}>{line}</li>)}
+      {frame.lines.slice(-CHAT_LINES_SHOWN).map((line, index) => <li key={`${frame.mark}:${index}`}>{line}</li>)}
     </ol>
   );
+}
+
+function PortalCallLabel({ region }: Readonly<{ region: RaidRegion }>) {
+  const [call, setCall] = useState<PortalCall | null>(null);
+  useEffect(() => {
+    const poll = window.setInterval(() => {
+      const next = region.portalCall();
+      setCall((shown) => (shown?.colour === next?.colour && shown?.quadrant === next?.quadrant ? shown : next));
+    }, CHAT_POLL_MS);
+    return () => window.clearInterval(poll);
+  }, [region]);
+  if (call === null) return null;
+  return <p id="portal_call">{call.colour} · {call.quadrant}</p>;
 }
 
 function restartRaid(nextSeed: string | null, invincible: boolean) {
@@ -685,7 +747,7 @@ function RaidResultPanel({ launch, region }: Readonly<{ launch: RaidLaunch; regi
 
 type MovementToggle = Readonly<{ shown: boolean; setShown: (on: boolean) => void }>;
 
-function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; movement: MovementToggle }>) {
+function RaidControls({ launch, region, flags, movement }: Readonly<{ launch: RaidLaunch; region: RaidRegion; flags: BuildFlags; movement: MovementToggle }>) {
   const [typedSeed, setTypedSeed] = useState<string | null>(null);
   const [view, setView] = useState<MenuView>("closed");
   return (
@@ -693,8 +755,8 @@ function RaidControls({ launch, region, movement }: Readonly<{ launch: RaidLaunc
       <div id="settings_menu" hidden={view !== "settings"}>
         <label>
           Encounter{" "}
-          <select id="encounter" value={launch.id} onChange={(event) => startEncounter(event.target.value)}>
-            {ENCOUNTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          <select id="encounter" value={launch.id} onChange={(event) => openRoom(event.target.value)}>
+            {roomMenu(flags).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </label>
         {launch.id === "guardian" && (
@@ -811,8 +873,9 @@ function TrainerPage({ session }: Readonly<{ session: Session }>) {
         <TrainerLoadingSplash state={loading} />
         <div id="hud_corner">
           <MovementBadge region={region} shown={showMovement} />
+          {session.kind === "raid" && session.launch.id === "ocellus-p2" ? <PortalCallLabel region={session.region} /> : null}
           <GameChat region={region} />
-          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} movement={movement} />}
+          {session.kind === "drill" ? <DrillControls drill={session.drill} flags={session.flags} movement={movement} /> : <RaidControls launch={session.launch} region={session.region} flags={session.flags} movement={movement} />}
           <Credits />
         </div>
         {session.kind === "drill" ? <RunResultPanel drill={session.drill} flags={session.flags} /> : <RaidResultPanel launch={session.launch} region={session.region} />}

@@ -160,7 +160,7 @@ export const DAGON_PADS = {
  */
 export const DAGON_TRAIL = [tile(5, 12), tile(6, 12), tile(6, 13), tile(7, 12), tile(8, 12), tile(8, 13)] as const;
 
-/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. */
+/** Hooded Figure, region 16472 plane 1. Every phase 1 capture sits on this one tile. His models match Ocellus 16674, so the encounter room records the tile and does not place a second body. */
 export const HOODED_TILE = tile(5, 20);
 
 /** Guardian batteries, region 16471 plane 0. The same four corners in every flying-room capture. */

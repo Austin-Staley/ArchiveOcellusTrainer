@@ -1,8 +1,10 @@
 import { act } from "react";
+import { DRILL_ROOMS, ENCOUNTERS } from "../../archive/catalog";
 import { captureNavigation, loadPage } from "./page";
 
 describe("encounter menu", () => {
   beforeEach(() => localStorage.setItem("osrs-sdk:settings", JSON.stringify({ version: 1, values: { use3dView: false } })));
+  afterEach(() => vi.unstubAllEnvs());
 
   test("phase 4 stays the fight when no encounter is chosen, and the menu can open Bork", () => {
     const page = loadPage("/?seed=1");
@@ -35,5 +37,25 @@ describe("encounter menu", () => {
     expect(navigation.assigned).toEqual(["http://localhost/?encounter=bork"]);
     expect(borkHp).toBe("bork");
     expect(hp).toBe(1500);
+  });
+
+  test("with the phase flags on, the room list adds the upstream drills and a drill opens on its phase", () => {
+    vi.stubEnv("ARCHIVE_P1", "on");
+    vi.stubEnv("ARCHIVE_P2", "on");
+    vi.stubEnv("ARCHIVE_P3", "on");
+    const navigation = captureNavigation();
+    const page = loadPage("/?seed=1");
+    const select = page.element("encounter");
+    if (!(select instanceof HTMLSelectElement)) throw new Error("#encounter is not a select");
+    const labels = [...select.options].map((option) => option.text);
+    act(() => {
+      select.value = "drill-p3";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    page.close();
+    navigation.restore();
+
+    expect(labels).toEqual([...ENCOUNTERS.map((item) => item.label), ...DRILL_ROOMS.map((room) => room.label)]);
+    expect(navigation.assigned).toEqual(["http://localhost/?phase=p3&setup=ranged"]);
   });
 });

@@ -121,8 +121,8 @@ Region 16472, plane 1. Offset (-25, -6).
 | Ocellus 16674 | slam / strike | 14811 and 14810; the role labels are low confidence | slam 14811, strike 14810 | same | matched |
 | Ocellus 16674 | 14809 / 14812 / 14813 | roles not mapped onto a sim action | not attached | not attached | stand-in |
 | Ocellus 16674 | death | no captured death | none plays | none plays | stand-in |
-| Hooded Figure 16672 | tile | template (4126, 5669), plane 1, all 32 captures, one tile | not spawned | trainer (5, 20), size 3 | fixed |
-| Hooded Figure 16672 | model | npc 16672, idle 14804, no walk, no attack | absent | npc 16672, idle 14804, no attack | fixed |
+| Hooded Figure 16672 | tile | template (4126, 5669), plane 1, all 32 captures, one tile | not spawned | trainer (5, 20) is recorded; the body is not placed | fixed |
+| Hooded Figure 16672 | model | npc 16672 shares models 62668 and 62669 with Ocellus 16674, idle 14804 | a second Ocellus body, with its own bar | not drawn. The room keeps one Ocellus, npc 16674, and the 125 heal lands on that body | fixed |
 
 ## Ocellus phase 2
 
@@ -285,7 +285,7 @@ Phase 2's portals are the 24 locs from upstream #79. They rise at tick 2, six 2�
 
 The sequence colour is separate from the model colour. Austin's dossier now marks the cycle Verified: the three orders run orange → red → green, clockwise through the quadrants, so volley 1 predicts all 18. The cited support is 55/55 in the captures, 87/87 in VERIFIED-REFERENCE.md, and the same order in kjc623's ocellus-portals (`PortalSequences.Colour`). The marked tile of each wave is that plugin's `(columnsOut, rowsOut)` from the quadrant's inner corner. The sim's portal bands already contain every one of those tiles. The dossier's safe-tile bands were drawn one tile further out (`x = 28 − 2·col`, `y = 43 + 2·row` on the north-west). The room does not use that shift: the marked tile stays safe, and the dossier's outer corner takes the hit.
 
-The starting quadrant and the first colour vary between raids, so both stay Likely. The seed picks them. It does not fix north-west and orange. From that pair the quadrants run clockwise and the colours run orange, red, green.
+The starting quadrant and the first colour vary between raids, so both stay Likely. The seed picks them: the quadrant is `seed % 4` over NW, NE, SE, SW, and the colour is `floor(seed / 4) % 3` over orange, red, green. From that pair the quadrants run clockwise and the colours run orange, red, green. A load with no `seed` in the address draws a new random 32-bit seed. Seed 5 is red in the north-east. The screen labels that colour and quadrant. The spoken line still shows both letter names.
 
 | Order | kjc623 colour | luuj `PORTAL_SEQUENCES` | reference, which swaps A and C | Status |
 | --- | --- | --- | --- | --- |
@@ -293,7 +293,7 @@ The starting quadrant and the first colour vary between raids, so both stay Like
 | `{{2,2},{2,3},{1,4},{2,2},{2,4},{3,3}}` | red | B | B | the shared letter |
 | `{{1,0},{1,3},{1,5},{3,3},{2,2},{3,0}}` | green | C | A | Disputed |
 
-The spoken volley line shows the colour and both letters. There is no separate red or green portal model in the capture, so none was added.
+The spoken volley line shows the colour and both letters, and the screen labels the current colour and quadrant. There is no separate red or green portal model in the capture, so none was added.
 
 ## Visual event sync
 

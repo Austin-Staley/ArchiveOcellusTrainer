@@ -9,7 +9,9 @@ import type { RaidEvent, RaidInput, RaidMemory, Stamp } from "./clock";
 import { blastCuesOn, crackCues } from "./cracks";
 import { FloorGraphic, idlePortals, paintPortals, raisePortals } from "./floorView";
 import type { PortalGraphic } from "./floorView";
-import { BATTERY_TILES, CENSERS, HOODED_TILE, ROOMS } from "./layout";
+import { BATTERY_TILES, CENSERS, ROOMS } from "./layout";
+import type { Quadrant } from "./layout";
+import type { PortalColour } from "./portals";
 import { dress } from "./loadout";
 import { BLADE_MODEL, BLADE_SEAT, GRAPHICS, PLAYER_BLOCK, arenaFor, attackSequence, deathSequence, spawnSequence } from "./poses";
 import type { ActorRole } from "./poses";
@@ -321,6 +323,11 @@ type RaidRunState = Readonly<{ kind: "running" }> | Readonly<{ kind: "ended"; at
 
 type RaidRunView = Readonly<{ kind: "running"; seed: Seed }> | Readonly<{ kind: "ended"; seed: Seed; at: Tick; reason: RaidFinish }>;
 
+type ChatLine = Readonly<{ id: number; text: string }>;
+
+/** The sequence colour and quadrant of the volley currently on the grid. */
+export type PortalCall = Readonly<{ colour: PortalColour; quadrant: Quadrant }>;
+
 type Mounted = Readonly<{ player: Player; boss: PracticeMob; adds: readonly PracticeMob[]; censers: readonly PracticeMob[]; fixtures: readonly PracticeMob[] }>;
 
 function barFor(launch: RaidLaunch): Bar {
@@ -389,7 +396,9 @@ export class RaidRegion extends Region {
   private shownTick = 0;
   private readonly tint = new WalkTint(this, () => overlayTiles(this.launch.id));
   private rows: Stamp[] = [];
-  private lines: string[] = [];
+  private lines: ChatLine[] = [];
+  private nextChatId = 1;
+  private litCall: PortalCall | null = null;
   private previous: Tile = ROOMS[this.launch.id].player;
   private realHp = 0;
   private form: "flying" | "grounded" = this.launch.id === "guardian" ? "flying" : "grounded";
@@ -542,7 +551,18 @@ export class RaidRegion extends Region {
   }
 
   chat(): readonly string[] {
-    return [...this.lines];
+    return this.lines.map((line) => line.text);
+  }
+
+  /** Climbs on every spoken line, including one that pushes an older line out of the eight-line window. */
+  chatMark(): number {
+    const last = this.lines[this.lines.length - 1];
+    return last === undefined ? 0 : last.id;
+  }
+
+  /** The last lit volley. It stays up through the idle gap so the colour can be read without the chat. */
+  portalCall(): PortalCall | null {
+    return this.litCall;
   }
 
   fightLog(): Readonly<{ header: { seed: Seed }; rows: readonly Stamp[] }> {
@@ -574,6 +594,7 @@ export class RaidRegion extends Region {
     this.clockTick = 0;
     this.rows = [];
     this.lines = [];
+    this.litCall = null;
     this.run = { kind: "running" };
     this.held = 0;
     this.released = 0;
@@ -870,6 +891,7 @@ export class RaidRegion extends Region {
         idlePortals(this.portals);
         return;
       case "lit":
+        this.litCall = { colour: event.colour, quadrant: event.quadrant };
         paintPortals(this.portals, event.quadrant, event.nsGap, event.ewGap);
         return;
       default: {
@@ -921,7 +943,9 @@ export class RaidRegion extends Region {
   }
 
   private say(text: string): void {
-    this.lines.push(text);
+    const id = this.nextChatId;
+    this.nextChatId += 1;
+    this.lines.push({ id, text });
     if (this.lines.length > 8) this.lines.shift();
   }
 
@@ -1009,13 +1033,6 @@ export class RaidRegion extends Region {
         return battery;
       });
     }
-    if (this.launch.id === "ocellus-p1") {
-      const figure = new PracticeMob(this, { x: HOODED_TILE.x, y: HOODED_TILE.y });
-      figure.kind = "fixture";
-      figure.label = "Hooded Figure";
-      figure.fill({ npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name: "Hooded Figure", size: ARCHIVE.p1.hoodedSize });
-      return [figure];
-    }
     return [];
   }
 
@@ -1064,7 +1081,6 @@ function landSplat(from: Unit, target: Unit, amount: number): void {
 }
 
 function fixtureBar(name: string): Bar {
-  if (name === "Hooded Figure") return { npcId: ARCHIVE.p1.hoodedNpcId, hp: 1, defence: 0, name, size: ARCHIVE.p1.hoodedSize };
   if (name === "Guardian battery") return { npcId: ARCHIVE.guardian.batteryNpcId, hp: 1, defence: 0, name, size: ARCHIVE.guardian.batterySize };
   return { npcId: 0, hp: 1, defence: 0, name, size: 1 };
 }

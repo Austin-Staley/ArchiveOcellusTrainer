@@ -14,11 +14,13 @@ const FIRST_RELEASE = {
 };
 
 const NEXT_RELEASE = {
-  version: "2026.10.26.13",
+  version: "2026.10.26.14",
   date: "2026-10-26",
   notes: [
-    "Phase 2's portal orders run orange, then red, then green, clockwise. The seed picks the starting quadrant and the first colour.",
-    "A volley line shows that colour and both letter names for the order. The portals on the floor stay the captured orange and purple models.",
+    "Phase 1 draws one Ocellus. The Hooded Figure uses the same models, so that second body stays off the tile, and the 125 heal lands on the one boss.",
+    "The chat keeps the latest lines after the box fills.",
+    "Settings lists the upstream phase 1, phase 2 and phase 3 drills next to the rooms.",
+    "Phase 2 labels the current volley's colour and quadrant. A room with no seed draws a new random seed. Seed 5 opens red in the north-east.",
   ],
 };
 

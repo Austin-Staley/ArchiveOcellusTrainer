@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Tick } from "../../../sim/brands";
 import { seed, tile } from "../../../sim/brands";
-import { defaultOptions } from "../catalog";
+import { defaultOptions, parseRaid } from "../catalog";
 import type { RaidId } from "../catalog";
 import { portalOpening, project } from "../clock";
 import type { RaidInput } from "../clock";
@@ -203,6 +203,15 @@ describe("raid clocks", () => {
       quadrants: ["NW", "NE", "SE"],
       colours: ["green", "orange", "red"],
     });
+    expect(portalOpening(5)).toEqual({
+      quadrants: ["NE", "SE", "SW"],
+      colours: ["red", "green", "orange"],
+    });
+    const bare = parseRaid(new URL("http://localhost/?encounter=ocellus-p2"), "ocellus-p2", () => 8);
+    const pinned = parseRaid(new URL("http://localhost/?encounter=ocellus-p2&seed=5"), "ocellus-p2", () => 8);
+    expect(bare.options.seed).toBe(8);
+    expect(portalOpening(bare.options.seed)).toEqual(portalOpening(8));
+    expect(pinned.options.seed).toBe(5);
     const rows = project("ocellus-p2", options, 131, hold("ocellus-p2"));
     const lit = rows.flatMap((stamp) => (stamp.event.kind === "portals" && stamp.event.look === "lit" ? [stamp.event] : []));
     expect(lit).toHaveLength(18);

@@ -5,7 +5,7 @@ import type { RaidId } from "../catalog";
 import { RAID_IDS, parseRaid } from "../catalog";
 import { seed, tick, tile } from "../../../sim/brands";
 import { cornerCrack } from "../cracks";
-import { BATTERY_TILES, HOODED_TILE, ROOMS } from "../layout";
+import { BATTERY_TILES, ROOMS } from "../layout";
 import { BLADE_SEAT, GRAPHICS } from "../poses";
 import { ARCHIVE } from "../timings";
 import { RaidRegion } from "../RaidRegion";
@@ -28,6 +28,33 @@ function fight(world: World, ticks: number): void {
 
 function npcIdOf(mob: Mob): number {
   return "npcId" in mob && typeof mob.npcId === "number" ? mob.npcId : 0;
+}
+
+function bossNpc(id: RaidId): number {
+  switch (id) {
+    case "bork":
+      return ARCHIVE.bork.npcId;
+    case "ezekiel":
+      return ARCHIVE.ezekiel.npcId;
+    case "guardian":
+      return ARCHIVE.guardian.flyingNpcId;
+    case "moia":
+      return ARCHIVE.moia.npcId;
+    case "xarth":
+      return ARCHIVE.xarth.npcId;
+    case "dagonhai":
+      return ARCHIVE.dagonhai.npcId;
+    case "ocellus-p1":
+      return ARCHIVE.p1.npcId;
+    case "ocellus-p2":
+      return ARCHIVE.p2.npcId;
+    case "ocellus-p3":
+      return ARCHIVE.p3.npcId;
+    default: {
+      const unhandled: never = id;
+      return unhandled;
+    }
+  }
 }
 
 describe("raid rooms in 3D", () => {
@@ -70,18 +97,29 @@ describe("raid rooms in 3D", () => {
     expect({ x: bomb.location.x, y: bomb.location.y }).toEqual({ x: ROOMS.bork.smork.x, y: ROOMS.bork.smork.y });
   });
 
-  it("places the Hooded Figure and the four batteries off the combat-add list", () => {
-    const phase1 = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
-    const figure = [...phase1.region.mobs, ...phase1.region.newMobs].find((mob) => mob.mobName() === "Hooded Figure");
-    if (!figure) throw new Error("the Hooded Figure was not in phase 1");
-    expect(figure.get3dModel()).toBeInstanceOf(CacheRenderModel);
-    expect({ x: figure.location.x, y: figure.location.y, size: figure.size, npcId: npcIdOf(figure) }).toEqual({
-      x: HOODED_TILE.x,
-      y: HOODED_TILE.y,
-      size: ARCHIVE.p1.hoodedSize,
-      npcId: ARCHIVE.p1.hoodedNpcId,
-    });
+  it.each(RAID_IDS)("places exactly one boss in %s", (id) => {
+    const { region } = open(id, `?encounter=${id}&seed=1&invincible=on`);
+    const present = [...region.mobs, ...region.newMobs];
+    const bosses = present.filter((mob) => npcIdOf(mob) === bossNpc(id));
+    expect(bosses).toHaveLength(1);
+    expect(region.primaryBoss).toBe(bosses[0]);
+  });
 
+  it("draws one Ocellus in phase 1, and a missed tendril's 125 heal lands on that body", () => {
+    const { region, world, player } = open("ocellus-p1", "?encounter=ocellus-p1&seed=1&invincible=on");
+    const present = [...region.mobs, ...region.newMobs];
+    const bodies = present.filter((mob) => {
+      const id = npcIdOf(mob);
+      return id === ARCHIVE.p1.npcId || id === ARCHIVE.p1.hoodedNpcId;
+    });
+    expect(bodies.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+    player.setLocation({ x: 1, y: 1 });
+    fight(world, 6);
+    const healed = [...region.mobs, ...region.newMobs].filter((mob) => mob.incomingProjectiles.some((splat) => splat.damage === -ARCHIVE.p1.tendrilBossHeal));
+    expect(healed.map((mob) => npcIdOf(mob))).toEqual([ARCHIVE.p1.npcId]);
+  });
+
+  it("places the four batteries off the combat-add list", () => {
     const guardian = open("guardian", "?encounter=guardian&seed=1&invincible=on");
     const batteries = [...guardian.region.mobs, ...guardian.region.newMobs].filter((mob) => mob.mobName() === "Guardian battery");
     expect(batteries.map((mob) => ({ x: mob.location.x, y: mob.location.y, size: mob.size, npcId: npcIdOf(mob) }))).toEqual(
@@ -257,6 +295,18 @@ describe("raid rooms in 3D", () => {
     const gap = phase2.region.entities.filter((entity) => entity.entityName() === "Portal orange north 1");
     expect(purple).toHaveLength(1);
     expect(gap).toHaveLength(1);
+    expect(phase2.region.portalCall()).toEqual({ colour: "orange", quadrant: "NE" });
+  });
+
+  it("keeps speaking after the chat window is full, and seed 5 opens red in the north-east", () => {
+    const seeded = open("ocellus-p2", "?encounter=ocellus-p2&seed=5&invincible=on");
+    fight(seeded.world, 22);
+    const lines = seeded.region.chat();
+    expect(lines).toHaveLength(8);
+    expect(seeded.region.chatMark()).toBeGreaterThan(8);
+    expect(lines[lines.length - 1]).toContain("red");
+    expect(lines[lines.length - 1]).toContain("NE");
+    expect(seeded.region.portalCall()).toEqual({ colour: "red", quadrant: "NE" });
   });
 
   it("holds The Blade on its scenery tile while the player moves", () => {
